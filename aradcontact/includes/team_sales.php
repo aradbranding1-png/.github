@@ -115,32 +115,29 @@ function tsr_aggregate(PDO $pdo, array $userRows): array
 }
 
 /**
- * فروشِ یک تیم در بازه (برای «گزارش سرپرست») — همان معیارِ ستونِ «فروشِ خالص» نیروها در آن صفحه:
- * سفارش‌های تأییدشده با تاریخِ تأییدِ مالی در بازه؛ خالص = مبلغِ فاکتور منهای مالیات.
+ * فروشِ یک تیم در بازه (برای «گزارش سرپرست») — همان تعریفِ «گزارش فروش»:
+ * پیش‌پرداخت در روزِ تأییدِ سفارش + هر قسط/پرداختِ تأییدشده در روزِ تأییدش؛ خالص = بدونِ مالیات (به نسبتِ سفارش).
  * @return array{cnt:int, net:int, gross:int, slots:array<string,int>, users:array<int,array{cnt:int,net:int}>}
  */
 function tsr_team_sales_period(PDO $pdo, int $teamId, string $from, string $to): array
 {
+    // همان تعریفِ «گزارش فروش» (includes/sales_credit.php): پیش‌پرداخت در روزِ تأییدِ سفارش + هر قسط/پرداختِ تأییدشده
+    // در روزِ تأییدش، خالص (بدونِ مالیات)؛ فروشِ مشترک به نسبتِ تفکیکِ مالی
     $res = ['cnt' => 0, 'net' => 0, 'gross' => 0, 'slots' => ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0, 'سایر' => 0], 'users' => []];
     $ids = tsr_team_user_ids($pdo, $teamId);
     if (!$ids) return $res;
-    $in = implode(',', array_map('intval', $ids));
+    if (!function_exists('sales_by_user')) require_once __DIR__ . '/sales_credit.php';
+    $roles = [];
     try {
-        $st = $pdo->prepare("SELECT o.seller_user_id uid, u.role, COUNT(*) cnt, COALESCE(SUM(o.total_amount - o.tax_amount),0) net,
-                COALESCE(SUM(COALESCE(o.confirmed_amount, o.total_amount)),0) gross
-            FROM sales_orders o LEFT JOIN users u ON u.id = o.seller_user_id
-            WHERE o.seller_user_id IN ($in) AND o.status = 'approved' AND DATE(o.decided_at) BETWEEN ? AND ? GROUP BY o.seller_user_id, u.role");
-        $st->execute([$from, $to]);
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) {
-            $slot = tsr_slot($pdo, (int) $r['uid'], (string) $r['role']);
-            $res['cnt'] += (int) $r['cnt'];
-            $res['net'] += (int) $r['net'];
-            $res['gross'] += (int) $r['gross'];
-            $res['slots'][$slot] += (int) $r['net'];
-            $res['users'][(int) $r['uid']] = ['cnt' => (int) $r['cnt'], 'net' => (int) $r['net']];
-        }
-    } catch (Throwable $e) {
-        error_log('tsr_team_sales_period: ' . $e->getMessage());
+        $roles = $pdo->query('SELECT id, role FROM users WHERE id IN (' . implode(',', array_map('intval', $ids)) . ')')->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
+    } catch (Throwable $e) {}
+    foreach (sales_by_user($pdo, $ids, $from, $to) as $uid => $r) {
+        $slot = tsr_slot($pdo, (int) $uid, (string) ($roles[$uid] ?? ''));
+        $res['cnt'] += $r['cnt'];
+        $res['net'] += $r['net'];
+        $res['gross'] += $r['gross'];
+        $res['slots'][$slot] += $r['net'];
+        $res['users'][(int) $uid] = ['cnt' => $r['cnt'], 'net' => $r['net']];
     }
     return $res;
 }

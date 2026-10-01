@@ -109,12 +109,10 @@ function sup_person_stats(PDO $pdo, int $uid, string $from, string $to): array
         $q->execute([$uid, $from, $to]);
         $meet += (int) $q->fetchColumn();
     } catch (Throwable $e) {}
-    $sales = ['n' => 0, 'net' => 0];
-    try {
-        $q = $pdo->prepare("SELECT COUNT(*) n, COALESCE(SUM(total_amount - tax_amount),0) net FROM sales_orders WHERE seller_user_id = ? AND status = 'approved' AND DATE(decided_at) BETWEEN ? AND ?");
-        $q->execute([$uid, $from, $to]);
-        $sales = $q->fetch(PDO::FETCH_ASSOC) ?: $sales;
-    } catch (Throwable $e) {}
+    // فروش — همان تعریفِ «گزارش فروش»: پیش‌پرداخت در روزِ تأییدِ سفارش + هر قسط/پرداختِ تأییدشده در روزِ تأییدش، خالص
+    if (!function_exists('sales_by_user')) require_once __DIR__ . '/sales_credit.php';
+    $__s = sales_by_user($pdo, [$uid], $from, $to)[$uid] ?? ['cnt' => 0, 'net' => 0];
+    $sales = ['n' => $__s['cnt'], 'net' => $__s['net']];
     $share = 0;
     try {
         $q = $pdo->prepare('SELECT COALESCE(SUM(amount),0) FROM ps_lines WHERE user_id = ? AND voided = 0 AND pay_date BETWEEN ? AND ?');

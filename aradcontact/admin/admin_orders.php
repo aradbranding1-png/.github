@@ -67,8 +67,18 @@ if ($ready) {
         array_push($__paramsNS, '%' . $q . '%', $like, $like, $like);
     }
     $base = 'FROM sales_orders o LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN users s ON s.id = o.seller_user_id WHERE ' . implode(' AND ', $where);
+    // «فروش» (یک تعریف در همه‌ی گزارش‌ها — includes/sales_credit.php): رویدادهای تأییدشده (تأییدِ سفارش + هر قسط/پرداختِ تأییدشده)
+    // در «روزِ تأییدِ مالی»ِ خودشان، خالص (بدونِ مالیات). بازه‌ی تاریخ روی همین روزِ تأیید اعمال می‌شود؛ بقیه‌ی فیلترها روی سفارش.
+    require_once __DIR__ . '/../includes/sales_credit.php';
+    $__evW = ['1=1']; $__evP = [];
+    if ($method !== '') { $__evW[] = 'o.payment_method = ?'; $__evP[] = $method; }
+    if ($q !== '') { $__evW[] = '(c.full_name LIKE ? OR c.mobile LIKE ? OR o.order_number LIKE ? OR o.payment_ref LIKE ?)'; array_push($__evP, '%' . $q . '%', $like, $like, $like); }
+    $__evSql = sales_user_events_sql($pdo, implode(' AND ', $__evW));
+    $__evParams = sales_user_events_params($pdo, $from, $to, $__evP);
+    $__evUidSql = ($sellerId > 0 ? ' AND x.uid = ' . (int) $sellerId : '') . ($__teamUidSql !== '' ? ' AND x.uid' . $__teamUidSql : '');
 
-    $st = $pdo->prepare("SELECT o.status, COUNT(*) cnt, COALESCE(SUM(CASE WHEN o.status='approved' THEN COALESCE(o.confirmed_amount,o.total_amount) ELSE o.total_amount END),0) amt $base GROUP BY o.status");
+    $__extraPaid = sales_payments_ready($pdo) ? "COALESCE((SELECT SUM(p.amount) FROM sales_order_payments p WHERE p.order_id = o.id AND p.status = 'confirmed' AND p.kind = 'extra'), 0)" : '0';
+    $st = $pdo->prepare("SELECT o.status, COUNT(*) cnt, COALESCE(SUM(CASE WHEN o.status='approved' THEN " . sales_net_sql("COALESCE(o.confirmed_amount,o.total_amount) + $__extraPaid") . " ELSE " . sales_net_sql('o.total_amount') . " END),0) amt $base GROUP BY o.status");
     $st->execute($params);
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
         if (isset($counts[$r['status']])) {
@@ -98,29 +108,12 @@ if ($ready) {
         $ap = array_merge($params, []);
         // فروش به تفکیکِ کارشناس — «فروشِ مشترک»: اگر مالی عددِ فروشِ سفارشی را بینِ چند نفر تفکیک کرده، هر نفر سهمِ خودش را می‌گیرد
         // (فقط نمایشی؛ سهم عملکرد جداست). اگر عددِ سفارش بعداً عوض شده باشد، تفکیک به همان نسبت اعمال می‌شود.
-        $__splitReady = false;
-        try { require_once __DIR__ . '/../includes/sales_credit.php'; $__splitReady = scr_ready($pdo); } catch (Throwable $e) {}
-        if ($__splitReady) {
-            $__bNS = 'FROM sales_orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE ' . implode(' AND ', $__whereNS) . " AND o.status = 'approved'";
-            // هر سفارش ← سهمِ هر نفر (بدونِ تفکیک: کلِ مبلغ برای ثبت‌کننده؛ با تفکیک: سهمِ هر نفر به نسبتِ تفکیکِ مالی)
-            $__xInner = "SELECT o.id order_id, o.seller_user_id uid, COALESCE(o.confirmed_amount,o.total_amount) amt, 0 shared $__bNS
-                        AND NOT EXISTS (SELECT 1 FROM sales_order_credit_splits sp0 WHERE sp0.order_id = o.id)
-                    UNION ALL
-                    SELECT o.id, sp.user_id, ROUND(sp.amount * COALESCE(o.confirmed_amount,o.total_amount) / NULLIF(t.tot, 0)), 1
-                        FROM sales_order_credit_splits sp
-                        JOIN (SELECT order_id, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id) t ON t.order_id = sp.order_id
-                        JOIN sales_orders o ON o.id = sp.order_id LEFT JOIN customers c ON c.id = o.customer_id
-                        WHERE " . implode(' AND ', $__whereNS) . " AND o.status = 'approved'";
-            $__sql = "SELECT x.uid, u.full_name, u.role, COUNT(DISTINCT x.order_id) cnt, SUM(x.amt) amt, SUM(x.shared) shared_cnt FROM (
-                    $__xInner
-                ) x LEFT JOIN users u ON u.id = x.uid WHERE 1=1" . ($sellerId > 0 ? ' AND x.uid = ?' : '') . ($__teamUidSql !== '' ? ' AND x.uid' . $__teamUidSql : '') . "
-                GROUP BY x.uid, u.full_name, u.role ORDER BY amt DESC";
-            $st = $pdo->prepare($__sql);
-            $st->execute(array_merge($__paramsNS, $__paramsNS, $sellerId > 0 ? [$sellerId] : []));
-        } else {
-            $st = $pdo->prepare("SELECT o.seller_user_id uid, s.full_name, s.role, COUNT(*) cnt, SUM(COALESCE(o.confirmed_amount,o.total_amount)) amt, 0 shared_cnt $base AND o.status = 'approved' GROUP BY o.seller_user_id, s.full_name, s.role ORDER BY amt DESC");
-            $st->execute($ap);
-        }
+        $__splitReady = scr_ready($pdo);
+        // هر رویدادِ فروش ← سهمِ هر نفر (بدونِ تفکیک: کلِ مبلغ برای ثبت‌کننده؛ با تفکیک: به نسبتِ تفکیکِ مالی)
+        $__xInner = "SELECT x.order_id, x.uid, SUM(x.net) amt, MAX(x.shared) shared, SUM(x.kind = 'payment') pay_events FROM ($__evSql) x WHERE 1=1 $__evUidSql GROUP BY x.order_id, x.uid";
+        $st = $pdo->prepare("SELECT y.uid, u.full_name, u.role, COUNT(*) cnt, SUM(y.amt) amt, SUM(y.shared) shared_cnt FROM ($__xInner) y
+            LEFT JOIN users u ON u.id = y.uid GROUP BY y.uid, u.full_name, u.role ORDER BY amt DESC");
+        $st->execute($__evParams);
         $report['by_seller'] = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
         $report['by_team'] = tsr_aggregate($pdo, $report['by_seller']);
 
@@ -137,19 +130,14 @@ if ($ready) {
             $dRows = [];
             if ($dUids) {
                 $__in = implode(',', array_map('intval', $dUids));
-                if ($__splitReady) {
-                    $st = $pdo->prepare("SELECT x.order_id, x.uid, x.amt, x.shared FROM ($__xInner) x WHERE x.uid IN ($__in)");
-                    $st->execute(array_merge($__paramsNS, $__paramsNS));
-                } else {
-                    $st = $pdo->prepare("SELECT o.id order_id, o.seller_user_id uid, COALESCE(o.confirmed_amount,o.total_amount) amt, 0 shared $base AND o.status = 'approved' AND o.seller_user_id IN ($__in)");
-                    $st->execute($ap);
-                }
+                $st = $pdo->prepare("SELECT y.order_id, y.uid, y.amt, y.shared, y.pay_events FROM ($__xInner) y WHERE y.uid IN ($__in)");
+                $st->execute($__evParams);
                 $dRows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
             }
             $dOrders = $dSplits = $dNames = [];
             if ($dRows) {
                 $__oin = implode(',', array_unique(array_map(static fn($x) => (int) $x['order_id'], $dRows)));
-                foreach ($pdo->query("SELECT o.id, o.order_number, o.created_at, o.decided_at, o.seller_user_id, COALESCE(o.confirmed_amount, o.total_amount) order_amt,
+                foreach ($pdo->query("SELECT o.id, o.order_number, o.created_at, o.decided_at, o.seller_user_id, (o.total_amount - o.tax_amount) order_amt,
                         c.full_name customer_name, c.mobile customer_mobile, s.full_name seller_name,
                         (SELECT GROUP_CONCAT(i.title ORDER BY i.id SEPARATOR '، ') FROM sales_order_items i WHERE i.order_id = o.id) items_txt
                         FROM sales_orders o LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN users s ON s.id = o.seller_user_id WHERE o.id IN ($__oin)") as $__o) {
@@ -172,8 +160,8 @@ if ($ready) {
         $st = $pdo->prepare("SELECT i.title, SUM(i.quantity) qty, SUM(i.amount) amt, COUNT(DISTINCT o.id) orders_cnt FROM sales_order_items i JOIN sales_orders o ON o.id = i.order_id LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN users s ON s.id = o.seller_user_id WHERE " . implode(' AND ', $where) . " AND o.status = 'approved' GROUP BY i.title ORDER BY amt DESC LIMIT 20");
         $st->execute($ap);
         $report['by_service'] = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        $st = $pdo->prepare("SELECT DATE(o.decided_at) d, SUM(COALESCE(o.confirmed_amount,o.total_amount)) amt $base AND o.status = 'approved' GROUP BY DATE(o.decided_at) ORDER BY d");
-        $st->execute($ap);
+        $st = $pdo->prepare("SELECT DATE(x.at) d, SUM(x.net) amt FROM ($__evSql) x WHERE 1=1 $__evUidSql GROUP BY DATE(x.at) ORDER BY d");
+        $st->execute($__evParams);
         $report['by_day'] = $st->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
     }
 
@@ -510,7 +498,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
           <a class="btn btn-sm btn-outline-secondary" href="?<?= e(http_build_query(array_diff_key($_GET, ['du' => 1, 'dt' => 1]))) ?>"><i class="fa-solid fa-xmark"></i> بستن</a>
         </div>
         <div class="table-responsive"><table class="table table-sm align-middle small mb-0">
-          <thead class="table-light"><tr><th>#</th><th>شماره فاکتور</th><th>تاریخ ثبت / تأیید</th><th>مشتری</th><th>خدمات</th><?php if ($D['is_team']): ?><th>کارشناس</th><?php endif; ?><th class="text-end">مبلغِ کلِ سفارش</th><th class="text-end">سهمِ <?= $D['is_team'] ? 'کارشناس' : 'این کارشناس' ?></th><th>توضیح</th></tr></thead><tbody>
+          <thead class="table-light"><tr><th>#</th><th>شماره فاکتور</th><th>تاریخ ثبت / تأیید</th><th>مشتری</th><th>خدمات</th><?php if ($D['is_team']): ?><th>کارشناس</th><?php endif; ?><th class="text-end">کلِ سفارش (خالص)</th><th class="text-end">فروشِ <?= $D['is_team'] ? 'کارشناس' : 'این کارشناس' ?> در این بازه (خالص)</th><th>توضیح</th></tr></thead><tbody>
           <?php if (!$D['rows']): ?><tr><td colspan="9" class="text-center text-muted py-3">سفارشی پیدا نشد.</td></tr><?php endif; ?>
           <?php foreach ($D['rows'] as $__i => $x): $o = $D['orders'][(int) $x['order_id']] ?? null; if (!$o) continue; $__dSum += (int) $x['amt']; ?>
             <tr>
@@ -521,7 +509,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
               <td style="max-width:260px"><?= e((string) $o['items_txt']) ?></td>
               <?php if ($D['is_team']): ?><td><?= e($D['names'][(int) $x['uid']] ?? '—') ?></td><?php endif; ?>
               <td class="text-end text-nowrap"><?= format_toman((int) $o['order_amt']) ?></td>
-              <td class="text-end text-nowrap fw-bold"><?= format_toman((int) $x['amt']) ?></td>
+              <td class="text-end text-nowrap fw-bold"><?= format_toman((int) $x['amt']) ?><?php if ((int) ($x['pay_events'] ?? 0) > 0): ?><div class="text-success fw-normal" style="font-size:11px"><i class="fa-solid fa-coins"></i> شاملِ قسط/پرداختِ تأییدشده در این بازه</div><?php endif; ?></td>
               <td class="small"><?php if ((int) $x['shared']): ?>
                   <span class="badge text-bg-light border" style="color:#6d28d9"><i class="fa-solid fa-people-group"></i> فروشِ مشترک</span>
                   <div class="text-muted mt-1">مالی عددِ این سفارش را بینِ این افراد تقسیم کرده:</div>
@@ -575,7 +563,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <div class="col-lg-6">
         <div class="card p-3 h-100">
           <h6 class="fw-bold mb-1">فروش به تفکیکِ کارشناس</h6>
-          <div class="small text-muted mb-2">روی تعداد یا مبلغِ هر کارشناس بزنید تا سفارش‌هایش را ببینید. «مشترک» یعنی مالی عددِ آن سفارش را بینِ چند کارشناس تقسیم کرده و این‌جا فقط سهمِ همین نفر آمده.</div>
+          <div class="small text-muted mb-2">مبلغ‌ها <b>خالص (بدونِ مالیات)</b>؛ فروش = پیش‌پرداختِ تأییدشده در روزِ تأییدِ سفارش + هر قسط/پرداختِ بعدی در روزِ تأییدِ همان پرداخت. روی تعداد یا مبلغِ هر کارشناس بزنید تا سفارش‌هایش را ببینید. «مشترک» یعنی مالی عددِ آن سفارش را بینِ چند کارشناس تقسیم کرده و این‌جا فقط سهمِ همین نفر آمده.</div>
           <table class="table table-sm mb-0"><thead class="table-light"><tr><th>کارشناس</th><th>واحد</th><th>تیم</th><th>تعداد</th><th class="text-end">مبلغ</th></tr></thead><tbody>
             <?php if (!$report['by_seller']): ?><tr><td colspan="5" class="text-center text-muted py-3">فروشِ تأییدشده‌ای در این بازه نیست.</td></tr><?php endif; ?>
             <?php $__umap = tsr_user_team_map($pdo); ?>

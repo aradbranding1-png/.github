@@ -62,8 +62,18 @@ if ($ready) {
     foreach ($st->fetchAll(PDO::FETCH_KEY_PAIR) ?: [] as $k => $c) {
         if (isset($counts[$k])) $counts[$k] = (int) $c;
     }
-    $st = $pdo->prepare("SELECT COALESCE(SUM(COALESCE(o.confirmed_amount, o.total_amount)),0) $base AND o.status = 'approved' AND o.decided_at >= ? AND o.decided_at <= ?");
-    $st->execute(array_merge($params, [$monthFrom . ' 00:00:00', $monthTo . ' 23:59:59']));
+    // فروشِ این ماه — همان تعریفِ «گزارش فروش»: پیش‌پرداخت در روزِ تأییدِ سفارش + هر قسط/پرداختِ تأییدشده در روزِ تأییدش، خالص (بدونِ مالیات)
+    require_once __DIR__ . '/includes/sales_credit.php';
+    $__uids = [(int) $user['id']];
+    if ($scope === 'team' && !empty($team['id'])) {
+        $__t = $pdo->prepare('SELECT id FROM users WHERE team_id = ?');
+        $__t->execute([(int) $team['id']]);
+        $__uids = array_merge($__uids, array_map('intval', $__t->fetchAll(PDO::FETCH_COLUMN) ?: []));
+    }
+    $__evW = '1=1'; $__evP = [];
+    if ($q !== '') { $__evW = '(c.full_name LIKE ? OR c.mobile LIKE ? OR o.order_number LIKE ?)'; $__evP = ['%' . $q . '%', $like, $like]; }
+    $st = $pdo->prepare('SELECT COALESCE(SUM(x.net), 0) FROM (' . sales_user_events_sql($pdo, $__evW) . ') x WHERE x.uid IN (' . implode(',', array_unique($__uids)) . ')');
+    $st->execute(sales_user_events_params($pdo, $monthFrom, $monthTo, $__evP));
     $approvedMonth = (int) $st->fetchColumn();
 
     $sql = "SELECT o.*, c.full_name AS customer_name, c.mobile AS customer_mobile, s.full_name AS seller_name $base";
@@ -106,7 +116,7 @@ require_once __DIR__ . '/includes/layout_top.php';
       <h5><i class="fa-solid fa-cart-shopping"></i> سفارش‌های من</h5>
       <p>برای ثبتِ سفارشِ جدید: پرونده‌ی مشتری ← پیش‌فاکتور ← قفل ← «تبدیل به فاکتور و ثبت سفارش».</p>
     </div>
-    <div class="text-end"><div class="small">فروشِ تأییدشده‌ی این ماه <span style="opacity:.8">(<?= to_jalali($monthFrom) ?> تا <?= to_jalali($monthTo) ?>)</span></div><div class="fs-5 fw-bold"><?= format_toman($approvedMonth) ?></div></div>
+    <div class="text-end"><div class="small">فروشِ تأییدشده‌ی این ماه (خالص، با قسط‌های تأییدشده) <span style="opacity:.8">(<?= to_jalali($monthFrom) ?> تا <?= to_jalali($monthTo) ?>)</span></div><div class="fs-5 fw-bold"><?= format_toman($approvedMonth) ?></div></div>
   </div>
 
   <?php if (!$ready): ?>

@@ -14,7 +14,7 @@
  *   - لید              : مشتری‌های یکتایی (نه همکار/خانواده) که تیم در آن روز برایشان پیگیری/تماس ثبت کرده
  *   - مذاکره            : مشتری‌های یکتایی که در آن روز جلسه‌شان «برگزار شد» یا پیگیری‌شان به «جلسه برگزار شد / در انتظار تصمیم / در انتظار پرداخت» رسید
  *   - جدید / قدیم        : سفارش‌های تأییدشده (تاریخِ تأییدِ مالی) با فروشنده‌ی تیم؛ «جدید» = اولین خریدِ تأییدشده‌ی آن شخص (۳۶۰)، بقیه «قدیم»
- *   - پ (آورده)         : مبلغِ خالصِ همان سفارش‌ها (بدونِ مالیات) — همان عددِ «فروشِ تیم»
+ *   - پ (آورده)         : فروشِ خالص با همان تعریفِ «گزارش فروش» (پیش‌پرداخت + قسط‌های تأییدشده، هر کدام روزِ تأییدش) — همان عددِ «فروشِ تیم»
  *   - قانونِ تعداد       : توسعه‌ی لازم = ⌈عملیات ÷ ۸⌉ + ⌈ستادی ÷ ۲⌉ ؛ ✓ اگر توسعه ≥ توسعه‌ی لازم
  *   - قانونِ پ          : حقوقِ روزانه = حقوقِ ثابتِ ماهانه ÷ ۲۴؛ هدفِ روزانه = مجموعِ حقوقِ روزانه‌ی تیم × ۱۰؛
  *                         در بازه‌ی گزارش (اولِ ماه تا روزِ انتخاب‌شده) هدف = هدفِ روزانه × تعدادِ روزهای کاری (بدونِ جمعه)؛
@@ -225,15 +225,22 @@ function sd_sales_series(PDO $pdo, array $ids, array $days): array
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) $nego[$r['d']][(int) $r['c']] = true;
     } catch (Throwable $e) {}
     foreach ($nego as $d => $set) if (isset($out[$d])) $out[$d]['nego'] = count($set);
-    // سفارش‌های تأییدشده ← جدید / قدیم
+    // فروش (همان تعریفِ «گزارش فروش»): پیش‌پرداخت در روزِ تأییدِ سفارش + هر قسط/پرداختِ تأییدشده در روزِ تأییدش، خالص
+    // جدید / قدیم بر اساسِ سفارش (اولین خریدِ آن شخص = جدید)؛ تعداد = سفارش‌هایی که همان روز تأیید شده‌اند
     try {
-        $st = $pdo->prepare("SELECT id, customer_id, decided_at, DATE(decided_at) d, (total_amount - tax_amount) net FROM sales_orders
-            WHERE seller_user_id IN ($in) AND status = 'approved' AND DATE(decided_at) BETWEEN ? AND ?");
-        $st->execute([$from, $to]);
+        if (!function_exists('sales_user_events_sql')) require_once __DIR__ . '/sales_credit.php';
+        $st = $pdo->prepare("SELECT x.order_id, x.kind, DATE(x.at) d, SUM(x.net) net, o.customer_id, o.decided_at
+            FROM (" . sales_user_events_sql($pdo) . ") x JOIN sales_orders o ON o.id = x.order_id
+            WHERE x.uid IN ($in) GROUP BY x.order_id, x.kind, x.payment_id, DATE(x.at), o.customer_id, o.decided_at");
+        $st->execute(sales_user_events_params($pdo, $from, $to));
+        $counted = [];
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $o) {
             if (!isset($out[$o['d']])) continue;
-            $k = sd_is_first_order($pdo, (int) $o['id'], (int) $o['customer_id'], (string) $o['decided_at']) ? 'new' : 'old';
-            $out[$o['d']][$k . '_cnt']++;
+            $k = sd_is_first_order($pdo, (int) $o['order_id'], (int) $o['customer_id'], (string) $o['decided_at']) ? 'new' : 'old';
+            if ($o['kind'] === 'order' && !isset($counted[$o['order_id']])) {
+                $counted[$o['order_id']] = true;
+                $out[$o['d']][$k . '_cnt']++;
+            }
             $out[$o['d']][$k . '_amt'] += max(0, (int) $o['net']);
             $out[$o['d']]['total_amt'] += max(0, (int) $o['net']);
         }

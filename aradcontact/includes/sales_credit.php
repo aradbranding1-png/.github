@@ -75,6 +75,92 @@ function scr_cleanup_tiny_v2(PDO $pdo): void
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  «فروش» — یک تعریف برای همه‌ی گزارش‌ها (گزارش فروش، سفارش‌های من، فروشِ تیم، گزارشِ سرپرست، A4)
+// ═══════════════════════════════════════════════════════════════════════
+//  فروش = رویدادهای پولیِ تأییدشده، هر کدام در «روزِ تأییدِ مالی»ِ خودش:
+//   ۱) تأییدِ سفارش ← مبلغِ تأییدشده‌ی سفارش (پیش‌پرداخت؛ اگر خالی: مبلغِ کلِ سفارش) در روزِ تأییدِ سفارش
+//   ۲) هر پرداختِ بعدیِ تأییدشده (قسط / پرداختِ اضافه، kind = extra) در روزِ تأییدِ همان پرداخت
+//  («اعتبار» و «انتقال از قراردادِ لغوشده» پولِ تازه نیستند و حساب نمی‌شوند.)
+//  همه‌ی مبلغ‌ها «خالص» = بدونِ مالیات، به نسبتِ همان سفارش: مبلغ × (کلِ سفارش − مالیات) ÷ کلِ سفارش.
+//  فروشِ مشترک: سهمِ هر نفر به نسبتِ تفکیکِ مالی (sales_order_credit_splits).
+
+/** خالصِ یک مبلغ برای سفارشِ $o (SQL) */
+function sales_net_sql(string $amountExpr, string $o = 'o'): string
+{
+    return "COALESCE(ROUND(($amountExpr) * ($o.total_amount - $o.tax_amount) / NULLIF($o.total_amount, 0)), 0)";
+}
+
+function sales_payments_ready(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $pdo->query('SELECT decided_at, kind, status FROM sales_order_payments LIMIT 0');
+        return $ok = true;
+    } catch (Throwable $e) {
+        return $ok = false;
+    }
+}
+
+/**
+ * رویدادهای فروش به تفکیکِ نفر (برای FROM (...) x).
+ * ستون‌ها: order_id, uid, at, kind ('order'|'payment'), payment_id, gross, net, shared
+ * $orderWhere: شرط روی سفارش (alias o) و مشتری (alias c)؛ پارامترها: sales_user_events_params()
+ */
+function sales_user_events_sql(PDO $pdo, string $orderWhere = '1=1'): string
+{
+    $ev = "SELECT o.id order_id, o.decided_at at, 'order' kind, 0 payment_id, COALESCE(o.confirmed_amount, o.total_amount) gross,
+                " . sales_net_sql('COALESCE(o.confirmed_amount, o.total_amount)') . " net
+           FROM sales_orders o WHERE o.status = 'approved' AND o.decided_at BETWEEN ? AND ?";
+    if (sales_payments_ready($pdo)) {
+        $ev .= " UNION ALL
+           SELECT o.id, p.decided_at, 'payment', p.id, p.amount, " . sales_net_sql('p.amount') . "
+           FROM sales_order_payments p JOIN sales_orders o ON o.id = p.order_id
+           WHERE o.status = 'approved' AND p.status = 'confirmed' AND p.kind = 'extra' AND p.decided_at BETWEEN ? AND ?";
+    }
+    if (scr_ready($pdo)) {
+        return "SELECT ev.order_id, COALESCE(sp.user_id, o.seller_user_id) uid, ev.at, ev.kind, ev.payment_id,
+                    CASE WHEN sp.user_id IS NULL THEN ev.gross ELSE ROUND(sp.amount * ev.gross / NULLIF(t.tot, 0)) END gross,
+                    CASE WHEN sp.user_id IS NULL THEN ev.net ELSE ROUND(sp.amount * ev.net / NULLIF(t.tot, 0)) END net,
+                    CASE WHEN sp.user_id IS NULL THEN 0 ELSE 1 END shared
+                FROM ($ev) ev
+                JOIN sales_orders o ON o.id = ev.order_id
+                LEFT JOIN customers c ON c.id = o.customer_id
+                LEFT JOIN sales_order_credit_splits sp ON sp.order_id = o.id
+                LEFT JOIN (SELECT order_id, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id) t ON t.order_id = o.id
+                WHERE ($orderWhere)";
+    }
+    return "SELECT ev.order_id, o.seller_user_id uid, ev.at, ev.kind, ev.payment_id, ev.gross, ev.net, 0 shared
+            FROM ($ev) ev JOIN sales_orders o ON o.id = ev.order_id LEFT JOIN customers c ON c.id = o.customer_id WHERE ($orderWhere)";
+}
+
+/** پارامترهای sales_user_events_sql برای بازه‌ی [from, to] (تاریخِ میلادی؛ خالی = بدونِ محدودیت) + پارامترهای $orderWhere */
+function sales_user_events_params(PDO $pdo, string $from, string $to, array $whereParams = []): array
+{
+    $f = ($from !== '' ? $from : '1000-01-01') . ' 00:00:00';
+    $t = ($to !== '' ? $to : '9999-12-31') . ' 23:59:59';
+    return array_merge([$f, $t], sales_payments_ready($pdo) ? [$f, $t] : [], $whereParams);
+}
+
+/** فروشِ خالصِ چند نفر در بازه: [uid => ['net' => …, 'gross' => …, 'cnt' => تعدادِ سفارش‌ها]] */
+function sales_by_user(PDO $pdo, array $uids, string $from, string $to): array
+{
+    $out = [];
+    $uids = array_values(array_unique(array_map('intval', $uids)));
+    if (!$uids) return $out;
+    $in = implode(',', $uids);
+    try {
+        $st = $pdo->prepare('SELECT x.uid, SUM(x.net) net, SUM(x.gross) gross, COUNT(DISTINCT CASE WHEN x.kind = \'order\' THEN x.order_id END) cnt
+            FROM (' . sales_user_events_sql($pdo) . ") x WHERE x.uid IN ($in) GROUP BY x.uid");
+        $st->execute(sales_user_events_params($pdo, $from, $to));
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) $out[(int) $r['uid']] = ['net' => (int) $r['net'], 'gross' => (int) $r['gross'], 'cnt' => (int) $r['cnt']];
+    } catch (Throwable $e) {
+        error_log('sales_by_user: ' . $e->getMessage());
+    }
+    return $out;
+}
+
 /** عددِ فروشِ سفارش (همان مبنای گزارش فروش) */
 function scr_order_amount(array $order): int
 {
