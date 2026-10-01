@@ -77,7 +77,8 @@ if ($ready) {
     $__evParams = sales_user_events_params($pdo, $from, $to, $__evP);
     $__evUidSql = ($sellerId > 0 ? ' AND x.uid = ' . (int) $sellerId : '') . ($__teamUidSql !== '' ? ' AND x.uid' . $__teamUidSql : '');
 
-    $__extraPaid = sales_payments_ready($pdo) ? "COALESCE((SELECT SUM(p.amount) FROM sales_order_payments p WHERE p.order_id = o.id AND p.status = 'confirmed' AND p.kind = 'extra'), 0)" : '0';
+    $__extraPaid = sales_payments_ready($pdo) ? "COALESCE((SELECT SUM(p.amount) FROM sales_order_payments p WHERE p.order_id = o.id AND p.status = 'confirmed' AND p.kind = 'extra'"
+        . (sales_has_legacy_col($pdo) ? ' AND COALESCE(o.is_legacy, 0) = 0' : '') . "), 0)" : '0';
     $st = $pdo->prepare("SELECT o.status, COUNT(*) cnt, COALESCE(SUM(CASE WHEN o.status='approved' THEN " . sales_net_sql("COALESCE(o.confirmed_amount,o.total_amount) + $__extraPaid") . " ELSE " . sales_net_sql('o.total_amount') . " END),0) amt $base GROUP BY o.status");
     $st->execute($params);
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -466,7 +467,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
               <td class="text-nowrap"><?= format_toman((int) $r['paid_amount']) ?><?php if ($diff < 0): ?><div class="small text-warning">کسری <?= format_toman(abs($diff)) ?></div><?php endif; ?></td>
               <td class="small"><?= e($methods[$r['payment_method']] ?? (string) $r['payment_method']) ?><?php if ($r['payment_ref']): ?><div class="text-muted" dir="ltr"><?= e($r['payment_ref']) ?></div><?php endif; ?></td>
               <td><span class="badge <?= (int) $r['files_cnt'] > 0 ? 'text-bg-success' : 'text-bg-danger' ?>"><i class="fa-solid fa-receipt"></i> <?= to_persian_digits((string) $r['files_cnt']) ?></span></td>
-              <td><?= orders_status_badge((string) $r['status']) ?>
+              <td><?= !empty($r['is_legacy']) && $r['status'] === 'approved' ? '<span class="badge text-bg-info"><i class="fa-solid fa-hand-holding-dollar"></i> اقساطِ قبلی</span>' : orders_status_badge((string) $r['status']) ?>
                 <?php
                   // هشدارِ واریزیِ تکراری (فقط برای سفارش‌های در انتظار — همان‌هایی که مالی باید تصمیم بگیرد)
                   $__dups = ($r['status'] === 'pending' && pdup_ready($pdo)) ? pdup_candidates($pdo, $r) : [];

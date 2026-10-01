@@ -81,7 +81,8 @@ function scr_cleanup_tiny_v2(PDO $pdo): void
 //  فروش = رویدادهای پولیِ تأییدشده، هر کدام در «روزِ تأییدِ مالی»ِ خودش:
 //   ۱) تأییدِ سفارش ← مبلغِ تأییدشده‌ی سفارش (پیش‌پرداخت؛ اگر خالی: مبلغِ کلِ سفارش) در روزِ تأییدِ سفارش
 //   ۲) هر پرداختِ بعدیِ تأییدشده (قسط / پرداختِ اضافه، kind = extra) در روزِ تأییدِ همان پرداخت
-//  («اعتبار» و «انتقال از قراردادِ لغوشده» پولِ تازه نیستند و حساب نمی‌شوند.)
+//  («اعتبار» و «انتقال از قراردادِ لغوشده» پولِ تازه نیستند و حساب نمی‌شوند؛ فیش‌های «پرونده‌ی اقساطِ قبلی» (is_legacy)
+//   بدهیِ خدماتِ قبل از سامانه‌اند و فروشِ جدید حساب نمی‌شوند — مثلِ قبل؛ سهمِ عملکردشان جداست.)
 //  همه‌ی مبلغ‌ها «خالص» = بدونِ مالیات، به نسبتِ همان سفارش: مبلغ × (کلِ سفارش − مالیات) ÷ کلِ سفارش.
 //  فروشِ مشترک: سهمِ هر نفر به نسبتِ تفکیکِ مالی (sales_order_credit_splits).
 
@@ -103,6 +104,18 @@ function sales_payments_ready(PDO $pdo): bool
     }
 }
 
+function sales_has_legacy_col(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $pdo->query('SELECT is_legacy FROM sales_orders LIMIT 0');
+        return $ok = true;
+    } catch (Throwable $e) {
+        return $ok = false;
+    }
+}
+
 /**
  * رویدادهای فروش به تفکیکِ نفر (برای FROM (...) x).
  * ستون‌ها: order_id, uid, at, kind ('order'|'payment'), payment_id, gross, net, shared
@@ -117,7 +130,8 @@ function sales_user_events_sql(PDO $pdo, string $orderWhere = '1=1'): string
         $ev .= " UNION ALL
            SELECT o.id, p.decided_at, 'payment', p.id, p.amount, " . sales_net_sql('p.amount') . "
            FROM sales_order_payments p JOIN sales_orders o ON o.id = p.order_id
-           WHERE o.status = 'approved' AND p.status = 'confirmed' AND p.kind = 'extra' AND p.decided_at BETWEEN ? AND ?";
+           WHERE o.status = 'approved' AND p.status = 'confirmed' AND p.kind = 'extra' AND p.decided_at BETWEEN ? AND ?"
+           . (sales_has_legacy_col($pdo) ? ' AND COALESCE(o.is_legacy, 0) = 0' : '');
     }
     if (scr_ready($pdo)) {
         return "SELECT ev.order_id, COALESCE(sp.user_id, o.seller_user_id) uid, ev.at, ev.kind, ev.payment_id,

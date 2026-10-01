@@ -352,7 +352,11 @@ require_once __DIR__ . '/includes/layout_top.php';
       <h5><i class="fa-solid fa-file-invoice-dollar"></i> فاکتور / سفارش <?= e(to_persian_digits($order['order_number'])) ?></h5>
       <div class="sub">مشتری: <b><?= e($order['customer_name']) ?></b> — <span dir="ltr"><?= e($order['customer_mobile']) ?></span> | کارشناس: <?= e($order['seller_name'] ?? '—') ?> | ثبت: <?= to_jalali($order['created_at']) ?></div>
     </div>
+    <?php if ($isLegacyOrder && $order['status'] === 'approved'): ?>
+      <div class="fs-6"><span class="badge bg-light text-dark px-3 py-2"><i class="fa-solid fa-hand-holding-dollar"></i> پرونده‌ی اقساطِ قبلی</span></div>
+    <?php else: ?>
     <div class="fs-6"><span class="badge bg-light text-dark px-3 py-2"><i class="fa-solid <?= e($st['icon']) ?>"></i> <?= e($st['label']) ?></span></div>
+    <?php endif; ?>
   </div>
 
   <?php if ($order['status'] === 'rejected' && $order['finance_note']): ?>
@@ -360,6 +364,10 @@ require_once __DIR__ . '/includes/layout_top.php';
       <div><b>دلیلِ رد:</b> <?= nl2br(e($order['finance_note'])) ?></div>
       <?php if ($isSeller || can_manage_service_requests($user)): ?><a class="btn btn-sm btn-danger" href="order_submit.php?order_id=<?= $orderId ?>"><i class="fa-solid fa-pen"></i> اصلاح و ارسالِ دوباره</a><?php endif; ?>
     </div>
+  <?php elseif ($order['status'] === 'approved' && $isLegacyOrder): ?>
+    <?php // پرونده‌ی اقساطِ قبلی تأییدِ مالی ندارد؛ کارشناس فقط آن را می‌سازد (ستونِ finance_user_id در این پرونده = سازنده) ?>
+    <div class="alert alert-info"><i class="fa-solid fa-hand-holding-dollar"></i> پرونده‌ی اقساطِ قبلی توسطِ <?= e($order['finance_name'] ?? $order['seller_name'] ?? 'کارشناس') ?> در <?= to_jalali($order['created_at']) ?> ساخته شد.
+      این پرونده سفارشِ جدید نیست و تأییدِ مالی ندارد؛ <b>هر فیشِ قسط جداگانه توسطِ واحدِ مالی تأیید می‌شود</b>.</div>
   <?php elseif ($order['status'] === 'approved'): ?>
     <div class="alert alert-success"><i class="fa-solid fa-circle-check"></i> سفارش توسطِ <?= e($order['finance_name'] ?? 'واحد مالی') ?> در <?= to_jalali($order['decided_at']) ?> تأیید و ثبت شد<?= $order['finance_note'] ? ' — ' . e($order['finance_note']) : '' ?>.</div>
   <?php endif; ?>
