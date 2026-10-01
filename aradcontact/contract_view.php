@@ -248,6 +248,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($isTicket) {
             $dept = trim((string) ($_POST['department'] ?? '')) ?: ctr_ticket_default_department();
             $tr = ctr_send_ticket($pdo, $contract, $docs, $links, $msg, $dept, $uid);
+            if (($tr['status'] ?? '') === 'duplicate') $json(['ok' => false, 'message' => $tr['message']]); // تکراری: نه تیکتِ تازه، نه سابقه‌ی ارسال
             $pdo->prepare('INSERT INTO contract_sends (contract_id, customer_id, quote_id, doc_types, channel, status, result_note, link_ids, sent_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
                 ->execute([$id, (int) $contract['customer_id'], (int) $contract['quote_id'], implode(',', $docs), 'ticket',
                     $tr['ok'] ? 'sent' : ($tr['status'] === 'queued' ? 'sending' : 'failed'),

@@ -1615,6 +1615,56 @@ function ctr_send_ticket(PDO $pdo, array $contract, array $docs, array $links, s
     $attachments = $__att ? json_encode($__att, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null;
     $now = date('Y-m-d H:i:s');
     $serviceTitle = mb_substr('قرارداد ' . $number, 0, 250);
+    // ─── جلوگیری از ارسالِ تکراری: اسنادی که قبلاً با تیکت برای مشتری رفته‌اند دوباره فرستاده نمی‌شوند ───
+    // قفل برای همین قرارداد: دو درخواستِ هم‌زمان (دوبار کلیک) پشتِ سرِ هم اجرا می‌شوند و دومی ارسالِ اولی را می‌بیند.
+    $__lock = 'ctr_ticket_' . (int) $contract['id'];
+    $__locked = false;
+    try { $__locked = (int) $pdo->query('SELECT GET_LOCK(' . $pdo->quote($__lock) . ', 25)')->fetchColumn() === 1; } catch (Throwable $e) {}
+    try {
+        $dup = ctr_ticket_already_sent($pdo, $contract, $docs, $serviceTitle);
+        if ($dup) {
+            return ['ok' => false, 'status' => 'duplicate', 'ticket_id' => (int) $dup['id'],
+                'message' => 'اسنادِ این قرارداد قبلاً با تیکت' . (!empty($dup['external_id']) ? ' ' . to_persian_digits((string) $dup['external_id']) : '')
+                    . ' برای مشتری ارسال شده؛ تیکتِ تکراری فرستاده نشد. اگر واقعاً لازم است (مثلاً تیکت در سایتِ آراد برندینگ حذف شده) در صفحه‌ی سفارش روی همان تیکت «ارسال مجدد» را بزنید.'];
+        }
+        return ctr_send_ticket_locked($pdo, $contract, $docs, $links, $message, $department, $userId, $orderLike, $subject, $attachments, $serviceTitle, $now);
+    } finally {
+        if ($__locked) { try { $pdo->query('SELECT RELEASE_LOCK(' . $pdo->quote($__lock) . ')'); } catch (Throwable $e) {} }
+    }
+}
+
+/**
+ * تیکتِ ارسال‌شده‌ای که همه‌ی اسنادِ خواسته‌شده را قبلاً برای مشتری برده؟ (null = نه)
+ * اسنادِ ارسال‌شده از سابقه‌ی «ارسالِ اسناد» (contract_sends با کانالِ تیکت) خوانده می‌شود؛ اگر سابقه نباشد، هر تیکتِ ارسال‌شده‌ی همین قرارداد کافی است.
+ */
+function ctr_ticket_already_sent(PDO $pdo, array $contract, array $docs, string $serviceTitle): ?array
+{
+    try {
+        $st = $pdo->prepare("SELECT id, external_id FROM aradbranding_tickets WHERE item_id IS NULL AND service_title = ? AND customer_id = ?
+            AND status IN ('sent', 'manual', 'bundled') ORDER BY id DESC LIMIT 1");
+        $st->execute([$serviceTitle, (int) $contract['customer_id']]);
+        $t = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$t) return null;
+        $sent = [];
+        $hasLog = false;
+        $q = $pdo->prepare("SELECT doc_types FROM contract_sends WHERE contract_id = ? AND channel = 'ticket' AND status = 'sent'");
+        $q->execute([(int) $contract['id']]);
+        foreach ($q->fetchAll(PDO::FETCH_COLUMN) ?: [] as $dt) {
+            $hasLog = true;
+            foreach (explode(',', (string) $dt) as $d) if (trim($d) !== '') $sent[trim($d)] = true;
+        }
+        if (!$hasLog) return $t;
+        foreach ($docs as $d) if (!isset($sent[(string) $d])) return null; // سندِ تازه‌ای هست ← ارسال مجاز
+        return $t;
+    } catch (Throwable $e) {
+        error_log('ctr_ticket_already_sent: ' . $e->getMessage());
+        return null;
+    }
+}
+
+function ctr_send_ticket_locked(PDO $pdo, array $contract, array $docs, array $links, string $message, string $department, int $userId,
+                                array $orderLike, string $subject, ?string $attachments, string $serviceTitle, string $now): array
+{
     try {
         // تیکتِ ارسال‌نشده‌ی قبلیِ همین قرارداد دوباره استفاده می‌شود (تیکتِ تکراری ساخته نمی‌شود)
         $ex = $pdo->prepare("SELECT id FROM aradbranding_tickets WHERE item_id IS NULL AND order_id = ? AND service_title = ? AND status IN ('queued','failed','skipped') ORDER BY id DESC");

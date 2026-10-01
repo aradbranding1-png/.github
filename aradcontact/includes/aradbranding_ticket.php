@@ -815,7 +815,27 @@ function abt_fetch_departments(PDO $pdo, array $s, int $userId = 0): array
 }
 
 /** ارسالِ واقعیِ تیکت. @return array{ok:bool, message:string} */
+/**
+ * ارسالِ یک تیکت — با قفلِ پایگاه‌داده برای همان تیکت: اگر دو درخواست هم‌زمان برسد (دوبار کلیک، دو تب، …)
+ * دومی بعد از اولی وضعیتِ تازه را می‌خواند و چون «ارسال شده» است دوباره نمی‌فرستد.
+ */
 function abt_send(PDO $pdo, array $order, array $ticket, int $userId): array
+{
+    $tid = (int) ($ticket['id'] ?? 0);
+    $lock = 'abt_send_' . $tid;
+    $locked = false;
+    try {
+        $locked = $tid > 0 && (int) $pdo->query('SELECT GET_LOCK(' . $pdo->quote($lock) . ', 25)')->fetchColumn() === 1;
+    } catch (Throwable $e) {}
+    try {
+        if ($tid > 0 && ($fresh = abt_get_ticket($pdo, $tid))) $ticket = $fresh;
+        return abt_send_unlocked($pdo, $order, $ticket, $userId);
+    } finally {
+        if ($locked) { try { $pdo->query('SELECT RELEASE_LOCK(' . $pdo->quote($lock) . ')'); } catch (Throwable $e) {} }
+    }
+}
+
+function abt_send_unlocked(PDO $pdo, array $order, array $ticket, int $userId): array
 {
     if (in_array($ticket['status'], ['sent', 'manual', 'bundled'], true)) {
         return ['ok' => true, 'message' => 'تیکتِ این سفارش قبلاً ارسال شده است.'];
