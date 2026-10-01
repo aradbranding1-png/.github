@@ -30,7 +30,7 @@ function perf_ready(PDO $pdo): bool
 {
     static $ready = null;
     if ($ready !== null) return $ready;
-    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); ps_a_d_rule_v13($pdo); } return $ready; }
+    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); ps_a_d_rule_v14($pdo); } return $ready; }
     $ddl = [
         "CREATE TABLE IF NOT EXISTS ps_base_versions (id INT UNSIGNED NOT NULL AUTO_INCREMENT, percent DECIMAL(6,3) NOT NULL, effective_from DATETIME NOT NULL,
           note VARCHAR(500) DEFAULT NULL, created_by INT UNSIGNED DEFAULT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id), KEY idx_psbv_from (effective_from)
@@ -344,13 +344,13 @@ function ps_distribute(int $pool, array $own): array
     // A
     $a = $own['A'] ?? null;
     if ($a) $lines[] = ['unit' => 'A', 'slot' => 'A', 'user_id' => (int) $a['user_id'], 'team_id' => $a['team_id'] ?? null, 'amount' => $unit,
-        'reason' => 'A مشتری = ' . ($a['name'] ?? '#' . $a['user_id']) . $team($a) . ' / کلِ سهمِ A (۲۵٪)'];
-    else $org($lines, 'A', 'A', $unit, 'A ندارد ← سهمِ A به سازمان');
+        'reason' => 'A مشتری = ' . ($a['name'] ?? '#' . $a['user_id']) . $team($a) . ' / کلِ سهمِ A (۲۵٪)' . (!empty($a['basis']) ? ' / مبنا: ' . $a['basis'] : '')];
+    else $org($lines, 'A', 'A', $unit, 'A ندارد' . (!empty($own['A_note']) ? ' (کارشناسِ قبلی: ' . $own['A_note'] . ')' : '') . ' ← سهمِ A به سازمان');
 
     // C
     $c = $own['C'] ?? null;
     if ($c) $lines[] = ['unit' => 'C', 'slot' => 'C', 'user_id' => (int) $c['user_id'], 'team_id' => $c['team_id'] ?? null, 'amount' => $unit,
-        'reason' => 'C مشتری = ' . ($c['name'] ?? '#' . $c['user_id']) . $team($c) . ' / کلِ سهمِ C (۲۵٪)'];
+        'reason' => 'C مشتری = ' . ($c['name'] ?? '#' . $c['user_id']) . $team($c) . ' / کلِ سهمِ C (۲۵٪)' . (!empty($c['basis']) ? ' / مبنا: ' . $c['basis'] : '')];
     else $org($lines, 'C', 'C', $unit, 'C ندارد ← سهمِ C به سازمان');
 
     // B — فقط یک نفر (مثلِ A و C). snapshotهای قدیمی که چند B داشتند: همان B اول (کوچک‌ترین جایگاه) کلِ سهم را می‌گیرد.
@@ -358,7 +358,7 @@ function ps_distribute(int $pool, array $own): array
     usort($bs, static fn($x, $y) => (int) ($x['position'] ?? 1) <=> (int) ($y['position'] ?? 1));
     $bEff = $bs[0] ?? null;
     if ($bEff) $lines[] = ['unit' => 'B', 'slot' => 'B', 'user_id' => (int) $bEff['user_id'], 'team_id' => $bEff['team_id'] ?? null, 'amount' => $unit,
-        'reason' => 'B مشتری = ' . ($bEff['name'] ?? '#' . $bEff['user_id']) . $team($bEff) . ' / کلِ سهمِ B (۲۵٪)'];
+        'reason' => 'B مشتری = ' . ($bEff['name'] ?? '#' . $bEff['user_id']) . $team($bEff) . ' / کلِ سهمِ B (۲۵٪)' . (!empty($bEff['basis']) ? ' / مبنا: ' . $bEff['basis'] : '')];
     else $org($lines, 'B', 'B', $unit, 'B ندارد ← سهمِ B به سازمان');
 
     // D
@@ -876,10 +876,15 @@ function ps_order_snapshot(PDO $pdo, int $orderId, ?array $registrant, string $s
     $own = ps_owners($pdo, (int) $order['customer_id']);
     $slim = static fn($x) => $x ? ['user_id' => (int) $x['user_id'], 'name' => $x['full_name'], 'team_id' => $x['team_id'] ? (int) $x['team_id'] : null,
         'leader_id' => $x['leader_id'] ? (int) $x['leader_id'] : null, 'leader_name' => $x['leader_name'], 'position' => (int) $x['position']] : null;
-    // قانونِ A: فقط اگر همین A مشتری را واردِ سامانه کرده یا از Box A گرفته باشد (یا مدیر دستی تعیین کرده باشد)؛ وگرنه سهمِ A ← سازمان
+    // قانونِ A: فقط اگر همین A مشتری را واردِ سامانه کرده یا از Box A گرفته باشد (بدونِ استثنا)؛ وگرنه سهمِ A ← سازمان
     $aOwn = $own['A'];
-    if ($aOwn && ($aOwn['source'] ?? '') !== 'manual' && !ps_a_eligible($pdo, (int) $order['customer_id'], (int) $aOwn['user_id'])) $aOwn = null;
+    $aBasis = $aOwn ? ps_a_basis($pdo, (int) $order['customer_id'], (int) $aOwn['user_id']) : null;
+    if ($aBasis && !$aBasis['ok']) $aOwn = null;
     $snap = ['A' => $slim($aOwn), 'B' => array_map($slim, $own['B']), 'C' => $slim($own['C']), 'direct_d' => null];
+    if ($snap['A']) $snap['A']['basis'] = $aBasis['text'];
+    elseif ($aBasis) $snap['A_note'] = $own['A']['full_name'] . ' — ' . $aBasis['text'];
+    foreach ($snap['B'] as $i => $bb) $snap['B'][$i]['basis'] = ps_owner_basis($pdo, $own['B'][$i]);
+    if ($snap['C']) $snap['C']['basis'] = ps_owner_basis($pdo, $own['C']);
     $regId = $registrant ? (int) $registrant['id'] : (int) $order['seller_user_id'];
     $reg = ps_user_row($pdo, $regId);
     if ($reg && $reg['role'] === 'leader') $snap['direct_d'] = ['user_id' => $regId, 'name' => $reg['full_name'], 'team_id' => $reg['team_id'] ? (int) $reg['team_id'] : null];
@@ -968,12 +973,14 @@ function ps_assign_c_on_first_money(PDO $pdo, int $orderId, int $byUser): bool
         if (!empty($ow[$slot])) return false; // جایگاهِ این سفارش پر است (A/C یکتاست)
         // قانونِ A: ثبت‌کننده فقط وقتی A می‌شود که مشتری را از Box A گرفته باشد یا خودش برای اولین بار واردِ سامانه کرده باشد؛
         // مشتریانِ قدیمی (که در Box A ریخته نشده‌اند) A ندارند ← سهمِ A به سازمان
-        if ($slot === 'A' && !ps_a_eligible($pdo, $cid, $regId)) return false;
+        $aB = $slot === 'A' ? ps_a_basis($pdo, $cid, $regId) : null;
+        if ($aB && !$aB['ok']) return false;
         if (!$own[$slot]) {
             $r = ps_owner_add($pdo, $cid, $slot, $regId, 'payment', $byUser ?: $regId);
             if ($r['ok']) ps_activity($pdo, $cid, $byUser ?: $regId, $slot . ' مشتری = ' . $reg['full_name'] . ' (ثبتِ فیش در سفارشِ #' . $orderId . ')');
         }
         $ow[$slot] = ps_snapshot_person($pdo, $regId);
+        if ($ow[$slot]) $ow[$slot]['basis'] = $aB ? $aB['text'] : 'ثبتِ فیشِ همین سفارش (اولین پولِ مشتری را خودش گرفته)';
         $changed = true;
     } else { // B — مثلِ A و C: فقط یک نفر
         if (!empty($ow['B'])) return false; // جایگاهِ B این سفارش پر است
@@ -981,7 +988,7 @@ function ps_assign_c_on_first_money(PDO $pdo, int $orderId, int $byUser): bool
             $r = ps_owner_add($pdo, $cid, 'B', $regId, 'payment', $byUser ?: $regId);
             if ($r['ok']) ps_activity($pdo, $cid, $byUser ?: $regId, 'B مشتری = ' . $reg['full_name'] . ' (ثبتِ فیش در سفارشِ #' . $orderId . ')');
         }
-        $ow['B'] = [ps_snapshot_person($pdo, $regId, 1)];
+        $ow['B'] = [ps_snapshot_person($pdo, $regId, 1) + ['basis' => 'ثبتِ فیشِ همین سفارش (اولین پولِ مشتری را خودش گرفته)']];
         $changed = true;
     }
     if (!$changed) return false;
@@ -1233,10 +1240,19 @@ function ps_edit_order_owners(PDO $pdo, int $orderId, array $in, int $byUser, st
         return $u && $u['role'] === $role ? null : ('نقشِ کاربرِ انتخاب‌شده برای ' . $role . ' باید ' . $role . ' باشد.');
     };
     $new = ['A' => null, 'B' => [], 'C' => null, 'direct_d' => null, 'manual_edit' => true];
-    if (!empty($in['A'])) { if ($e = $need($pdo, (int) $in['A'], 'A')) return ['ok' => false, 'message' => $e]; $new['A'] = ps_snapshot_person($pdo, (int) $in['A']); }
-    if (!empty($in['C'])) { if ($e = $need($pdo, (int) $in['C'], 'C')) return ['ok' => false, 'message' => $e]; $new['C'] = ps_snapshot_person($pdo, (int) $in['C']); }
+    $byName = ps_user_row($pdo, $byUser)['full_name'] ?? '';
+    $manualBasis = 'ویرایشِ دستیِ سهمِ سفارش' . ($byName !== '' ? ' توسطِ ' . $byName : '') . ' (' . to_jalali(date('Y-m-d')) . ')';
+    if (!empty($in['A'])) {
+        if ($e = $need($pdo, (int) $in['A'], 'A')) return ['ok' => false, 'message' => $e];
+        $oc0 = $pdo->prepare('SELECT customer_id FROM sales_orders WHERE id = ?');
+        $oc0->execute([$orderId]);
+        $ab = ps_a_basis($pdo, (int) $oc0->fetchColumn(), (int) $in['A']);
+        if (!$ab['ok']) return ['ok' => false, 'message' => 'این کارشناس نمی‌تواند A ِ این مشتری باشد: ' . $ab['text'] . '. A فقط کسی است که مشتری را خودش واردِ سامانه کرده یا از Box A برداشته.'];
+        $new['A'] = ps_snapshot_person($pdo, (int) $in['A']) + ['basis' => $ab['text'] . ' — ' . $manualBasis];
+    }
+    if (!empty($in['C'])) { if ($e = $need($pdo, (int) $in['C'], 'C')) return ['ok' => false, 'message' => $e]; $new['C'] = ps_snapshot_person($pdo, (int) $in['C']) + ['basis' => $manualBasis]; }
     $bIn = (int) ($in['B'] ?? ($in['B1'] ?? 0));
-    if ($bIn > 0) { if ($e = $need($pdo, $bIn, 'B')) return ['ok' => false, 'message' => $e]; $new['B'][] = ps_snapshot_person($pdo, $bIn, 1); }
+    if ($bIn > 0) { if ($e = $need($pdo, $bIn, 'B')) return ['ok' => false, 'message' => $e]; $new['B'][] = ps_snapshot_person($pdo, $bIn, 1) + ['basis' => $manualBasis]; }
     if (!empty($in['D'])) {
         $d = ps_user_row($pdo, (int) $in['D']);
         if (!$d || $d['role'] !== 'leader') return ['ok' => false, 'message' => 'سرپرستِ ثبت‌کننده باید نقشِ سرپرست داشته باشد.'];
@@ -1562,6 +1578,10 @@ function ps_owner_set(PDO $pdo, int $customerId, string $slot, int $userId, stri
     $u = ps_user_row($pdo, $userId);
     if (!$u) return ['ok' => false, 'message' => 'کاربر پیدا نشد.'];
     if ($u['role'] !== $slot) return ['ok' => false, 'message' => 'نقشِ «' . $u['full_name'] . '» ' . ($u['role'] ?: '—') . ' است؛ برای جایگاهِ ' . $slot . ' باید ' . $slot . ' باشد.'];
+    if ($slot === 'A') {
+        $ab = ps_a_basis($pdo, $customerId, $userId);
+        if (!$ab['ok']) return ['ok' => false, 'message' => $u['full_name'] . ' نمی‌تواند A ِ این مشتری باشد: ' . $ab['text'] . '. A فقط کسی است که مشتری را خودش واردِ سامانه کرده یا از Box A برداشته.'];
+    }
     $pk = ps_person_key($pdo, $customerId);
     $st = $pdo->prepare('SELECT * FROM ps_owners WHERE person_key = ? AND slot = ?');
     $st->execute([$pk, $slot]);
@@ -1785,25 +1805,67 @@ function ps_launch_at(PDO $pdo): ?string
 }
 
 /**
- * آیا این کارشناسِ A حقِ جایگاهِ A این مشتری را دارد؟
- *   ۱) مشتری را از Box A دریافت کرده، یا
- *   ۲) مشتری جدید است: قدیمی‌ترین پرونده‌ی این شماره (در کلِ ۳۶۰) بعد از راه‌اندازیِ Boxها ساخته شده
- *      و اولین کسی که آن را وارد کرده همین کارشناس است (شماره قبلاً در سامانه نبوده).
- * مشتریانِ قدیمی که در Box A ریخته نشده‌اند ← A ندارند (سهمِ A برای سازمان).
+ * چه کسی این پرونده را «واردِ سامانه» کرده؟ (نه صاحبِ فعلی — صاحبِ فعلی ممکن است پرونده را بعداً تحویل گرفته باشد)
+ *   ۱) لاگِ «ثبتِ مشتری» (customer_activity_logs: create) ← همان کاربر
+ *   ۲) اولین انتقال/ارجاعِ پرونده ← فرستنده (صاحبِ قبل از اولین انتقال)
+ *   ۳) اولین رابطه‌ی کارشناس با پرونده، اگر از راهِ ثبت/تماسِ خودِ کارشناس بوده (نه Box/ارجاع/ایمپورتِ مدیر)
+ *   ۴) پرونده‌ای که هیچ رابطه و انتقالی ندارد ← صاحبِ پرونده
+ * @return array{uid:int, how:string}
  */
-function ps_a_eligible(PDO $pdo, int $customerId, int $userId): bool
+function ps_customer_creator(PDO $pdo, int $recId): array
+{
+    static $cache = [];
+    if (isset($cache[$recId])) return $cache[$recId];
+    try {
+        $q = $pdo->prepare("SELECT user_id, created_at FROM customer_activity_logs WHERE customer_id = ? AND activity_type = 'create' AND user_id IS NOT NULL ORDER BY created_at ASC, id ASC LIMIT 1");
+        $q->execute([$recId]);
+        if ($r = $q->fetch(PDO::FETCH_ASSOC)) return $cache[$recId] = ['uid' => (int) $r['user_id'], 'how' => 'ثبتِ مشتری در سامانه'];
+    } catch (Throwable $e) {}
+    foreach (['customer_referrals', 'customer_handoffs'] as $t) {
+        try {
+            $q = $pdo->prepare("SELECT from_user_id FROM $t WHERE customer_id = ? AND from_user_id > 0 ORDER BY created_at ASC, id ASC LIMIT 1");
+            $q->execute([$recId]);
+            if ($u = (int) $q->fetchColumn()) return $cache[$recId] = ['uid' => $u, 'how' => 'صاحبِ پرونده قبل از اولین انتقال'];
+        } catch (Throwable $e) {}
+    }
+    $hasRel = false;
+    try {
+        $q = $pdo->prepare('SELECT employee_id, created_by_source FROM customer_employee_relations WHERE customer_id = ? ORDER BY created_at ASC, id ASC LIMIT 1');
+        $q->execute([$recId]);
+        if ($r = $q->fetch(PDO::FETCH_ASSOC)) {
+            $hasRel = true;
+            if (in_array((string) $r['created_by_source'], ['call_import', 'novatel_import', 'manual_link', 'legacy_owner'], true)) {
+                return $cache[$recId] = ['uid' => (int) $r['employee_id'], 'how' => 'اولین کارشناسِ پرونده (' . (string) $r['created_by_source'] . ')'];
+            }
+        }
+    } catch (Throwable $e) {}
+    if (!$hasRel) {
+        $q = $pdo->prepare('SELECT owner_user_id FROM customers WHERE id = ?');
+        $q->execute([$recId]);
+        if ($u = (int) $q->fetchColumn()) return $cache[$recId] = ['uid' => $u, 'how' => 'صاحبِ پرونده (بدونِ هیچ انتقالی)'];
+    }
+    return $cache[$recId] = ['uid' => 0, 'how' => 'واردکننده مشخص نیست (ایمپورت/انتقال)'];
+}
+
+/**
+ * مبنای جایگاهِ A — فقط دو حالت:
+ *   ۱) کارشناس مشتری را از Box A برداشته، یا
+ *   ۲) خودش مشتری را واردِ سامانه کرده (قدیمی‌ترین پرونده‌ی این شماره در کلِ ۳۶۰، بعد از راه‌اندازیِ Boxها).
+ * مشتریانِ قدیمی که در Box A ریخته نشده‌اند ← A ندارند (سهمِ A برای سازمان). تعیینِ دستی هم استثنا نیست.
+ * @return array{ok:bool, text:string}
+ */
+function ps_a_basis(PDO $pdo, int $customerId, int $userId): array
 {
     static $cache = [];
     $key = $customerId . ':' . $userId;
     if (isset($cache[$key])) return $cache[$key];
     $pk = ps_person_key($pdo, $customerId);
     try {
-        $b = $pdo->prepare("SELECT 1 FROM ps_box_items WHERE person_key = ? AND box = 'A' AND status = 'claimed' AND claimed_by = ? LIMIT 1");
+        $b = $pdo->prepare("SELECT claimed_at FROM ps_box_items WHERE person_key = ? AND box = 'A' AND status = 'claimed' AND claimed_by = ? ORDER BY claimed_at ASC LIMIT 1");
         $b->execute([$pk, $userId]);
-        if ($b->fetchColumn()) return $cache[$key] = true;
+        $at = $b->fetchColumn();
+        if ($at !== false) return $cache[$key] = ['ok' => true, 'text' => 'از Box A برداشته' . ($at ? ' (' . to_jalali(substr((string) $at, 0, 10)) . ')' : '')];
     } catch (Throwable $e) {}
-    $launch = ps_launch_at($pdo);
-    if ($launch === null) return $cache[$key] = false;
     try {
         if (!function_exists('cc_person_ids')) require_once __DIR__ . '/customer_credit.php';
         $ids = array_map('intval', cc_person_ids($pdo, $customerId) ?: []);
@@ -1813,15 +1875,39 @@ function ps_a_eligible(PDO $pdo, int $customerId, int $userId): bool
     if (!in_array($customerId, $ids, true)) $ids[] = $customerId;
     $in = implode(',', $ids);
     $first = $pdo->query("SELECT id, owner_user_id, created_at FROM customers WHERE id IN ($in) ORDER BY created_at ASC, id ASC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-    if (!$first || (string) $first['created_at'] < $launch) return $cache[$key] = false;
-    $creator = 0;
-    try {
-        $r = $pdo->prepare('SELECT employee_id FROM customer_employee_relations WHERE customer_id = ? ORDER BY created_at ASC, id ASC LIMIT 1');
-        $r->execute([(int) $first['id']]);
-        $creator = (int) $r->fetchColumn();
-    } catch (Throwable $e) {}
-    if ($creator <= 0) $creator = (int) $first['owner_user_id'];
-    return $cache[$key] = ($creator === $userId);
+    if (!$first) return $cache[$key] = ['ok' => false, 'text' => 'پرونده پیدا نشد'];
+    $cr = ps_customer_creator($pdo, (int) $first['id']);
+    $crName = $cr['uid'] ? (ps_user_row($pdo, $cr['uid'])['full_name'] ?? ('#' . $cr['uid'])) : '';
+    $when = to_jalali(substr((string) $first['created_at'], 0, 10));
+    $launch = ps_launch_at($pdo);
+    if ($launch === null || (string) $first['created_at'] < $launch) {
+        return $cache[$key] = ['ok' => false, 'text' => 'مشتریِ قدیمی (ثبت ' . $when . '، قبل از راه‌اندازیِ Box) و از Box A برداشته نشده'];
+    }
+    if ($cr['uid'] === $userId) return $cache[$key] = ['ok' => true, 'text' => 'خودش مشتری را واردِ سامانه کرده (' . $when . ' — ' . $cr['how'] . ')'];
+    return $cache[$key] = ['ok' => false, 'text' => 'نه از Box A برداشته، نه خودش واردِ سامانه کرده (واردکننده: ' . ($crName !== '' ? $crName : $cr['how']) . '، ' . $when . ')'];
+}
+
+function ps_a_eligible(PDO $pdo, int $customerId, int $userId): bool
+{
+    return ps_a_basis($pdo, $customerId, $userId)['ok'];
+}
+
+/** مبنای جایگاهِ B/C از روی ردیفِ مالکیت (ps_owners) */
+function ps_owner_basis(PDO $pdo, ?array $row): string
+{
+    if (!$row) return 'مالکیتِ مشتری در لحظه‌ی ثبتِ سفارش';
+    $slot = (string) ($row['slot'] ?? '');
+    $at = !empty($row['created_at']) ? ' (' . to_jalali(substr((string) $row['created_at'], 0, 10)) . ')' : '';
+    switch ((string) ($row['source'] ?? '')) {
+        case 'box': return 'از Box ' . $slot . ' برداشته' . $at;
+        case 'payment': return 'ثبتِ فیش (اولین پولِ مشتری را خودش گرفته)' . $at;
+        case 'peer': return 'ارجاعِ هم‌سطح از کارشناسِ قبلی' . $at;
+        case 'c_revive': return 'برگشتِ مشتریِ خودش از Box C' . $at;
+        case 'manual':
+            $by = !empty($row['created_by']) ? (ps_user_row($pdo, (int) $row['created_by'])['full_name'] ?? '') : '';
+            return 'تعیینِ دستی' . ($by !== '' ? ' توسطِ ' . $by : '') . $at;
+        default: return 'منبع: ' . (string) ($row['source'] ?? '—') . $at;
+    }
 }
 
 /**
@@ -1878,51 +1964,65 @@ function ps_a_rule_v11(PDO $pdo): void
 }
 
 /**
- * یک‌بار (نسخه‌ی ۱۳):
- *   ۱) قانونِ A برای همه: A فقط وقتی معتبر است که همین کارشناس مشتری را واردِ سامانه کرده باشد یا از Box A گرفته باشد.
- *      A‌های خودکاری که این شرط را ندارند (از هر منبعی: ثبتِ فیش، Box، انتقال‌های قبلی …) از snapshotِ سفارش و از مالکیتِ مشتری برداشته می‌شوند.
- *      فقط تعیینِ دستیِ مدیر (مالکیتِ «دستی» یا ویرایشِ دستیِ سهمِ سفارش) دست نمی‌خورد.
- *   ۲) قانونِ جدیدِ D (سه سهمِ ثابت: هر جایگاه یک سهم برای سرپرستِ خودش؛ جایگاهِ خالی ← سازمان) ← همه‌ی سفارش‌ها دوباره محاسبه می‌شوند.
+ * یک‌بار (نسخه‌ی ۱۴) — اصلاحِ کاملِ گذشته:
+ *   ۱) قانونِ A بدونِ استثنا: A فقط کسی است که مشتری را خودش واردِ سامانه کرده یا از Box A برداشته.
+ *      هر A ِ دیگری (از هر منبعی، حتی تعیینِ دستی یا ویرایشِ دستیِ سهمِ سفارش) از snapshotِ سفارش و از مالکیتِ مشتری برداشته می‌شود
+ *      ← سهمِ A و سهمِ D(A) به سازمان.
+ *   ۲) مبنای هر جایگاه (A/B/C) در snapshot نوشته می‌شود تا در صفحه‌ی سهم دیده شود «از چه راهی» به او رسیده.
+ *   ۳) قانونِ جدیدِ D (سه سهمِ ثابت) ← همه‌ی سفارش‌ها دوباره محاسبه می‌شوند.
  */
-function ps_a_d_rule_v13(PDO $pdo): void
+function ps_a_d_rule_v14(PDO $pdo): void
 {
     static $done = false;
     if ($done) return;
     $done = true;
-    $flag = __DIR__ . '/../storage/.perf_share_a_d_rule_v13';
+    $flag = __DIR__ . '/../storage/.perf_share_a_d_rule_v14';
     if (is_file($flag)) return;
     @file_put_contents($flag, (string) time());
     @set_time_limit(1800);
-    $whyA = 'قانونِ A: این کارشناس مشتری را نه واردِ سامانه کرده و نه از Box A گرفته ← سهمِ A برای سازمان';
-    $why = 'قانونِ A (فقط واردکننده یا دریافت از Box A) + قانونِ جدیدِ D (هر جایگاه یک سهم) — محاسبه‌ی مجدد';
+    $why = 'قانونِ A (فقط واردکننده یا برداشتن از Box A — بدونِ استثنا) + قانونِ جدیدِ D (هر جایگاه یک سهم) — محاسبه‌ی مجدد';
     try {
-        // ۱) مالکیتِ A (پروفایلِ ۳۶۰): هر A ِ غیرِ دستی که شرط را ندارد پاک می‌شود
-        $rows = $pdo->query("SELECT o.*, (SELECT c.id FROM customers c WHERE c.id = o.customer_id LIMIT 1) AS cid FROM ps_owners o WHERE o.slot = 'A' AND o.source <> 'manual'")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        // ۱) مالکیتِ A (پروفایلِ ۳۶۰)
+        $rows = $pdo->query("SELECT o.*, (SELECT c.id FROM customers c WHERE c.id = o.customer_id LIMIT 1) AS cid FROM ps_owners o WHERE o.slot = 'A'")->fetchAll(PDO::FETCH_ASSOC) ?: [];
         foreach ($rows as $r) {
             $cid = (int) ($r['cid'] ?: $r['person_key']);
-            if (ps_a_eligible($pdo, $cid, (int) $r['user_id'])) continue;
+            $ab = ps_a_basis($pdo, $cid, (int) $r['user_id']);
+            if ($ab['ok']) continue;
             $pdo->prepare('DELETE FROM ps_owners WHERE id = ?')->execute([(int) $r['id']]);
-            perf_audit($pdo, 0, 'owner_remove', 'ps_owners', (int) $r['person_key'], $r, null, $whyA);
+            perf_audit($pdo, 0, 'owner_remove', 'ps_owners', (int) $r['person_key'], $r, null, 'قانونِ A: ' . $ab['text'] . ' ← سهمِ A برای سازمان');
         }
-        // ۲) snapshotِ سفارش‌ها
-        $snaps = $pdo->query("SELECT s.order_id, s.owners_json, s.person_key, o.customer_id FROM ps_order_snapshots s JOIN sales_orders o ON o.id = s.order_id
-            WHERE s.owners_json LIKE '%\"A\":{%'")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        // ۲) snapshotِ سفارش‌ها: A ِ بی‌شرط حذف + مبنای هر جایگاه
+        $snaps = $pdo->query('SELECT s.order_id, s.owners_json, s.person_key, o.customer_id FROM ps_order_snapshots s JOIN sales_orders o ON o.id = s.order_id')->fetchAll(PDO::FETCH_ASSOC) ?: [];
         $upd = $pdo->prepare('UPDATE ps_order_snapshots SET owners_json = ? WHERE order_id = ?');
-        $man = $pdo->prepare("SELECT 1 FROM ps_owners WHERE person_key = ? AND slot = 'A' AND source = 'manual' AND user_id = ? LIMIT 1");
+        $ownQ = $pdo->prepare('SELECT * FROM ps_owners WHERE person_key = ? AND slot = ? AND user_id = ? LIMIT 1');
+        $regQ = $pdo->prepare("SELECT 1 FROM perf_audit WHERE action = 'registrant_share' AND entity = 'sales_orders' AND entity_id = ? LIMIT 1");
         foreach ($snaps as $sn) {
             $ow = json_decode((string) $sn['owners_json'], true) ?: [];
-            if (!empty($ow['manual_edit'])) continue;
+            $orig = $ow;
+            $manual = !empty($ow['manual_edit']);
             $aUid = (int) ($ow['A']['user_id'] ?? 0);
-            if ($aUid <= 0) continue;
-            $man->execute([(int) $sn['person_key'], $aUid]);
-            if ($man->fetchColumn()) continue; // مدیر دستی تعیین کرده
-            if (ps_a_eligible($pdo, (int) $sn['customer_id'], $aUid)) continue;
-            $old = $ow['A'];
-            $ow['A'] = null;
-            $upd->execute([json_encode($ow, JSON_UNESCAPED_UNICODE), (int) $sn['order_id']]);
-            perf_audit($pdo, 0, 'a_rule_fix', 'sales_orders', (int) $sn['order_id'], ['A' => $old], ['A' => null], $whyA);
+            if ($aUid > 0) {
+                $ab = ps_a_basis($pdo, (int) $sn['customer_id'], $aUid);
+                if (!$ab['ok']) {
+                    perf_audit($pdo, 0, 'a_rule_fix', 'sales_orders', (int) $sn['order_id'], ['A' => $ow['A']], ['A' => null], 'قانونِ A: ' . $ab['text'] . ' ← سهمِ A و D(A) برای سازمان');
+                    $ow['A_note'] = ($ow['A']['name'] ?? ('#' . $aUid)) . ' — ' . $ab['text'];
+                    $ow['A'] = null;
+                } elseif (empty($ow['A']['basis'])) {
+                    $ow['A']['basis'] = $ab['text'] . ($manual ? ' — ویرایشِ دستیِ سهمِ سفارش' : '');
+                }
+            }
+            $basisOf = static function (string $slot, array $p) use ($pdo, $sn, $ownQ, $regQ, $manual): string {
+                if ($manual) return 'ویرایشِ دستیِ سهمِ سفارش';
+                $ownQ->execute([(int) $sn['person_key'], $slot, (int) $p['user_id']]);
+                if ($row = $ownQ->fetch(PDO::FETCH_ASSOC)) return ps_owner_basis($pdo, $row);
+                try { $regQ->execute([(int) $sn['order_id']]); if ($regQ->fetchColumn()) return 'ثبتِ فیشِ همین سفارش (اولین پولِ مشتری را خودش گرفته)'; } catch (Throwable $e) {}
+                return 'مالکیتِ مشتری در لحظه‌ی ثبتِ سفارش';
+            };
+            if (!empty($ow['C']) && empty($ow['C']['basis'])) $ow['C']['basis'] = $basisOf('C', $ow['C']);
+            foreach ((array) ($ow['B'] ?? []) as $i => $bb) if ($bb && empty($bb['basis'])) $ow['B'][$i]['basis'] = $basisOf('B', $bb);
+            if ($ow !== $orig) $upd->execute([json_encode($ow, JSON_UNESCAPED_UNICODE), (int) $sn['order_id']]);
         }
-        // ۳) محاسبه‌ی مجددِ همه‌ی سفارش‌ها (A اصلاح‌شده + قانونِ جدیدِ D)
+        // ۳) محاسبه‌ی مجددِ همه‌ی سفارش‌ها
         $ids = $pdo->query('SELECT DISTINCT order_id FROM ps_payment_calcs WHERE voided_at IS NULL')->fetchAll(PDO::FETCH_COLUMN) ?: [];
         $vc = $pdo->prepare('UPDATE ps_payment_calcs SET voided_at = ?, void_reason = ? WHERE order_id = ? AND voided_at IS NULL');
         $vl = $pdo->prepare('UPDATE ps_lines l JOIN ps_payment_calcs c ON c.id = l.calc_id SET l.voided = 1 WHERE c.order_id = ? AND c.void_reason = ? AND l.voided = 0');
@@ -1932,6 +2032,6 @@ function ps_a_d_rule_v13(PDO $pdo): void
             ps_sync_order($pdo, (int) $oid, 0);
         }
     } catch (Throwable $e) {
-        error_log('ps_a_d_rule_v13: ' . $e->getMessage());
+        error_log('ps_a_d_rule_v14: ' . $e->getMessage());
     }
 }
