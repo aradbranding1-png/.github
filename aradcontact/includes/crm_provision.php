@@ -139,6 +139,35 @@ function crm_get(PDO $pdo, int $itemId): ?array
     return $st->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
+/**
+ * دوره‌ی اشتراکِ CRM از قلمِ فاکتور. سامانه‌ی CRM فقط «سالانه» یا «ماهانه» می‌پذیرد، ولی واحدِ قلم در فاکتور
+ * معمولاً «عدد»، «سال»، «۱ ساله»، «سه ماهه»، «اشتراک» … است. ترتیب: واحد ← عنوانِ خدمت ← پیش‌فرض «سالانه».
+ * «۳ ماهه» × ۲ = ۶ ماهانه؛ «عدد» × ۲ = ۲ سالانه.
+ * @return array{0:int|float,1:string} [تعداد، «سالانه»|«ماهانه»]
+ */
+function crm_period(array $item): array
+{
+    $q = (float) ($item['quantity'] ?? 1);
+    if ($q <= 0) $q = 1;
+    $norm = static function (string $t): string {
+        $t = normalize_digits(str_replace(['ي', 'ك', "\u{200C}", '‌'], ['ی', 'ک', ' ', ' '], mb_strtolower(trim($t))));
+        return preg_replace('/\s+/u', ' ', $t);
+    };
+    $words = ['یک' => 1, 'دو' => 2, 'سه' => 3, 'چهار' => 4, 'پنج' => 5, 'شش' => 6, 'شیش' => 6, 'نه' => 9, 'دوازده' => 12];
+    $detect = static function (string $t) use ($words): ?array {
+        $mult = 1;
+        if (preg_match('/(\d+)\s*(?:ماه|سال|month|year)/u', $t, $m)) $mult = max(1, (int) $m[1]);
+        else foreach ($words as $w => $n) if (preg_match('/(?:^|\s)' . $w . '\s*(?:ماه|سال)/u', $t)) { $mult = $n; break; }
+        if (preg_match('/ماه|month/u', $t)) return [$mult, 'ماهانه'];
+        if (preg_match('/سال|year|annual/u', $t)) return [$mult, 'سالانه'];
+        return null;
+    };
+    $hit = $detect($norm((string) ($item['unit'] ?? ''))) ?? $detect($norm((string) ($item['title'] ?? '')));
+    [$mult, $unit] = $hit ?? [1, 'سالانه'];
+    $total = $q * $mult;
+    return [$total == (int) $total ? (int) $total : $total, $unit];
+}
+
 /** ساخت/تمدیدِ شرکت در CRM برای یک قلمِ سفارش (فقط یک‌بار) */
 function crm_ensure(PDO $pdo, array $order, array $item, int $userId): array
 {
@@ -155,12 +184,12 @@ function crm_ensure(PDO $pdo, array $order, array $item, int $userId): array
     $owner = trim(preg_replace('/\s+/u', ' ', (string) $cust['full_name'])) ?: 'مالک';
     $mobile = normalize_digits((string) $cust['mobile']);
     if ($mobile === '') return ['ok' => false, 'message' => 'موبایلِ مشتری ثبت نشده؛ ساختِ شرکت در CRM ممکن نیست.'];
-    $q = (float) $item['quantity'];
+    [$pq, $pu] = crm_period($item);
     $req = [
         'external_id' => 'arad-contact-crm-item-' . $itemId,
         'owner_name' => $owner, 'mobile' => $mobile, 'company_name' => $owner,
         'plan' => $item['plan'], 'plan_title' => CRM_PLANS[$item['plan']],
-        'period_quantity' => $q == (int) $q ? (int) $q : $q, 'period_unit' => (string) ($item['unit'] ?? ''),
+        'period_quantity' => $pq, 'period_unit' => $pu,
     ];
     $now = date('Y-m-d H:i:s');
     $pdo->prepare('INSERT INTO crm_provisions (item_id, order_id, external_id, plan, status, request_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)
