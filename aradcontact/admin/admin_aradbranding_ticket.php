@@ -21,12 +21,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash_set('danger', 'نشست منقضی شده است؛ دوباره تلاش کنید.');
         redirect('admin_aradbranding_ticket.php');
     }
-    if (($_POST['action'] ?? '') === 'fetch_departments') {
-        $r = abt_fetch_departments($pdo, abt_settings($pdo), (int) $admin['id']);
-        $_SESSION['abt_departments'] = $r;
-        flash_set($r['ok'] ? 'success' : 'danger', $r['message']);
-        redirect('admin_aradbranding_ticket.php#abt-departments');
-    }
     // ─── سامانه‌ی CRM ───
     if (in_array($_POST['action'] ?? '', ['save_crm', 'test_crm'], true)) {
         require_once __DIR__ . '/../includes/crm_provision.php';
@@ -174,11 +168,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $s = abt_settings($pdo);
 $ready = abt_connection_ready($s);
-$deptResult = $_SESSION['abt_departments'] ?? null;
-unset($_SESSION['abt_departments']);
-if (!$deptResult && ($__saved = abt_departments($s))) {
-    $deptResult = ['items' => array_map(static fn($id, $name) => ['id' => (string) $id, 'name' => (string) $name], array_keys($__saved), array_values($__saved)), 'raw' => ''];
-}
 // پیش‌نمایش با داده‌ی نمونه
 $sampleVars = [
     'عنوان' => 'آقای', 'نام_مشتری' => 'نمونه نمونه‌زاده', 'موبایل' => '۰۹۱۲۰۰۰۰۰۰۰', 'شماره_سفارش' => 'INV-۱۴۰۵-۰۰۴۵',
@@ -286,7 +275,9 @@ require_once __DIR__ . '/../includes/layout_top.php';
         if ($__auto !== null || $__set !== '') $__eduRows[] = $__sv + ['auto' => $__auto, 'set' => $__set];
     }
   ?>
-  <form method="post" class="card p-3 mb-3" id="abt-edu" style="border-top:3px solid #0891b2">
+  <div class="row g-3 mb-3 align-items-stretch">
+  <div class="col-xl-6">
+  <form method="post" class="card p-3 h-100" id="abt-edu" style="border-top:3px solid #0891b2">
     <?= csrf_field() ?>
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
       <h6 class="fw-bold mb-0"><i class="fa-solid fa-graduation-cap" style="color:#0891b2"></i> سامانه‌ی آموزش (edu.aradbranding.me)</h6>
@@ -325,6 +316,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <button name="action" value="test_edu" class="btn btn-sm btn-outline-dark"><i class="fa-solid fa-plug"></i> تستِ اتصال</button>
     </div>
   </form>
+  </div>
 
   <?php
     require_once __DIR__ . '/../includes/crm_provision.php';
@@ -336,7 +328,8 @@ require_once __DIR__ . '/../includes/layout_top.php';
         if ($__auto !== null || $__set !== '') $__crmRows[] = $__sv + ['auto' => $__auto, 'set' => $__set];
     }
   ?>
-  <form method="post" class="card p-3 mb-3" id="abt-crm" style="border-top:3px solid #16a34a">
+  <div class="col-xl-6">
+  <form method="post" class="card p-3 h-100" id="abt-crm" style="border-top:3px solid #16a34a">
     <?= csrf_field() ?>
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
       <h6 class="fw-bold mb-0"><i class="fa-solid fa-address-book" style="color:#16a34a"></i> سامانه‌ی CRM (crm.aradbranding.me)</h6>
@@ -370,9 +363,31 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <button name="action" value="test_crm" class="btn btn-sm btn-outline-dark"><i class="fa-solid fa-plug"></i> تستِ اتصال</button>
     </div>
   </form>
+  </div>
+  </div>
 
+
+  <div class="modal fade" id="abtPreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content" style="border-radius:16px">
+        <div class="modal-header">
+          <h6 class="modal-title fw-bold"><i class="fa-regular fa-eye"></i> پیش‌نمایشِ تیکت <span class="text-muted fw-normal small">(داده‌ی نمونه، متنِ ذخیره‌شده)</span></h6>
+          <button type="button" class="btn-close ms-0 me-auto" data-bs-dismiss="modal" aria-label="بستن"></button>
+        </div>
+        <div class="modal-body">
+          <div class="fw-bold small mb-2"><?= e(abt_render($s['subject_tpl'], $sampleVars)) ?></div>
+          <div class="preview" style="max-height:none"><?= e(abt_render($s['body_tpl'], $sampleVars)) ?></div>
+          <div class="small text-muted mt-2">تغییراتی که هنوز ذخیره نکرده‌اید در این پیش‌نمایش دیده نمی‌شوند.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <?php $__ctrBody = trim((string) $s['ctr_body_tpl']) !== '' ? (string) $s['ctr_body_tpl'] : abt_default_contract_body(); ?>
+  <div class="row g-3 mb-3 align-items-stretch">
+  <div class="col-xl-6">
   <?php $__acc = abt_settings($pdo); ?>
-  <form method="post" class="card p-3 mb-3" id="abt-account" style="border-top:3px solid #7c3aed">
+  <form method="post" class="card p-3 h-100" id="abt-account" style="border-top:3px solid #7c3aed">
     <?= csrf_field() ?>
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
       <h6 class="fw-bold mb-0"><i class="fa-solid fa-user-plus" style="color:#7c3aed"></i> مشتری‌ای که در آراد برندینگ حساب ندارد</h6>
@@ -398,26 +413,8 @@ require_once __DIR__ . '/../includes/layout_top.php';
     </div>
     <div class="mt-2"><button name="action" value="save_account" class="btn btn-sm btn-primary"><i class="fa-solid fa-floppy-disk"></i> ذخیره</button></div>
   </form>
-
-  <div class="modal fade" id="abtPreviewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content" style="border-radius:16px">
-        <div class="modal-header">
-          <h6 class="modal-title fw-bold"><i class="fa-regular fa-eye"></i> پیش‌نمایشِ تیکت <span class="text-muted fw-normal small">(داده‌ی نمونه، متنِ ذخیره‌شده)</span></h6>
-          <button type="button" class="btn-close ms-0 me-auto" data-bs-dismiss="modal" aria-label="بستن"></button>
-        </div>
-        <div class="modal-body">
-          <div class="fw-bold small mb-2"><?= e(abt_render($s['subject_tpl'], $sampleVars)) ?></div>
-          <div class="preview" style="max-height:none"><?= e(abt_render($s['body_tpl'], $sampleVars)) ?></div>
-          <div class="small text-muted mt-2">تغییراتی که هنوز ذخیره نکرده‌اید در این پیش‌نمایش دیده نمی‌شوند.</div>
-        </div>
-      </div>
-    </div>
   </div>
-
-  <?php $__ctrBody = trim((string) $s['ctr_body_tpl']) !== '' ? (string) $s['ctr_body_tpl'] : abt_default_contract_body(); ?>
-  <div class="row g-3 mb-3 align-items-stretch">
-  <div class="col-xl-7">
+  <div class="col-xl-6">
   <form method="post" class="card p-3 h-100" id="abt-contract" style="border-top:3px solid #7c3aed">
     <?= csrf_field() ?><input type="hidden" name="action" value="save_contract_ticket">
     <h6 class="fw-bold mb-1"><i class="fa-solid fa-file-signature" style="color:#7c3aed"></i> تیکتِ اسنادِ قرارداد</h6>
@@ -426,7 +423,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <div class="col-md-4">
         <label class="form-label small mb-1">واحد (دپارتمان) در آراد برندینگ</label>
         <input name="ctr_department" class="form-control form-control-sm" value="<?= e((string) $s['ctr_department']) ?>" placeholder="مثلاً ۳۸ یا قرارداد">
-        <div class="form-text">شناسه (مثلاً <b>۳۸</b>) یا نامِ دقیقِ واحد از فهرستِ واحدها.</div>
+        <div class="form-text">شناسه (مثلاً <b>۳۸</b>) یا نامِ دقیقِ واحد از <a href="admin_services_list.php#abt-departments">فهرستِ واحدها (صفحه‌ی لیست خدمات)</a>.</div>
       </div>
       <div class="col-md-3">
         <label class="form-label small mb-1">اعتبارِ لینکِ اسناد (روز)</label>
@@ -453,24 +450,6 @@ require_once __DIR__ . '/../includes/layout_top.php';
   </form>
   </div>
 
-  <div class="col-xl-5">
-  <div class="card p-3 h-100" id="abt-departments">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <div><h6 class="fw-bold mb-0"><i class="fa-solid fa-sitemap"></i> فهرستِ واحدهای آراد برندینگ</h6>
-        <div class="small text-muted">شناسه‌ی هر واحد را در «لیست خدمات» (واحدِ تیکت) یا «واحدِ پیش‌فرض» وارد کنید. اول تنظیمات را ذخیره کنید.</div></div>
-      <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="fetch_departments">
-        <button class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-rotate"></i> دریافتِ فهرستِ واحدها</button></form>
-    </div>
-    <?php if ($deptResult): ?>
-      <?php if (!empty($deptResult['items'])): ?>
-        <div style="max-height:520px;overflow-y:auto" class="mt-3"><table class="table table-sm small mb-0"><thead class="table-light"><tr><th>شناسه (برای واردکردن)</th><th>نامِ واحد</th></tr></thead><tbody>
-          <?php foreach ($deptResult['items'] as $d): ?><tr><td dir="ltr" class="fw-bold"><?= e($d['id']) ?></td><td><?= e($d['name']) ?></td></tr><?php endforeach; ?>
-        </tbody></table></div>
-      <?php endif; ?>
-      <?php if (empty($deptResult['items']) && !empty($deptResult['raw'])): ?><pre class="small mt-3 mb-0 p-2 bg-light border rounded" dir="ltr" style="white-space:pre-wrap"><?= e((string) $deptResult['raw']) ?></pre><?php endif; ?>
-    <?php endif; ?>
-  </div>
-  </div>
   </div>
 
 </div>

@@ -7,6 +7,26 @@ $descReady = services_desc_ready($pdo);
 $ticketReady = services_ticket_ready($pdo);
 
 // -----------------------------------------------------------------
+// فهرستِ واحدهای آراد برندینگ (برای «واحدِ تیکت» هر خدمت)
+// -----------------------------------------------------------------
+require_once __DIR__ . '/../includes/aradbranding_ticket.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fetch_departments') {
+    if (!csrf_verify()) {
+        flash_set('danger', 'نشست شما منقضی شده است، دوباره تلاش کنید.');
+    } elseif (abt_ready($pdo)) {
+        $r = abt_fetch_departments($pdo, abt_settings($pdo), (int) $admin['id']);
+        $_SESSION['abt_departments'] = $r;
+        flash_set($r['ok'] ? 'success' : 'danger', $r['message']);
+    }
+    redirect('admin_services_list.php' . ($_POST['redirect_qs'] ?? '') . '#abt-departments');
+}
+$deptResult = $_SESSION['abt_departments'] ?? null;
+unset($_SESSION['abt_departments']);
+if (!$deptResult && abt_ready($pdo) && ($__saved = abt_departments(abt_settings($pdo)))) {
+    $deptResult = ['items' => array_map(static fn($id, $name) => ['id' => (string) $id, 'name' => (string) $name], array_keys($__saved), array_values($__saved)), 'raw' => ''];
+}
+
+// -----------------------------------------------------------------
 // افزودن/ویرایشِ دستیِ یک خدمت
 // -----------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_service'])) {
@@ -274,6 +294,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
           <div class="collapse <?= $__hasTicket ? 'show' : '' ?> mt-2" id="svcTicket">
             <label class="form-label small mb-1">واحد (دپارتمان) در آراد برندینگ</label>
             <input type="text" name="ticket_department" class="form-control form-control-sm mb-2" value="<?= e((string) ($editService['ticket_department'] ?? '')) ?>" placeholder="نام یا شناسه‌ی واحد — مثلاً: آموزش / طراحی / ۳">
+            <div class="form-text mt-n1 mb-2">شناسه‌ها در <a href="#abt-departments">فهرستِ واحدهای آراد برندینگ</a> (پایینِ همین کادر).</div>
             <label class="form-label small mb-1">موضوعِ تیکت</label>
             <input type="text" name="ticket_subject" id="svcTSubj" class="form-control form-control-sm mb-2" value="<?= e((string) ($editService['ticket_subject'] ?? '')) ?>" placeholder="مثلاً: فعال‌سازیِ «نام_خدمت» — سفارش «شماره_سفارش»">
             <label class="form-label small mb-1">متنِ پیام</label>
@@ -303,6 +324,25 @@ require_once __DIR__ . '/../includes/layout_top.php';
           <a href="admin_services_list.php?<?= e(http_build_query(['q' => $q, 'category' => $categoryFilter])) ?>" class="btn btn-outline-secondary btn-sm w-100 mt-2">انصراف از ویرایش</a>
         <?php endif; ?>
       </form>
+    </div>
+
+    <div class="card p-3 mt-3" id="abt-departments">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div><h6 class="fw-bold mb-0"><i class="fa-solid fa-sitemap"></i> فهرستِ واحدهای آراد برندینگ</h6>
+          <div class="small text-muted">شناسه‌ی هر واحد را در «واحدِ تیکت» خدمت (یا «واحدِ پیش‌فرض» در تنظیمات تیکت) وارد کنید.</div></div>
+        <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="fetch_departments"><input type="hidden" name="redirect_qs" value="<?= e($redirectQs) ?>">
+          <button class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-rotate"></i> دریافتِ فهرستِ واحدها</button></form>
+      </div>
+      <?php if ($deptResult): ?>
+        <?php if (!empty($deptResult['items'])): ?>
+          <div style="max-height:420px;overflow-y:auto" class="mt-3"><table class="table table-sm small mb-0"><thead class="table-light"><tr><th>شناسه (برای واردکردن)</th><th>نامِ واحد</th></tr></thead><tbody>
+            <?php foreach ($deptResult['items'] as $d): ?><tr><td dir="ltr" class="fw-bold"><?= e($d['id']) ?></td><td><?= e($d['name']) ?></td></tr><?php endforeach; ?>
+          </tbody></table></div>
+        <?php endif; ?>
+        <?php if (empty($deptResult['items']) && !empty($deptResult['raw'])): ?><pre class="small mt-3 mb-0 p-2 bg-light border rounded" dir="ltr" style="white-space:pre-wrap"><?= e((string) $deptResult['raw']) ?></pre><?php endif; ?>
+      <?php else: ?>
+        <div class="small text-muted mt-2">هنوز فهرستی دریافت نشده؛ اول اتصالِ API را در «تنظیمات تیکت» ذخیره و بعد «دریافتِ فهرستِ واحدها» را بزنید.</div>
+      <?php endif; ?>
     </div>
   </div>
 </div>
