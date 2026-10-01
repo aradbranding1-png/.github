@@ -1097,10 +1097,32 @@ function ctr_create(PDO $pdo, int $quoteId, int $userId): array
     if (($quote['status'] ?? '') !== 'locked') {
         return ['ok' => false, 'message' => 'برای ساختِ قرارداد، ابتدا پیش‌فاکتور را قفل کنید.'];
     }
-    $ex = $pdo->prepare("SELECT id FROM contracts WHERE quote_id = ? AND status <> 'cancelled' LIMIT 1");
-    $ex->execute([$quoteId]);
-    if ($id = (int) $ex->fetchColumn()) {
-        return ['ok' => true, 'id' => $id, 'message' => 'برای این پیش‌فاکتور قبلاً قرارداد ساخته شده است.', 'existing' => true];
+    // هر سفارش / پیش‌فاکتور فقط یک قرارداد: قفل تا دوبار کلیک (یا دو تب) دو قرارداد نسازد
+    $__lock = 'ctr_create_' . (int) $quote['customer_id'];
+    $__locked = false;
+    try { $__locked = (int) $pdo->query('SELECT GET_LOCK(' . $pdo->quote($__lock) . ', 25)')->fetchColumn() === 1; } catch (Throwable $e) {}
+    try {
+        return ctr_create_locked($pdo, $quote, $quoteId, $userId);
+    } finally {
+        if ($__locked) { try { $pdo->query('SELECT RELEASE_LOCK(' . $pdo->quote($__lock) . ')'); } catch (Throwable $e) {} }
+    }
+}
+
+/** قراردادِ فعالِ (باطل‌نشده‌ی) این پیش‌فاکتور یا سفارشِ آن (null = ندارد) */
+function ctr_existing_for(PDO $pdo, int $quoteId, ?int $orderId): ?int
+{
+    $ex = $pdo->prepare("SELECT id FROM contracts WHERE (quote_id = ?" . ($orderId ? ' OR order_id = ?' : '') . ") AND status <> 'cancelled' ORDER BY id DESC LIMIT 1");
+    $ex->execute($orderId ? [$quoteId, $orderId] : [$quoteId]);
+    $id = (int) $ex->fetchColumn();
+    return $id ?: null;
+}
+
+function ctr_create_locked(PDO $pdo, array $quote, int $quoteId, int $userId): array
+{
+    $order = function_exists('orders_active_for_quote') ? orders_active_for_quote($pdo, $quoteId) : null;
+    if ($id = ctr_existing_for($pdo, $quoteId, $order ? (int) $order['id'] : null)) {
+        return ['ok' => true, 'id' => $id, 'existing' => true,
+            'message' => 'برای این سفارش قبلاً قرارداد ساخته شده؛ قراردادِ دوم ساخته نمی‌شود. همین قرارداد را ویرایش/اصلاح و دوباره صادر کنید.'];
     }
     // اطلاعاتِ هویتیِ مشتری باید پیش از ساختِ قرارداد کامل باشد (عنوان، نام پدر، کد ملی، آدرس، کد پستی، کارت ملی)
     if (function_exists('kyc_get')) {
@@ -1111,10 +1133,16 @@ function ctr_create(PDO $pdo, int $quoteId, int $userId): array
         }
     }
     $tpl = ctr_template_active($pdo);
-    $order = function_exists('orders_active_for_quote') ? orders_active_for_quote($pdo, $quoteId) : null;
     $now = date('Y-m-d H:i:s');
+    // اگر قراردادِ همین پیش‌فاکتور قبلاً حذف شده، همان شماره دوباره استفاده می‌شود (شماره‌ی تازه = «قراردادِ دوم» به نظر می‌رسید)
+    $reuse = '';
+    try {
+        $d = $pdo->prepare('SELECT d.contract_number FROM contract_deletions d WHERE d.quote_id = ? AND NOT EXISTS (SELECT 1 FROM contracts c WHERE c.contract_number = d.contract_number) ORDER BY d.id DESC LIMIT 1');
+        $d->execute([$quoteId]);
+        $reuse = (string) ($d->fetchColumn() ?: '');
+    } catch (Throwable $e) {}
     for ($try = 0; $try < 3; $try++) {
-        $number = ctr_next_number($pdo, (string) ($tpl['number_prefix'] ?? ''));
+        $number = ($try === 0 && $reuse !== '') ? $reuse : ctr_next_number($pdo, (string) ($tpl['number_prefix'] ?? ''));
         try {
             $pdo->prepare('INSERT INTO contracts (contract_number, customer_id, quote_id, order_id, status, template_id, template_version, template_body, attachment_text, contract_date, fields_json, created_by, created_at, updated_at)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')

@@ -270,6 +270,10 @@ $dupCands = (pdup_ready($pdo) && in_array($order['status'], ['pending', 'approve
 // قرارداد و شرحِ خدماتِ همین سفارش (برای واحد مالی)
 $isLegacyOrder = !empty($order['is_legacy']);   // پرونده‌ی «اقساطِ قبل از سامانه» (بدونِ پیش‌فاکتور/خدمت)
 $contract = (!$isLegacyOrder && ctr_ready($pdo)) ? ctr_for_quote($pdo, (int) $order['quote_id']) : null;
+// قراردادی که به خودِ این سفارش وصل است (حتی اگر با پیش‌فاکتورِ دیگری ساخته شده) ← دکمه‌ی «ساخت قرارداد» نشان داده نمی‌شود
+if (!$contract && !$isLegacyOrder && ctr_ready($pdo) && function_exists('ctr_existing_for') && ($__cid = ctr_existing_for($pdo, (int) $order['quote_id'], (int) $order['id']))) {
+    $contract = ctr_get($pdo, $__cid);
+}
 $ctrSt = $contract ? (ctr_statuses()[$contract['status']] ?? ['label' => $contract['status'], 'color' => 'secondary', 'icon' => 'fa-circle']) : null;
 $ctrCanCreate = !$contract && ctr_can_approve($user) && $order['status'] !== 'cancelled';
 $ctrCanDelete = $contract && ctr_can_delete($user);
