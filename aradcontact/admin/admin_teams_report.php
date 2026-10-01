@@ -3,6 +3,11 @@ require_once __DIR__ . '/../includes/auth.php';
 $admin = require_admin();
 $pdo = db();
 
+// نیروهای پذیرش: «تماس با متقاضی» از «مدت تماس» (با مشتری) جداست — همان تعریفِ «گزارش‌های تماس»
+if (is_file(__DIR__ . '/../includes/reception_functions.php')) require_once __DIR__ . '/../includes/reception_functions.php';
+$rxCc = function_exists('rx_cc_ready') && rx_cc_ready($pdo);
+$rxNot = $rxCc ? ' AND ' . rx_cc_not_applicant_sql('f') : '';
+
 // =====================================================================
 // انتخاب بازه‌ی زمانی — امروز (پیش‌فرض)، دیروز، یا یک بازه‌ی دلخواه
 // =====================================================================
@@ -75,16 +80,16 @@ $statStmt = $pdo->prepare("SELECT
     (SELECT COUNT(*) FROM users mu WHERE mu.team_id = ? AND mu.is_active = 1 AND mu.job_group = 'ستادی') AS staff_count,
     (SELECT COALESCE(SUM(f.call_duration_seconds), 0) FROM followups f JOIN customers c ON c.id = f.customer_id JOIN users u ON u.id = f.created_by
         WHERE u.team_id = ? AND f.source IN ('call_import','novatel_import') AND f.call_duration_seconds > 10
-              AND c.contact_type = 'customer' AND f.followup_date BETWEEN ? AND ?) AS total_duration,
+              AND c.contact_type = 'customer' AND f.followup_date BETWEEN ? AND ?{$rxNot}) AS total_duration,
     (SELECT COUNT(*) FROM followups f JOIN customers c ON c.id = f.customer_id JOIN users u ON u.id = f.created_by
         WHERE u.team_id = ? AND f.source IN ('call_import','novatel_import') AND f.call_duration_seconds > 10
-              AND c.contact_type = 'customer' AND f.followup_date BETWEEN ? AND ?) AS total_calls,
+              AND c.contact_type = 'customer' AND f.followup_date BETWEEN ? AND ?{$rxNot}) AS total_calls,
     (SELECT COUNT(*) FROM followups f JOIN customers c ON c.id = f.customer_id JOIN users u ON u.id = f.created_by
         WHERE u.team_id = ? AND f.source IN ('call_import','novatel_import') AND f.call_duration_seconds > 10
-              AND c.contact_type = 'customer' AND f.followup_number = 1 AND f.followup_date BETWEEN ? AND ?) AS new_calls,
+              AND c.contact_type = 'customer' AND f.followup_number = 1 AND f.followup_date BETWEEN ? AND ?{$rxNot}) AS new_calls,
     (SELECT COUNT(*) FROM followups f JOIN customers c ON c.id = f.customer_id JOIN users u ON u.id = f.created_by
         WHERE u.team_id = ? AND f.source IN ('call_import','novatel_import') AND f.call_duration_seconds > 10
-              AND c.contact_type = 'customer' AND f.followup_number > 1 AND f.followup_date BETWEEN ? AND ?) AS old_calls,
+              AND c.contact_type = 'customer' AND f.followup_number > 1 AND f.followup_date BETWEEN ? AND ?{$rxNot}) AS old_calls,
     (SELECT COUNT(*) FROM followups f JOIN users u ON u.id = f.created_by
         WHERE u.team_id = ? AND f.status_after = 'جلسه برگزار شد' AND f.followup_date BETWEEN ? AND ?) AS meetings
 ");
@@ -108,10 +113,18 @@ unset($team);
 
 // «جدید» = شماره با همین آپلود وارد سامانه شده؛ «پیگیری» = از قبل در سامانه بوده
 $__nf = calls_new_followup_counts($pdo, $rangeFrom, $rangeTo, 10);
+if ($rxCc) $__nf = rx_cc_adjust_new_followup($pdo, $__nf, $rangeFrom, $rangeTo);
 $__teamOf = [];
 foreach ($pdo->query('SELECT id, team_id FROM users WHERE team_id IS NOT NULL')->fetchAll() as $__u) {
     $__teamOf[(int) $__u['id']] = (int) $__u['team_id'];
 }
+// دقیقه‌ی «تماس با متقاضی» (نیروهای پذیرش) هر تیم — ستونِ جدا
+$rxTeamSec = [];
+foreach (($rxCc ? rx_cc_stats($pdo, $rangeFrom, $rangeTo) : []) as $__uid => $__a) {
+    $__t = $__teamOf[(int) $__uid] ?? 0;
+    if ($__t) $rxTeamSec[$__t] = ($rxTeamSec[$__t] ?? 0) + (int) $__a['seconds'];
+}
+$__rxCol = array_sum($rxTeamSec) > 0;
 $__byTeam = [];
 foreach ($__nf['by_user'] as $__uid => $__c) {
     $__t = $__teamOf[(int) $__uid] ?? 0;
@@ -283,7 +296,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
           <?php else: ?>
             <th>تعداد عضو</th>
           <?php endif; ?>
-          <th>مدت تماس <span class="small text-muted">(دقیقه)</span></th><th>کل تماس</th><th>تماس جدید</th><th>پیگیری</th><th>جلسه برگزارشده</th>
+          <th>مدت تماس <span class="small text-muted">(دقیقه)</span></th><?php if ($__rxCol): ?><th>تماس با متقاضی <span class="small text-muted">(دقیقه)</span></th><?php endif; ?><th>کل تماس</th><th>تماس جدید</th><th>پیگیری</th><th>جلسه برگزارشده</th>
         </tr>
       </thead>
       <tbody>
@@ -305,6 +318,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
               <td><?= to_persian_digits((string) (int) $s['member_count']) ?></td>
             <?php endif; ?>
             <td><?= to_persian_digits((string) (int) round($s['total_duration'] / 60)) ?></td>
+            <?php if ($__rxCol): ?><td><?= to_persian_digits((string) (int) round(($rxTeamSec[(int) $team['id']] ?? 0) / 60)) ?></td><?php endif; ?>
             <td><?= to_persian_digits((string) (int) $s['total_calls']) ?></td>
             <td><?= to_persian_digits((string) (int) $s['new_calls']) ?></td>
             <td><?= to_persian_digits((string) (int) $s['old_calls']) ?></td>
@@ -323,6 +337,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
             <td><?= to_persian_digits((string) $totals['member_count']) ?></td>
           <?php endif; ?>
           <td><?= to_persian_digits((string) $sumRoundedMinutes) ?></td>
+          <?php if ($__rxCol): ?><td><?= to_persian_digits((string) array_sum(array_map(static fn($x) => (int) round($x / 60), $rxTeamSec))) ?></td><?php endif; ?>
           <td><?= to_persian_digits((string) $totals['total_calls']) ?></td>
           <td><?= to_persian_digits((string) $totals['new_calls']) ?></td>
           <td><?= to_persian_digits((string) $totals['old_calls']) ?></td>
@@ -331,6 +346,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
       </tfoot>
     </table>
   </div>
+  <div class="small text-muted mt-2">«مدت تماس» = تماس‌های کالیزر/نواتلِ بیش از ۱۰ ثانیه فقط با <b>مشتری</b> (همکار و خانواده حساب نمی‌شوند)؛ تماسِ نیروهای پذیرش با متقاضی جدا در «تماس با متقاضی».</div>
 </div>
 
 <div class="card p-3 mb-4">

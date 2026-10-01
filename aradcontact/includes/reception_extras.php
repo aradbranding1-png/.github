@@ -584,3 +584,28 @@ function rx_cc_not_applicant_sql(string $f = 'f'): string
 {
     return "NOT EXISTS (SELECT 1 FROM reception_callizer_calls rxl WHERE rxl.followup_id = $f.id)";
 }
+
+/** ردیف‌های followups که در اصل «تماس با متقاضی» بوده‌اند (سابقه‌ی قدیمی): [followup_id => user_id] */
+function rx_cc_legacy_followup_ids(PDO $pdo, string $from, string $to): array
+{
+    if (!rx_cc_ready($pdo)) return [];
+    try {
+        $st = $pdo->prepare("SELECT r.followup_id, r.agent_user_id FROM reception_callizer_calls r WHERE r.origin = 'legacy' AND r.followup_id IS NOT NULL AND r.call_date BETWEEN ? AND ?");
+        $st->execute([$from, $to]);
+        return array_map('intval', $st->fetchAll(PDO::FETCH_KEY_PAIR) ?: []);
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/** خروجیِ calls_new_followup_counts بدونِ تماس‌های متقاضی (تا شمارشِ «جدید/پیگیری» با مدتِ مکالمه هم‌خوان باشد) */
+function rx_cc_adjust_new_followup(PDO $pdo, array $nf, string $from, string $to): array
+{
+    foreach (rx_cc_legacy_followup_ids($pdo, $from, $to) as $fid => $uid) {
+        $cls = $nf['class'][$fid] ?? null;
+        if ($cls === null) continue;
+        unset($nf['class'][$fid]);
+        if (isset($nf['by_user'][$uid][$cls])) $nf['by_user'][$uid][$cls] = max(0, (int) $nf['by_user'][$uid][$cls] - 1);
+    }
+    return $nf;
+}

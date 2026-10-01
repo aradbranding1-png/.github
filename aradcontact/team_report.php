@@ -3,6 +3,11 @@ require_once __DIR__ . '/includes/auth.php';
 $user = require_login();
 $pdo = db();
 
+// نیروهای پذیرش: «تماس با متقاضی» از «مدت تماس» (با مشتری) جداست — همان تعریفِ «گزارش‌های تماس»
+if (is_file(__DIR__ . '/includes/reception_functions.php')) require_once __DIR__ . '/includes/reception_functions.php';
+$rxCc = function_exists('rx_cc_ready') && rx_cc_ready($pdo);
+$rxNot = $rxCc ? ' AND ' . rx_cc_not_applicant_sql('f') : '';
+
 // =====================================================================
 // «آمار تیم من» — نسخه‌ی مخصوصِ سرپرست از همون گزارشی که ادمین برای هر تیم می‌بینه
 // (admin/admin_team_leader_report.php)، ولی همیشه محدود به تیمی که خودِ همین
@@ -80,7 +85,7 @@ if ($team) {
         SUM(CASE WHEN f.followup_number > 1 THEN 1 ELSE 0 END) AS old_calls
         FROM followups f JOIN customers c ON c.id = f.customer_id
         WHERE f.created_by = ? AND f.source IN ('call_import','novatel_import') AND f.call_duration_seconds > 10
-              AND c.contact_type = 'customer' AND f.followup_date BETWEEN ? AND ?");
+              AND c.contact_type = 'customer' AND f.followup_date BETWEEN ? AND ?{$rxNot}");
 
     $memberMeetingStmt = $pdo->prepare("SELECT COUNT(*) FROM followups
         WHERE created_by = ? AND status_after = 'جلسه برگزار شد' AND followup_date BETWEEN ? AND ?");
@@ -94,6 +99,9 @@ if ($team) {
     unset($m);
     // «جدید» = شماره با همین آپلود وارد سامانه شده؛ «پیگیری» = از قبل در سامانه بوده
     $__nf = calls_new_followup_counts($pdo, $rangeFrom, $rangeTo, 10);
+if ($rxCc) $__nf = rx_cc_adjust_new_followup($pdo, $__nf, $rangeFrom, $rangeTo);
+// دقیقه‌ی «تماس با متقاضی» (نیروهای پذیرش) — ستونِ جدا
+$rxApplicant = $rxCc ? rx_cc_stats($pdo, $rangeFrom, $rangeTo) : [];
     foreach ($members as &$__m) {
         $__c = $__nf['by_user'][(int) $__m['id']] ?? ['new' => 0, 'followup' => 0];
         $__m['stats']['new_calls'] = $__c['new'];
@@ -291,10 +299,11 @@ require_once __DIR__ . '/includes/layout_top.php';
     <p class="text-muted small mb-0">هنوز عضوی به این تیم اضافه نشده.</p>
   <?php else: ?>
     <div class="table-responsive">
+      <?php $__rxCol = false; foreach (($members ?? []) as $__mm) if (!empty($rxApplicant[(int) $__mm['id']]['n'])) { $__rxCol = true; break; } ?>
       <table class="table table-sm align-middle mb-0">
         <thead class="table-light">
           <tr>
-            <th>نام</th><th>واحد</th><th>مدت تماس <span class="small text-muted">(دقیقه)</span></th><th>کل تماس</th><th>تماس جدید</th><th>پیگیری</th><th>جلسه برگزارشده</th>
+            <th>نام</th><th>واحد</th><th>مدت تماس <span class="small text-muted">(دقیقه)</span></th><?php if ($__rxCol): ?><th>تماس با متقاضی <span class="small text-muted">(دقیقه)</span></th><?php endif; ?><th>کل تماس</th><th>تماس جدید</th><th>پیگیری</th><th>جلسه برگزارشده</th>
             <th>تعداد ارجاع گرفته</th><th>تعداد تماس گرفته</th><th>تعداد تماس نگرفته</th>
           </tr>
         </thead>
@@ -304,6 +313,7 @@ require_once __DIR__ . '/includes/layout_top.php';
               <td><?= e($m['full_name']) ?></td>
               <td><?= e($m['role']) ?></td>
               <td><?= to_persian_digits((string) (int) round($s['total_duration'] / 60)) ?></td>
+              <?php if ($__rxCol): ?><td><?= to_persian_digits((string) (int) round(($rxApplicant[(int) $m['id']]['seconds'] ?? 0) / 60)) ?></td><?php endif; ?>
               <td><?= to_persian_digits((string) (int) $s['total_calls']) ?></td>
               <td><?= to_persian_digits((string) (int) $s['new_calls']) ?></td>
               <td><?= to_persian_digits((string) (int) $s['old_calls']) ?></td>

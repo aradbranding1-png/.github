@@ -555,7 +555,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <div class="d-flex align-items-center gap-2">
       <i class="fa-solid fa-phone"></i>
       <h6 class="mb-0 fw-bold">گزارش تماس‌های کالیزر (به تفکیک واحد) — <?= e($rangeLabel) ?></h6>
-      <span class="text-muted small">(روی هر عدد کلیک کنید تا تماس‌های تشکیل‌دهنده‌اش را ببینید)</span>
+      <span class="text-muted small">(روی هر عدد کلیک کنید تا تماس‌های تشکیل‌دهنده‌اش را ببینید — «مدت مکالمه» = همه‌ی تماس‌های کالیزر/نواتل با مشتری، همکار و خانواده؛ تماسِ پذیرش با متقاضی جدا، پایینِ صفحه)</span>
     </div>
     <a href="?<?= e(http_build_query(array_merge($_GET, ['export' => 'xls']))) ?>" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-file-excel"></i> خروجی اکسل</a>
   </div>
