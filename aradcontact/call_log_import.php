@@ -858,6 +858,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $checked = ($doAction === 'create') && $entry !== null && !empty($entry['create']);
             if (!$checked) {
                 $skippedCount++;
+                // شماره‌ی ناشناسی که مشتری نشد ← این تماس‌ها در هیچ گزارشی ثبت نمی‌شوند (برای تطبیق با فایل نشان داده می‌شود)
+                foreach ($cand['occurrences'] as $__oc) {
+                    $stats['skipped_calls'] = ($stats['skipped_calls'] ?? 0) + 1;
+                    $stats['skipped_seconds'] = ($stats['skipped_seconds'] ?? 0) + (int) ($__oc['duration'] ?? 0);
+                }
                 continue;
             }
 
@@ -896,7 +901,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $followupNumber = 0;
             foreach ($occurrences as $occ) {
                 $followupNumber++;
-                // ⭐ execute با دو مقدار جدید: 'customer' و 0
+                // contact_type = customer؛ is_phone_call مثلِ بقیه‌ی ردیف‌های کالیزر: برقرار و بیش از ۱۰ ثانیه ← ۱
+                // (قبلاً همیشه ۰ بود و تماس‌های مشتری‌های تازه در «گزارش‌های تماس» نمی‌آمد)
                 $fuInsStmt->execute([
                     $newCustomerId,
                     $followupNumber,
@@ -908,7 +914,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $occ['duration'],
                     $effectiveUserId,
                     'customer',
-                    0,
+                    (!empty($occ['connected']) && (int) ($occ['duration'] ?? 0) > 10) ? 1 : 0,
                 ]);
                 if (!empty($occ['duration'])) {
                     try { require_once __DIR__ . '/includes/performance_functions.php'; ps_note_interaction($pdo, (int) $newCustomerId, (int) $effectiveUserId, 'calizer'); } catch (Throwable $e) {}
@@ -1465,8 +1471,10 @@ function __buildNewCustPayload(formId) {
       <li><?= to_persian_digits((string) $result['created']) ?> مشتری جدید اضافه شد.</li>
     <?php endif; ?>
     <?php if ($result['created_skipped'] > 0): ?>
-      <li><?= to_persian_digits((string) $result['created_skipped']) ?> شماره ناشناس ثبت نشد.</li>
+      <li><?= to_persian_digits((string) $result['created_skipped']) ?> شماره ناشناس ثبت نشد<?php if (!empty($result['skipped_calls'])): ?>
+        — <b><?= to_persian_digits((string) $result['skipped_calls']) ?> تماس، <?= to_persian_digits((string) round(($result['skipped_seconds'] ?? 0) / 60)) ?> دقیقه</b>؛ این تماس‌ها در هیچ گزارشی حساب نمی‌شوند (اگر مشتری‌اند، فایل را دوباره آپلود و «افزودن به‌عنوان مشتری جدید» را بزنید)<?php endif; ?>.</li>
     <?php endif; ?>
+    <li class="text-muted">در گزارش‌ها «مدت مکالمه» فقط تماس‌های برقرارِ <b>بیش از ۱۰ ثانیه با مشتری</b> است؛ تماس با همکار/خانواده، تماس‌های کوتاه، ردیف‌های تکراری و شماره‌های ثبت‌نشده در جمعِ فایلِ کالیزر هستند ولی در گزارش نه.</li>
   </ul>
 </div>
 

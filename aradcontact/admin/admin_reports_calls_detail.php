@@ -96,7 +96,8 @@ if ($type === 'applicant') {
         $sql .= " AND f.call_duration_seconds <= 0";
         break;
     default:
-        $sql .= " AND f.call_duration_seconds > 0";
+        // همان تعریفِ عددِ «مدت مکالمه» در گزارش: تماسِ برقرارِ بیش از ۱۰ ثانیه
+        $sql .= " AND f.call_duration_seconds > 10";
         break;
 }
 if ($type !== 'applicant') $sql .= " ORDER BY f.followup_date DESC, f.event_time DESC, f.call_duration_seconds DESC LIMIT " . (in_array($metric, ['new', 'followup'], true) ? 5000 : 1000);

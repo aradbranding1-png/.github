@@ -1296,6 +1296,25 @@ function referral_union_sql(): string
                AND h.id = (SELECT MIN(h2.id) FROM customer_handoffs h2 WHERE h2.customer_id = h.customer_id AND h2.from_user_id = h.from_user_id AND h2.to_user_id = h.to_user_id))";
 }
 
+/**
+ * یک‌بار: تماس‌هایی که در آپلودِ کالیزر برای «مشتریِ جدید» (شماره‌ی ناشناسی که همان‌جا مشتری شد) ثبت شده بودند
+ * به‌اشتباه is_phone_call = 0 گرفته بودند و در «گزارش‌های تماس» شمرده نمی‌شدند (ولی در «گزارش تیم‌ها» بودند).
+ * همان قاعده‌ی بقیه‌ی ردیف‌ها: تماسِ کالیزر/نواتل، با مشتری، بیش از ۱۰ ثانیه ← is_phone_call = 1.
+ */
+function followups_phone_call_backfill_v1(PDO $pdo): void
+{
+    $flag = __DIR__ . '/../storage/.followups_phone_call_backfill_v1';
+    if (is_file($flag)) return;
+    @file_put_contents($flag, date('c'));
+    try {
+        $pdo->exec("UPDATE followups SET is_phone_call = 1
+            WHERE source IN ('call_import', 'novatel_import') AND is_phone_call = 0 AND contact_type = 'customer' AND call_duration_seconds > 10");
+    } catch (Throwable $e) {
+        error_log('followups_phone_call_backfill_v1: ' . $e->getMessage());
+        @unlink($flag);
+    }
+}
+
 function apply_call_import_followup_outcome(PDO $pdo, int $customerId, bool $connected, string $baseDateG, string $currentStatus, bool $statusLocked): string
 {
     if ($connected) {

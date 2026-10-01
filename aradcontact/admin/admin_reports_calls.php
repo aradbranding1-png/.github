@@ -9,6 +9,8 @@ $pdo = db();
 // نیروهای پذیرش: تفکیکِ «تماس با متقاضی» از «تماس با مشتری»
 if (is_file(__DIR__ . '/../includes/reception_functions.php')) require_once __DIR__ . '/../includes/reception_functions.php';
 $rxCalls = function_exists('rx_cc_ready') && rx_cc_ready($pdo);
+// یک‌بار: تماس‌های مشتری‌هایی که هنگامِ آپلودِ کالیزر «مشتریِ جدید» ساخته شده بودند is_phone_call = 0 خورده بودند و در این گزارش نمی‌آمدند
+try { followups_phone_call_backfill_v1($pdo); } catch (Throwable $e) {}
 
 $referralTableAvailable = false;
 try {
@@ -91,7 +93,7 @@ $byTypeSql = "SELECT contact_type,
         COALESCE(SUM(call_duration_seconds), 0) AS total_duration
     FROM followups FORCE INDEX (idx_isphone_date_creator)
     WHERE is_phone_call = 1
-      AND followup_date BETWEEN ? AND ?";
+      AND followup_date BETWEEN ? AND ?" . ($rxCalls ? ' AND NOT EXISTS (SELECT 1 FROM reception_callizer_calls rxl WHERE rxl.followup_id = followups.id)' : '');
 $byTypeParams = [$rangeFrom, $rangeTo];
 if ($staffId > 0) {
     $byTypeSql .= " AND created_by = ?";
@@ -109,11 +111,6 @@ foreach ($stmt->fetchAll() as $row) {
 }
 // تماس با متقاضی (نیروهای پذیرش): از «مشتری» جداست
 $applicantCallsByUser = $rxCalls ? rx_cc_stats($pdo, $rangeFrom, $rangeTo, $staffId) : [];
-$legacyApplicantByUser = $rxCalls ? rx_cc_legacy_in_followups($pdo, $rangeFrom, $rangeTo, $staffId) : [];
-foreach ($legacyApplicantByUser as $__l) {
-    $systemCallByContactType['customer']['count'] = max(0, $systemCallByContactType['customer']['count'] - (int) $__l['calls']);
-    $systemCallByContactType['customer']['duration'] = max(0, $systemCallByContactType['customer']['duration'] - (int) $__l['seconds']);
-}
 $systemApplicantCalls = ['count' => 0, 'duration' => 0];
 foreach ($applicantCallsByUser as $__a) {
     $systemApplicantCalls['count'] += $__a['n'];
@@ -137,28 +134,14 @@ $statsStmt = $pdo->prepare("
         SUM(CASE WHEN description = 'برقراری تماس' THEN 1 ELSE 0 END) AS connected_range,
         SUM(CASE WHEN description = 'بی پاسخ'      THEN 1 ELSE 0 END) AS missed_range
     FROM followups FORCE INDEX (idx_isphone_date_creator)
-    WHERE is_phone_call = 1
-      AND followup_date BETWEEN ? AND ?
+    WHERE is_phone_call = 1 AND contact_type = 'customer'
+      AND followup_date BETWEEN ? AND ?" . ($rxCalls ? ' AND NOT EXISTS (SELECT 1 FROM reception_callizer_calls rxl WHERE rxl.followup_id = followups.id)' : '') . "
     GROUP BY created_by
 ");
 $statsStmt->execute([$rangeFrom, $rangeTo]);
 foreach ($statsStmt->fetchAll() as $row) {
     $callStatsByUser[(int) $row['uid']] = $row;
 }
-// سابقه‌ی قدیمیِ «تماس با متقاضی» که داخلِ followups مانده، از آمارِ مشتریِ همان نیرو کم می‌شود
-foreach (($rxCalls ? rx_cc_legacy_in_followups($pdo, $rangeFrom, $rangeTo) : []) as $__uid => $__l) {
-    if (!isset($callStatsByUser[$__uid])) continue;
-    $__s = &$callStatsByUser[$__uid];
-    $__s['new_calls'] = max(0, (int) $__s['new_calls'] - $__l['new_calls']);
-    $__s['followup_calls'] = max(0, (int) $__s['followup_calls'] - $__l['followup_calls']);
-    $__s['calls_range'] = max(0, (int) $__s['calls_range'] - $__l['calls']);
-    $__s['duration_range'] = max(0, (int) $__s['duration_range'] - $__l['seconds']);
-    $__s['callizer_duration_range'] = max(0, (int) $__s['callizer_duration_range'] - $__l['seconds']);
-    $__s['connected_range'] = max(0, (int) $__s['connected_range'] - $__l['connected']);
-    $__s['missed_range'] = max(0, (int) $__s['missed_range'] - $__l['missed']);
-    unset($__s);
-}
-
 // --- ۲) آمار آپلود در بازه ---
 $uploadByUser = [];
 $uploadStmt = $pdo->prepare("
@@ -555,7 +538,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <div class="d-flex align-items-center gap-2">
       <i class="fa-solid fa-phone"></i>
       <h6 class="mb-0 fw-bold">گزارش تماس‌های کالیزر (به تفکیک واحد) — <?= e($rangeLabel) ?></h6>
-      <span class="text-muted small">(روی هر عدد کلیک کنید تا تماس‌های تشکیل‌دهنده‌اش را ببینید — «مدت مکالمه» = همه‌ی تماس‌های کالیزر/نواتل با مشتری، همکار و خانواده؛ تماسِ پذیرش با متقاضی جدا، پایینِ صفحه)</span>
+      <span class="text-muted small">(روی هر عدد کلیک کنید تا تماس‌های تشکیل‌دهنده‌اش را ببینید — «مدت مکالمه» = تماس‌های برقرارِ بیش از ۱۰ ثانیه با مشتری (کالیزر/نواتل) — همان تعریفِ «گزارش تیم‌ها»؛ تماسِ پذیرش با متقاضی جدا، پایینِ صفحه)</span>
     </div>
     <a href="?<?= e(http_build_query(array_merge($_GET, ['export' => 'xls']))) ?>" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-file-excel"></i> خروجی اکسل</a>
   </div>
