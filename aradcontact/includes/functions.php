@@ -1274,16 +1274,26 @@ function referral_log(PDO $pdo, int $customerId, int $fromUserId, int $toUserId,
     }
     if (!$ready) return;
     if (function_exists('ps_box_user_id') && $fromUserId === ps_box_user_id($pdo)) return; // «Box سیستم» کسی نیست
+    // همین مشتری به همین گیرنده قبلاً ارجاع خورده یا همین مسیر ثبت شده ← تکراری ثبت نشود
+    $dup = $pdo->prepare('SELECT (SELECT COUNT(*) FROM customer_referrals WHERE customer_id = ? AND to_user_id = ?)
+        + (SELECT COUNT(*) FROM customer_handoffs WHERE customer_id = ? AND from_user_id = ? AND to_user_id = ?)');
+    $dup->execute([$customerId, $toUserId, $customerId, $fromUserId, $toUserId]);
+    if ((int) $dup->fetchColumn() > 0) return;
     $pdo->prepare('INSERT IGNORE INTO customer_handoffs (customer_id, from_user_id, to_user_id, referred_by, source, note, ref_key) VALUES (?,?,?,?,?,?,?)')
         ->execute([$customerId, $fromUserId, $toUserId, $referredBy ?: $fromUserId, $source, $note !== '' ? mb_substr($note, 0, 255) : null, $refKey]);
 }
 
-/** همه‌ی ارجاع‌ها + انتقال‌ها به‌صورتِ یک «جدول» (برای FROM ... r) */
+/**
+ * همه‌ی ارجاع‌ها + انتقال‌ها به‌صورتِ یک «جدول» (برای FROM ... r).
+ * انتقالی که همان مشتری به همان گیرنده قبلاً «ارجاع» هم خورده، یا تکرارِ همان مسیر است، نشان داده نمی‌شود (هر مشتری یک بار).
+ */
 function referral_union_sql(): string
 {
     return "(SELECT id, customer_id, from_user_id, to_user_id, referred_by, created_at, source, note, 'referral' AS kind FROM customer_referrals
              UNION ALL
-             SELECT id, customer_id, from_user_id, to_user_id, referred_by, created_at, source, note, 'handoff' AS kind FROM customer_handoffs)";
+             SELECT h.id, h.customer_id, h.from_user_id, h.to_user_id, h.referred_by, h.created_at, h.source, h.note, 'handoff' AS kind FROM customer_handoffs h
+             WHERE NOT EXISTS (SELECT 1 FROM customer_referrals r0 WHERE r0.customer_id = h.customer_id AND r0.to_user_id = h.to_user_id)
+               AND h.id = (SELECT MIN(h2.id) FROM customer_handoffs h2 WHERE h2.customer_id = h.customer_id AND h2.from_user_id = h.from_user_id AND h2.to_user_id = h.to_user_id))";
 }
 
 function apply_call_import_followup_outcome(PDO $pdo, int $customerId, bool $connected, string $baseDateG, string $currentStatus, bool $statusLocked): string
