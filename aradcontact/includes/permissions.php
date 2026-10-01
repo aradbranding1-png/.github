@@ -242,8 +242,8 @@ if (!function_exists('perm_catalog')) {
                         'admin_staff_view.php', 'admin_staff_report.php', 'admin_staff_stat_detail.php', 'admin_today_status_detail.php',
                         'admin_team_leader_report.php', 'admin_teams_report.php', 'admin_meeting_bookings_report.php',
                     ], 'sensitive' => true],
-                    'supervisor_report_all' => ['label' => 'گزارشِ سرپرستِ همه‌ی تیم‌ها', 'desc' => 'فعالیتِ هر سرپرست، تماسش با نیروها، پوشش، راندمانِ نیروها و تیم‌ها.', 'pages' => ['supervisor_report.php'], 'sensitive' => true],
-                    'supervisor_report_view' => ['label' => 'گزارشِ سرپرست (تیمِ خودش)', 'desc' => 'سرپرست: فعالیتِ خودش، نیروهایی که با آن‌ها صحبت کرده/نکرده، و راندمانِ نیروهای تیمِ خودش.', 'pages' => ['supervisor_report.php']],
+                    'supervisor_report_all' => ['label' => 'گزارشِ سرپرستِ همه‌ی تیم‌ها', 'desc' => 'فعالیتِ هر سرپرست، تماسش با نیروها، پوشش، راندمانِ نیروها و تیم‌ها.', 'pages' => ['supervisor_report.php', 'supervisor_daily_report.php'], 'sensitive' => true],
+                    'supervisor_report_view' => ['label' => 'گزارشِ سرپرست (تیمِ خودش)', 'desc' => 'سرپرست: فعالیتِ خودش، نیروهایی که با آن‌ها صحبت کرده/نکرده، و راندمانِ نیروهای تیمِ خودش.', 'pages' => ['supervisor_report.php', 'supervisor_daily_report.php']],
                 ],
             ],
             'admin_services' => [

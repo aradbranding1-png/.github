@@ -146,9 +146,10 @@ function tsr_team_sales_period(PDO $pdo, int $teamId, string $from, string $to):
 }
 
 /**
- * قانونِ تعدادِ نیروی تیمِ سرپرست: هر ۸ نیروی «عملیات» یک نیروی «توسعه» و هر ۲ نیروی «ستادی» یک نیروی «توسعه» لازم دارد.
- *   عملیات ≤ ۸ × توسعه   و   ستادی ≤ ۲ × توسعه
+ * قانونِ تعدادِ نیروی تیمِ سرپرست: به ازای هر ۸ نیروی «عملیات» یک نیروی «توسعه» و به ازای هر ۲ نیروی «ستادی» یک نیروی «توسعه».
+ *   توسعه‌ی لازم = ⌈عملیات ÷ ۸⌉ + ⌈ستادی ÷ ۲⌉   ←   رعایت شده اگر توسعه ≥ توسعه‌ی لازم
  * نیروی «نامشخص» (گروهِ شغلیِ تعیین‌نشده) در قانون حساب نمی‌شود و جدا هشدار داده می‌شود.
+ * ops_max / staff_max: حداکثرِ مجاز با توسعه‌ی فعلی، اگر گروهِ دیگر ثابت بماند.
  * @param array{توسعه:int,عملیات:int,ستادی:int,نامشخص?:int} $grp
  */
 function tsr_staff_rule(array $grp): array
@@ -156,16 +157,18 @@ function tsr_staff_rule(array $grp): array
     $dev = (int) ($grp['توسعه'] ?? 0);
     $ops = (int) ($grp['عملیات'] ?? 0);
     $stf = (int) ($grp['ستادی'] ?? 0);
-    $opsMax = 8 * $dev;
-    $stfMax = 2 * $dev;
-    $needDev = max((int) ceil($ops / 8), (int) ceil($stf / 2));
-    $ok = $ops <= $opsMax && $stf <= $stfMax;
-    $why = [];
-    if ($ops > $opsMax) $why[] = 'عملیات ' . to_persian_digits((string) $ops) . ' نفر — مجاز: ' . to_persian_digits((string) $opsMax);
-    if ($stf > $stfMax) $why[] = 'ستادی ' . to_persian_digits((string) $stf) . ' نفر — مجاز: ' . to_persian_digits((string) $stfMax);
+    $needOps = (int) ceil($ops / 8);
+    $needStf = (int) ceil($stf / 2);
+    $needDev = $needOps + $needStf;
+    $ok = $dev >= $needDev;
+    $opsMax = 8 * max(0, $dev - $needStf);
+    $stfMax = 2 * max(0, $dev - $needOps);
+    $fa = static fn(int $n): string => to_persian_digits((string) $n);
     return [
         'ok' => $ok, 'ops_max' => $opsMax, 'staff_max' => $stfMax, 'need_dev' => $needDev, 'dev_short' => max(0, $needDev - $dev),
         'unknown' => (int) ($grp['نامشخص'] ?? 0),
-        'text' => $ok ? 'رعایت شده' : 'رعایت نشده: ' . implode('، ', $why) . ' — توسعه‌ی لازم: ' . to_persian_digits((string) $needDev) . ' نفر (کمبود ' . to_persian_digits((string) max(0, $needDev - $dev)) . ')',
+        'text' => $ok ? 'رعایت شده'
+            : 'رعایت نشده: توسعه‌ی لازم ' . $fa($needDev) . ' نفر (عملیات ' . $fa($ops) . ' ← ' . $fa($needOps) . ' + ستادی ' . $fa($stf) . ' ← ' . $fa($needStf) . ')'
+              . ' — توسعه‌ی فعلی ' . $fa($dev) . ' (کمبود ' . $fa(max(0, $needDev - $dev)) . ')',
     ];
 }

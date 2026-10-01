@@ -8,6 +8,7 @@ require_once __DIR__ . '/includes/customer_credit.php';
 require_once __DIR__ . '/includes/performance_functions.php';
 require_once __DIR__ . '/includes/supervisor_report.php';
 require_once __DIR__ . '/includes/team_sales.php';
+require_once __DIR__ . '/includes/supervisor_daily.php';
 
 $isAll = is_super_admin($user) || user_can('supervisor_report_all', $user);
 $isLeader = ($user['role'] ?? '') === 'leader';
@@ -68,6 +69,8 @@ $ruleBadge = static function (array $rule, bool $long = false): string {
     if ($rule['unknown'] > 0) $h .= '<div class="text-warning" style="font-size:11px">' . to_persian_digits((string) $rule['unknown']) . ' نامشخص حساب نشده</div>';
     return $h;
 };
+// عکسِ روزانه‌ی نیروی انسانیِ تیم‌ها (برای نمودارِ «روند نیروها» در گزارشِ A4)
+try { sd_snapshot_all($pdo); } catch (Throwable $e) {}
 $talk = sup_talk_by_user($pdo, $from, $to);
 $roleAvg = sup_role_averages($pdo, $talk);
 
@@ -132,7 +135,7 @@ if ($isAll && !$leaderId) {
               ['بازه', $rl . ': ' . $jFrom . ' تا ' . $jTo],
               ['فروش', 'سفارش‌های تأییدشده با تاریخِ تأییدِ مالی در بازه — خالص بدونِ مالیات؛ تیم = سرپرست (D) + نیروهای A/B/C'],
               ['تعداد نیرو', 'نیروهای فعالِ تیم (بدونِ خودِ سرپرست) = توسعه + عملیات + ستادی + نامشخص'],
-              ['قانونِ تعداد', 'هر ۸ نیروی عملیات یک نیروی توسعه و هر ۲ نیروی ستادی یک نیروی توسعه: عملیات ≤ ۸ × توسعه و ستادی ≤ ۲ × توسعه (نامشخص حساب نمی‌شود)'],
+              ['قانونِ تعداد', 'به ازای هر ۸ نیروی عملیات یک توسعه و به ازای هر ۲ نیروی ستادی یک توسعه: توسعه‌ی لازم = ⌈عملیات ÷ ۸⌉ + ⌈ستادی ÷ ۲⌉ ؛ رعایت شده اگر توسعه ≥ توسعه‌ی لازم (نامشخص حساب نمی‌شود)'],
               ['تاریخِ تهیه', to_jalali(date('Y-m-d')) . ' ' . date('H:i')],
            ], 'widths' => [16, 90]],
       ]);
@@ -154,6 +157,7 @@ require_once __DIR__ . '/includes/layout_top.php';
     <input name="from" class="form-control form-control-sm jalali-date" style="width:120px" placeholder="از" value="<?= e((string) ($_GET['from'] ?? '')) ?>">
     <input name="to" class="form-control form-control-sm jalali-date" style="width:120px" placeholder="تا" value="<?= e((string) ($_GET['to'] ?? '')) ?>">
     <button class="btn btn-sm btn-dark">نمایش</button>
+    <a href="supervisor_daily_report.php<?= $leaderId ? '?leader=' . (int) $leaderId : '' ?>" class="btn btn-sm btn-outline-dark" title="گزارشِ یک‌صفحه‌ایِ A4 برای چاپ / PDF"><i class="fa-solid fa-file-pdf"></i> گزارش A4 روزانه</a>
     <?php if ($isAll && !$leaderId): ?><button name="export" value="1" class="btn btn-sm btn-outline-success" title="جدول‌های همین صفحه با همین بازه"><i class="fa-solid fa-file-excel"></i> خروجی اکسل</button><?php endif; ?>
   </form>
 </div>
@@ -212,7 +216,7 @@ require_once __DIR__ . '/includes/layout_top.php';
     <td><?= to_persian_digits((string) $overTot['covered']) ?> از <?= to_persian_digits((string) $overTot['n']) ?></td><td></td><td><?= $fmtMin($overTot['own_talk']) ?></td>
     <td><?= $money($salesTot['net']) ?> <span class="text-muted fw-normal">(<?= to_persian_digits((string) $salesTot['cnt']) ?> سفارش)</span></td><td></td></tr></tfoot><?php endif; ?>
   </table></div></div>
-  <div class="small text-muted mt-1"><b>قانونِ تعداد:</b> هر ۸ نیروی عملیات یک نیروی توسعه و هر ۲ نیروی ستادی یک نیروی توسعه (عملیات ≤ ۸ × توسعه و ستادی ≤ ۲ × توسعه). نشانگرِ ماوس روی تیک/ضربدر جزئیات را نشان می‌دهد.</div>
+  <div class="small text-muted mt-1"><b>قانونِ تعداد:</b> هر ۸ نیروی عملیات یک نیروی توسعه و هر ۲ نیروی ستادی یک نیروی توسعه ← توسعه‌ی لازم = ⌈عملیات ÷ ۸⌉ + ⌈ستادی ÷ ۲⌉. نشانگرِ ماوس روی تیک/ضربدر جزئیات را نشان می‌دهد.</div>
   <?php if ($__showUnk): ?><div class="small text-muted mt-1">«نامشخص» = نیرویی که گروهِ شغلی‌اش تعیین نشده؛ با «جزئیات» هر تیم می‌توانید همان‌جا تعیینش کنید. جمعِ توسعه + عملیات + ستادی<?= $__showUnk ? ' + نامشخص' : '' ?> = تعداد نیروها.</div><?php endif; ?>
 
 <?php else:
@@ -288,8 +292,8 @@ require_once __DIR__ . '/includes/layout_top.php';
       <?php $__rule = tsr_staff_rule($grp); ?>
       <div class="mt-2 p-2 rounded-3 small" style="background:<?= $__rule['ok'] ? '#f0fdf4' : '#fef2f2' ?>">
         <div class="d-flex justify-content-between align-items-center"><b>قانونِ تعداد</b><?= $ruleBadge($__rule, true) ?></div>
-        <div class="text-muted mt-1">مجاز با <?= to_persian_digits((string) $grp['توسعه']) ?> توسعه: حداکثر <?= to_persian_digits((string) $__rule['ops_max']) ?> عملیات و <?= to_persian_digits((string) $__rule['staff_max']) ?> ستادی
-          <span class="d-block" style="font-size:11px">(هر ۸ عملیات ← ۱ توسعه، هر ۲ ستادی ← ۱ توسعه)</span></div>
+        <div class="text-muted mt-1">توسعه‌ی لازم: <?= to_persian_digits((string) $__rule['need_dev']) ?> نفر — فعلی: <?= to_persian_digits((string) $grp['توسعه']) ?>
+          <span class="d-block" style="font-size:11px">(⌈عملیات ÷ ۸⌉ + ⌈ستادی ÷ ۲⌉)</span></div>
       </div>
       <?php if ($unknownList): ?>
         <div class="small mt-2"><b class="text-danger">نامشخص‌ها:</b> <?= e(implode('، ', array_map(static fn($m) => $m['full_name'], $unknownList))) ?></div>
