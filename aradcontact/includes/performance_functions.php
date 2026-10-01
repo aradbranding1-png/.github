@@ -14,7 +14,7 @@
  *   ارجاعِ هم‌سطح: B می‌تواند مشتریِ خودش را به B دیگری، و C به C دیگری (حتی از تیمِ دیگر) ارجاع دهد؛
  *      از آن لحظه گیرنده جایگزینِ قبلی می‌شود و سرپرستِ تیمِ «گیرنده» سهمِ D آن جایگاه را می‌گیرد.
  *   D: سه سهمِ ثابت — هر جایگاهِ A/B/C یک سهم برای سرپرستِ تیمِ صاحبِ همان جایگاه (جایگاهِ خالی یا بدونِ سرپرست ← سهمِ همان جایگاه به سازمان)؛
- *      اگر سفارش را سرپرست مستقیم ثبت کرده: سهمِ D مساوی بینِ سرپرست‌های متمایزِ درگیر + خودِ او
+ *      سرپرست فقط از سهمِ اعضای تیمش سهم می‌برد؛ ثبتِ فیش توسطِ سرپرست (سفارشِ مستقیم) سهمی نمی‌دهد و سرپرست اصلاً فیش ثبت نمی‌کند.
  *   هیچ‌کس سهمِ بخشِ دیگری را نمی‌گیرد؛ جایگاهِ خالیِ A/B/C ← سازمان
  * گرد کردن: هر تقسیم رو به پایین (تومانِ کامل)؛ همه‌ی باقی‌مانده‌ها به سازمان ← جمع = Pool دقیقاً.
  * مالکیت (A/Bها/C/تیم/سرپرست) هنگامِ ثبتِ سفارش snapshot می‌شود و هر محاسبه‌ی پرداخت immutable است.
@@ -30,7 +30,7 @@ function perf_ready(PDO $pdo): bool
 {
     static $ready = null;
     if ($ready !== null) return $ready;
-    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); ps_a_d_rule_v14($pdo); } return $ready; }
+    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); ps_a_d_rule_v14($pdo); ps_no_direct_d_v15($pdo); } return $ready; }
     $ddl = [
         "CREATE TABLE IF NOT EXISTS ps_base_versions (id INT UNSIGNED NOT NULL AUTO_INCREMENT, percent DECIMAL(6,3) NOT NULL, effective_from DATETIME NOT NULL,
           note VARCHAR(500) DEFAULT NULL, created_by INT UNSIGNED DEFAULT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id), KEY idx_psbv_from (effective_from)
@@ -361,39 +361,15 @@ function ps_distribute(int $pool, array $own): array
         'reason' => 'B مشتری = ' . ($bEff['name'] ?? '#' . $bEff['user_id']) . $team($bEff) . ' / کلِ سهمِ B (۲۵٪)' . (!empty($bEff['basis']) ? ' / مبنا: ' . $bEff['basis'] : '')];
     else $org($lines, 'B', 'B', $unit, 'B ندارد ← سهمِ B به سازمان');
 
-    // D
-    $direct = $own['direct_d'] ?? null;
-    if ($direct) {
-        // سفارشِ مستقیمِ سرپرست: سهمِ D به‌طورِ مساوی بینِ سرپرست‌های «متمایزِ» درگیر
-        // (سرپرستِ تیمِ A، B مؤثر، C — هر کدام یک بار) + سرپرستِ ثبت‌کننده
-        $leaders = [];
-        foreach (['A' => $a, 'B' => $bEff, 'C' => $c] as $slot => $o) {
-            if ($o && !empty($o['leader_id'])) {
-                $lid = (int) $o['leader_id'];
-                $leaders[$lid] = $leaders[$lid] ?? ['user_id' => $lid, 'team_id' => $o['team_id'] ?? null, 'name' => $o['leader_name'] ?? ('#' . $lid), 'slots' => []];
-                $leaders[$lid]['slots'][] = $slot;
-            }
-        }
-        $did = (int) $direct['user_id'];
-        $leaders[$did] = $leaders[$did] ?? ['user_id' => $did, 'team_id' => $direct['team_id'] ?? null, 'name' => $direct['name'] ?? ('#' . $did), 'slots' => []];
-        $leaders[$did]['direct'] = true;
-        $each = intdiv($unit, count($leaders));
-        foreach ($leaders as $L) {
-            $why = [];
-            if ($L['slots']) $why[] = 'سرپرستِ تیمِ جایگاهِ ' . implode('/', $L['slots']);
-            if (!empty($L['direct'])) $why[] = 'ثبت‌کننده‌ی مستقیمِ سفارش';
-            $lines[] = ['unit' => 'D', 'slot' => 'D', 'user_id' => $L['user_id'], 'team_id' => $L['team_id'], 'amount' => $each,
-                'reason' => 'سفارشِ مستقیمِ سرپرست ← سهمِ D مساوی بینِ ' . count($leaders) . ' سرپرست: ' . $L['name'] . ' (' . implode(' + ', $why) . ')'];
-        }
-        $org($lines, 'D', 'D-round', $unit - $each * count($leaders), 'باقی‌مانده‌ی گرد کردنِ تقسیمِ D ← سازمان');
-    } else {
+    // D — سرپرست فقط از سهمِ اعضای تیمش سهم می‌برد (ثبتِ فیش توسطِ سرپرست سهمی نمی‌دهد؛ direct_d ِ snapshotهای قدیمی نادیده گرفته می‌شود)
+    {
         // حالتِ عادی: سهمِ D سه قسمتِ ثابت است — یک قسمت برای هر جایگاه (A / B / C)؛ قسمتِ هر جایگاه به سرپرستِ تیمِ صاحبِ همان جایگاه.
         // جایگاهِ خالی (یا صاحبِ بدونِ سرپرست) ← قسمتِ همان جایگاه به سازمان (سهمِ سرپرستِ دیگر زیاد نمی‌شود).
         $each = intdiv($unit, 3);
         foreach (['A' => $a, 'B' => $bEff, 'C' => $c] as $slot => $o) {
             if ($o && !empty($o['leader_id'])) {
                 $lines[] = ['unit' => 'D', 'slot' => 'D(' . $slot . ')', 'user_id' => (int) $o['leader_id'], 'team_id' => $o['team_id'] ?? null, 'amount' => $each,
-                    'reason' => 'جایگاهِ ' . $slot . ' ← تیم ' . ($o['team_id'] ?? '?') . ' ← سرپرست ' . ($o['leader_name'] ?? '#' . $o['leader_id']) . ' ← یک سهم از ۳ سهمِ D'];
+                    'reason' => 'جایگاهِ ' . $slot . ' ← تیم ' . ($o['team_id'] ?? '?') . ' ← سرپرست ' . ($o['leader_name'] ?? '#' . $o['leader_id']) . (!empty($o['leader_manual']) ? ' (تعیینِ دستی)' : '') . ' ← یک سهم از ۳ سهمِ D'];
             } elseif ($o) {
                 $org($lines, 'D', 'D(' . $slot . ')', $each, 'تیمِ صاحبِ جایگاهِ ' . $slot . ' سرپرست ندارد ← یک سهم از ۳ سهمِ D به سازمان');
             } else {
@@ -887,7 +863,6 @@ function ps_order_snapshot(PDO $pdo, int $orderId, ?array $registrant, string $s
     if ($snap['C']) $snap['C']['basis'] = ps_owner_basis($pdo, $own['C']);
     $regId = $registrant ? (int) $registrant['id'] : (int) $order['seller_user_id'];
     $reg = ps_user_row($pdo, $regId);
-    if ($reg && $reg['role'] === 'leader') $snap['direct_d'] = ['user_id' => $regId, 'name' => $reg['full_name'], 'team_id' => $reg['team_id'] ? (int) $reg['team_id'] : null];
     $ver = ps_base_version_at($pdo, (string) $order['created_at']);
     $tax = (float) ($order['q_tax'] ?? 0);
     if ($tax <= 0 && (int) $order['tax_amount'] > 0 && (int) $order['total_amount'] > (int) $order['tax_amount']) {
@@ -1253,10 +1228,14 @@ function ps_edit_order_owners(PDO $pdo, int $orderId, array $in, int $byUser, st
     if (!empty($in['C'])) { if ($e = $need($pdo, (int) $in['C'], 'C')) return ['ok' => false, 'message' => $e]; $new['C'] = ps_snapshot_person($pdo, (int) $in['C']) + ['basis' => $manualBasis]; }
     $bIn = (int) ($in['B'] ?? ($in['B1'] ?? 0));
     if ($bIn > 0) { if ($e = $need($pdo, $bIn, 'B')) return ['ok' => false, 'message' => $e]; $new['B'][] = ps_snapshot_person($pdo, $bIn, 1) + ['basis' => $manualBasis]; }
-    if (!empty($in['D'])) {
-        $d = ps_user_row($pdo, (int) $in['D']);
-        if (!$d || $d['role'] !== 'leader') return ['ok' => false, 'message' => 'سرپرستِ ثبت‌کننده باید نقشِ سرپرست داشته باشد.'];
-        $new['direct_d'] = ['user_id' => (int) $in['D'], 'name' => $d['full_name'], 'team_id' => $d['team_id'] ? (int) $d['team_id'] : null];
+    // سرپرستِ هر جایگاه (اختیاری): پیش‌فرض سرپرستِ تیمِ صاحبِ جایگاه؛ انتخابِ دستی جایگزینِ آن می‌شود
+    foreach (['A' => 'LA', 'B' => 'LB', 'C' => 'LC'] as $slot => $key) {
+        $lid = (int) ($in[$key] ?? 0);
+        if ($lid <= 0) continue;
+        $L = ps_user_row($pdo, $lid);
+        if (!$L || $L['role'] !== 'leader') return ['ok' => false, 'message' => 'سرپرستِ جایگاهِ ' . $slot . ' باید نقشِ سرپرست داشته باشد.'];
+        if ($slot === 'B') { if (!empty($new['B'][0])) { $new['B'][0]['leader_id'] = $lid; $new['B'][0]['leader_name'] = $L['full_name']; $new['B'][0]['leader_manual'] = true; } }
+        elseif (!empty($new[$slot])) { $new[$slot]['leader_id'] = $lid; $new[$slot]['leader_name'] = $L['full_name']; $new[$slot]['leader_manual'] = true; }
     }
     $old = json_decode((string) $snap['owners_json'], true) ?: [];
     $pdo->prepare('UPDATE ps_order_snapshots SET owners_json = ? WHERE order_id = ?')->execute([json_encode($new, JSON_UNESCAPED_UNICODE), $orderId]);
@@ -2033,5 +2012,40 @@ function ps_a_d_rule_v14(PDO $pdo): void
         }
     } catch (Throwable $e) {
         error_log('ps_a_d_rule_v14: ' . $e->getMessage());
+    }
+}
+
+/**
+ * یک‌بار (نسخه‌ی ۱۵): «سفارشِ مستقیمِ سرپرست» حذف شد — سرپرست فقط از سهمِ اعضای تیمش (D(A)/D(B)/D(C)) سهم می‌برد.
+ * سفارش‌هایی که سرپرست به‌عنوانِ ثبت‌کننده‌ی مستقیم سهم گرفته بود، بدونِ آن دوباره محاسبه می‌شوند.
+ */
+function ps_no_direct_d_v15(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $flag = __DIR__ . '/../storage/.perf_share_no_direct_d_v15';
+    if (is_file($flag)) return;
+    @file_put_contents($flag, (string) time());
+    @set_time_limit(1800);
+    $why = 'سرپرست برای ثبتِ فیش سهم نمی‌گیرد؛ فقط از سهمِ اعضای تیمش — محاسبه‌ی مجدد';
+    try {
+        $snaps = $pdo->query("SELECT order_id, owners_json FROM ps_order_snapshots WHERE owners_json LIKE '%\"direct_d\":{%'")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $upd = $pdo->prepare('UPDATE ps_order_snapshots SET owners_json = ? WHERE order_id = ?');
+        $vc = $pdo->prepare('UPDATE ps_payment_calcs SET voided_at = ?, void_reason = ? WHERE order_id = ? AND voided_at IS NULL');
+        $vl = $pdo->prepare('UPDATE ps_lines l JOIN ps_payment_calcs c ON c.id = l.calc_id SET l.voided = 1 WHERE c.order_id = ? AND c.void_reason = ? AND l.voided = 0');
+        foreach ($snaps as $sn) {
+            $ow = json_decode((string) $sn['owners_json'], true) ?: [];
+            if (empty($ow['direct_d'])) continue;
+            $old = $ow['direct_d'];
+            $ow['direct_d'] = null;
+            $upd->execute([json_encode($ow, JSON_UNESCAPED_UNICODE), (int) $sn['order_id']]);
+            perf_audit($pdo, 0, 'direct_d_remove', 'sales_orders', (int) $sn['order_id'], ['direct_d' => $old], ['direct_d' => null], $why);
+            $vc->execute([date('Y-m-d H:i:s'), $why, (int) $sn['order_id']]);
+            $vl->execute([(int) $sn['order_id'], $why]);
+            ps_sync_order($pdo, (int) $sn['order_id'], 0);
+        }
+    } catch (Throwable $e) {
+        error_log('ps_no_direct_d_v15: ' . $e->getMessage());
     }
 }

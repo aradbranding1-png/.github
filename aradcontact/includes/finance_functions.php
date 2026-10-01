@@ -598,11 +598,20 @@ if (!function_exists('fin_compute')) {
     }
 }
 
+if (!function_exists('fin_leader_blocked')) {
+    /** سرپرست فیش/پرداخت ثبت نمی‌کند (سهمِ سرپرست فقط از سهمِ اعضای تیمش می‌آید)؛ مگر دسترسیِ تأییدِ مالی داشته باشد */
+    function fin_leader_blocked(array $user): bool
+    {
+        return ($user['role'] ?? '') === 'leader' && !(function_exists('user_can') && user_can('finance_orders_decide', $user));
+    }
+}
+
 if (!function_exists('fin_add_payment')) {
     /** ثبتِ پرداختِ جدید برای یک سفارش (در انتظارِ تأییدِ مالی، مگر اینکه خودِ مالی ثبت کند) */
     function fin_add_payment(PDO $pdo, array $order, array $data, array $files, array $user, bool $autoConfirm = false): array
     {
         if (!finance_schema_ready($pdo)) return ['ok' => false, 'message' => 'جدول‌های مالی آماده نیستند.'];
+        if (fin_leader_blocked($user)) return ['ok' => false, 'message' => 'سرپرست نمی‌تواند پرداخت/فیش ثبت کند؛ فیش را کارشناسِ مشتری (A/B/C) ثبت می‌کند.'];
         $amount = (int) ($data['amount'] ?? 0);
         if ($amount <= 0) return ['ok' => false, 'message' => 'مبلغِ پرداخت را وارد کنید.'];
         $errs = orders_validate_files($files);

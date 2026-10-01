@@ -179,6 +179,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("UPDATE sales_orders SET status = 'cancelled' WHERE id = ?")->execute([$orderId]);
         orders_add_history($pdo, $orderId, (int) $user['id'], 'cancelled', $order['status'], 'cancelled', trim((string) ($_POST['reason'] ?? '')));
         flash_set('success', 'سفارش لغو شد. پیش‌فاکتور دوباره قابلِ ویرایش است.');
+    } elseif ($action === 'add_payment' && ($user['role'] ?? '') === 'leader' && !$canDecide) {
+        flash_set('danger', 'سرپرست نمی‌تواند پرداخت/فیش ثبت کند؛ فیش را کارشناسِ مشتری (A/B/C) ثبت می‌کند.');
     } elseif ($action === 'add_payment' && ($isSeller || $canDecide || $canCollect) && $order['status'] === 'approved') {
         // واریزیِ تکراری؟ (همین پرداخت را کسِ دیگری قبلاً برای همین مشتری ثبت کرده)
         $payFiles = orders_normalize_files($_FILES['receipts'] ?? null);
@@ -584,7 +586,7 @@ require_once __DIR__ . '/includes/layout_top.php';
             </tbody>
           </table>
         </div>
-        <?php if ($order['status'] === 'approved' && ($isSeller || $canDecide || $canCollect)): ?>
+        <?php if ($order['status'] === 'approved' && ($isSeller || $canDecide || $canCollect) && !(($user['role'] ?? '') === 'leader' && !$canDecide)): ?>
           <button class="btn btn-sm btn-success" type="button" data-bs-toggle="collapse" data-bs-target="#payAdd"><i class="fa-solid fa-plus"></i> ثبتِ پرداختِ جدید (قسط / مانده)</button>
           <form method="post" enctype="multipart/form-data" class="collapse border rounded-3 p-3 mt-2" id="payAdd" style="background:#f7fdf9">
             <?= csrf_field() ?>

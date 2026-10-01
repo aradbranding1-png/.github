@@ -20,6 +20,10 @@ if (!services_module_ready($pdo) || !orders_ready($pdo)) {
     exit;
 }
 
+if (($user['role'] ?? '') === 'leader' && !user_can('finance_orders_decide', $user)) {
+    perm_deny('سرپرست نمی‌تواند سفارش/فیش ثبت کند؛ فیش را کارشناسِ مشتری (A/B/C) ثبت می‌کند. سهمِ سرپرست از سهمِ اعضای تیمش محاسبه می‌شود.', $user);
+}
+
 $quoteId = (int) ($_GET['quote_id'] ?? $_POST['quote_id'] ?? 0);
 $orderId = (int) ($_GET['order_id'] ?? $_POST['order_id'] ?? 0);
 $order = null;
