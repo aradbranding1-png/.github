@@ -50,6 +50,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($action === 'add_payment' && isset($byId[(int) ($_POST['order_id'] ?? 0)])) {
         $order = orders_get($pdo, (int) $_POST['order_id']);
+        // سررسیدِ اقساطِ بعدی (همراهِ همین فیش) — اول بررسی، تا با تاریخِ نامعتبر فیش هم ثبت نشود
+        $__next = fin_parse_installment_post($_POST);
+        foreach ($__next as $__n) {
+            if ($__n['due_date'] === 'bad' || $__n['due_date'] === '' || $__n['amount'] <= 0) {
+                flash_set('danger', 'برای هر قسطِ بعدی هم مبلغ و هم تاریخِ سررسیدِ معتبر لازم است؛ فیش ثبت نشد.');
+                redirect($self);
+            }
+        }
         $r = li_add_payment($pdo, $order, [
             'amount'       => orders_money($_POST['amount'] ?? ''),
             'paid_at'      => trim((string) ($_POST['paid_at'] ?? '')) !== '' ? (to_gregorian(normalize_digits((string) $_POST['paid_at'])) ?: date('Y-m-d')) : date('Y-m-d'),
@@ -58,6 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'note'         => trim((string) ($_POST['note'] ?? '')),
             'auto_confirm' => !empty($_POST['auto_confirm']),
         ], orders_normalize_files($_FILES['receipts'] ?? null), $user);
+        if ($r['ok'] && $__next) {
+            $__s = li_set_next_installments($pdo, (int) $order['id'], $__next, (int) $user['id']);
+            $r['message'] .= ' ' . $__s['message'];
+            if (!$__s['ok']) $r['ok'] = false;
+        }
         flash_set($r['ok'] ? 'success' : 'danger', $r['message']);
         redirect($self);
     }
@@ -123,6 +136,20 @@ require_once __DIR__ . '/includes/layout_top.php';
         <div class="col-md-3"><label class="form-label small mb-1">شماره پیگیری</label><input name="ref" class="form-control form-control-sm" dir="ltr"></div>
         <div class="col-md-6"><label class="form-label small mb-1">توضیح (اختیاری)</label><input name="note" class="form-control form-control-sm" placeholder="مثلاً: قسطِ چهارم"></div>
         <div class="col-md-6"><label class="form-label small mb-1">تصویرِ فیش</label><input type="file" name="receipts[]" class="form-control form-control-sm" accept="image/*,application/pdf" multiple></div>
+      </div>
+      <?php $__open = array_values(array_filter($f['installments'] ?? [], static fn($x) => (int) ($x['remaining'] ?? 0) > 0)); ?>
+      <div class="border rounded-3 p-2 mt-2" style="background:#fff">
+        <div class="fw-bold small mb-1"><i class="fa-solid fa-calendar-days text-warning"></i> سررسیدِ اقساطِ بعدی <span class="fw-normal text-muted">(بعد از همین فیش — مالی برای تأیید لازم دارد)</span></div>
+        <?php if ($__open): ?><div class="small text-muted mb-1">برنامه‌ی فعلیِ پرداخت‌نشده: <?php foreach ($__open as $__x): ?><span class="badge text-bg-light border me-1"><?= to_persian_digits(number_format((int) $__x['remaining'])) ?> — <?= e(to_jalali((string) $__x['due_date'])) ?></span><?php endforeach; ?>
+          <br>اگر پایین چیزی بنویسید، قسط‌های بعد از این فیش با همین ردیف‌ها <b>جایگزین</b> می‌شوند.</div><?php endif; ?>
+        <?php for ($__k = 0; $__k < 4; $__k++): ?>
+          <div class="d-flex gap-1 mb-1">
+            <input name="inst_amount[]" class="form-control form-control-sm" dir="ltr" inputmode="numeric" placeholder="مبلغ">
+            <input name="inst_due[]" class="form-control form-control-sm jalali-date" autocomplete="off" placeholder="تاریخِ سررسید">
+            <input name="inst_note[]" class="form-control form-control-sm" placeholder="توضیح">
+          </div>
+        <?php endfor; ?>
+        <div class="small text-muted">مانده‌ی بعد از این فیش را بینِ قسط‌ها تقسیم کنید؛ ردیفِ خالی نادیده گرفته می‌شود. اگر همه خالی بمانند، برنامه‌ی فعلی دست نمی‌خورد.</div>
       </div>
       <?php if ($canDecide): ?>
         <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="auto_confirm" id="ac<?= (int) $o['id'] ?>" value="1">

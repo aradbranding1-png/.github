@@ -28,6 +28,9 @@ $canDecide = user_can('finance_orders_decide', $user);
 $canCollect = (int) ($order['owner_user_id'] ?? 0) === (int) $user['id'] || can_manage_service_requests($user)
     || leader_supervises_owner($pdo, $user, (int) $order['seller_user_id']);
 $isSeller = (int) $order['seller_user_id'] === (int) $user['id'];
+$isLegacyOrder = !empty($order['is_legacy']);   // پرونده‌ی «اقساطِ قبل از سامانه» (بدونِ پیش‌فاکتور/خدمت)
+// تعیینِ اقساط: مالی همیشه؛ کارشناس/جمع‌آورنده در سفارشِ «در انتظار/ردشده» — و در پرونده‌ی اقساطِ قبلی همیشه (این پرونده از اول «تأییدشده» است)
+$__canEditInst = $canDecide || (($isSeller || $canCollect) && (in_array($order['status'], ['pending', 'rejected'], true) || ($isLegacyOrder && $order['status'] !== 'cancelled')));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) {
@@ -221,13 +224,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'cheque_bounce' && $canDecide && $order['status'] === 'approved') {
         $res = fin_cheque_bounce($pdo, $order, (int) ($_POST['inst_id'] ?? 0), $user, (string) ($_POST['reason'] ?? ''));
         flash_set($res['ok'] ? 'success' : 'danger', $res['message']);
+    } elseif ($action === 'legacy_resubmit' && $isLegacyOrder && $order['status'] === 'rejected' && ($isSeller || $canCollect || $canDecide)) {
+        // پرونده‌ی اقساطِ قبلی پیش‌فاکتور ندارد ← «اصلاح و ارسالِ دوباره»ِ عادی کار نمی‌کند؛ همین‌جا دوباره برای مالی فرستاده می‌شود
+        $pdo->prepare("UPDATE sales_orders SET status = 'pending', submitted_at = NOW(), decided_at = NULL, updated_at = NOW() WHERE id = ? AND status = 'rejected'")->execute([$orderId]);
+        orders_add_history($pdo, $orderId, (int) $user['id'], 'resubmitted', 'rejected', 'pending', 'پرونده‌ی اقساطِ قبلی اصلاح و دوباره برای بررسیِ مالی ارسال شد.');
+        if (!empty($order['finance_user_id']) && (int) $order['finance_user_id'] !== (int) $user['id']) {
+            orders_notify($pdo, (int) $user['id'], (int) $order['finance_user_id'], 'پرونده‌ی اقساطِ قبلیِ ' . $order['order_number'] . ' (مشتری: ' . $order['customer_name'] . ') اصلاح و دوباره برای بررسی ارسال شد.');
+        }
+        flash_set('success', 'پرونده دوباره برای واحدِ مالی ارسال شد.');
+    } elseif ($action === 'payment_resubmit' && ($isSeller || $canCollect || $canDecide)) {
+        // فیشی که مالی رد کرده (مثلاً چون سررسیدِ اقساطِ بعدی مشخص نبود) بعد از اصلاح دوباره «در انتظارِ تأیید» می‌شود
+        $pid = (int) ($_POST['payment_id'] ?? 0);
+        $pp = $pdo->prepare("SELECT * FROM sales_order_payments WHERE id = ? AND order_id = ? AND status = 'rejected' AND kind <> 'initial'");
+        $pp->execute([$pid, $orderId]);
+        if ($prow = $pp->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->prepare("UPDATE sales_order_payments SET status = 'pending', decided_by = NULL, decided_at = NULL WHERE id = ?")->execute([$pid]);
+            orders_add_history($pdo, $orderId, (int) $user['id'], 'payment_pending', null, null,
+                'فیشِ ' . number_format((int) $prow['amount']) . ' تومانی اصلاح و دوباره برای تأییدِ مالی ارسال شد' . ($prow['decision_note'] ? ' (دلیلِ ردِ قبلی: ' . $prow['decision_note'] . ')' : '') . '.');
+            if (!empty($prow['decided_by']) && (int) $prow['decided_by'] !== (int) $user['id']) {
+                orders_notify($pdo, (int) $user['id'], (int) $prow['decided_by'], 'فیشِ ' . number_format((int) $prow['amount']) . ' تومانیِ سفارشِ ' . $order['order_number'] . ' اصلاح و دوباره برای تأیید ارسال شد.');
+            }
+            flash_set('success', 'فیش دوباره برای تأییدِ مالی ارسال شد.');
+        } else {
+            flash_set('danger', 'این فیش «ردشده» نیست یا پیدا نشد.');
+        }
     } elseif ($action === 'payment_decide' && $canDecide) {
         $__rd = trim((string) ($_POST['receipt_date'] ?? ''));
         $res = fin_decide_payment($pdo, (int) ($_POST['payment_id'] ?? 0), (string) ($_POST['decision'] ?? ''), $user,
             trim((string) ($_POST['decision_note'] ?? '')), trim((string) ($_POST['confirm_amount'] ?? '')) !== '' ? orders_money($_POST['confirm_amount']) : null,
             $__rd !== '' ? to_gregorian(normalize_digits($__rd)) : null);
         flash_set($res['ok'] ? 'success' : 'danger', $res['message']);
-    } elseif ($action === 'set_installments' && ($canDecide || (($isSeller || $canCollect) && in_array($order['status'], ['pending', 'rejected'], true)))) {
+    } elseif ($action === 'set_installments' && $__canEditInst) {
         $rows = fin_parse_installment_post($_POST);
         foreach ($rows as $r) {
             if ($r['due_date'] === 'bad') { flash_set('danger', 'تاریخِ یکی از سررسیدها معتبر نیست.'); redirect('order_view.php?id=' . $orderId . '#finance'); }
@@ -268,7 +295,6 @@ $ccPos = cc_ready($pdo) ? cc_position($pdo, (int) $order['customer_id']) : null;
 $dupCands = (pdup_ready($pdo) && in_array($order['status'], ['pending', 'approved'], true)) ? pdup_candidates($pdo, $order) : [];
 
 // قرارداد و شرحِ خدماتِ همین سفارش (برای واحد مالی)
-$isLegacyOrder = !empty($order['is_legacy']);   // پرونده‌ی «اقساطِ قبل از سامانه» (بدونِ پیش‌فاکتور/خدمت)
 $contract = (!$isLegacyOrder && ctr_ready($pdo)) ? ctr_for_quote($pdo, (int) $order['quote_id']) : null;
 // قراردادی که به خودِ این سفارش وصل است (حتی اگر با پیش‌فاکتورِ دیگری ساخته شده) ← دکمه‌ی «ساخت قرارداد» نشان داده نمی‌شود
 if (!$contract && !$isLegacyOrder && ctr_ready($pdo) && function_exists('ctr_existing_for') && ($__cid = ctr_existing_for($pdo, (int) $order['quote_id'], (int) $order['id']))) {
@@ -366,7 +392,12 @@ require_once __DIR__ . '/includes/layout_top.php';
   <?php if ($order['status'] === 'rejected' && $order['finance_note']): ?>
     <div class="alert alert-danger d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div><b>دلیلِ رد:</b> <?= nl2br(e($order['finance_note'])) ?></div>
-      <?php if ($isSeller || can_manage_service_requests($user)): ?><a class="btn btn-sm btn-danger" href="order_submit.php?order_id=<?= $orderId ?>"><i class="fa-solid fa-pen"></i> اصلاح و ارسالِ دوباره</a><?php endif; ?>
+      <?php if ($isLegacyOrder && ($isSeller || $canCollect || $canDecide)): ?>
+        <form method="post" class="d-inline" onsubmit="return confirm('اقساطِ بعدی (پایینِ همین صفحه، بخشِ «وضعیتِ مالی») را تعیین کرده‌اید؟ پرونده دوباره برای مالی ارسال شود؟')">
+          <?= csrf_field() ?><input type="hidden" name="action" value="legacy_resubmit">
+          <button class="btn btn-sm btn-danger"><i class="fa-solid fa-paper-plane"></i> ارسالِ دوباره برای مالی</button>
+        </form>
+      <?php elseif ($isSeller || can_manage_service_requests($user)): ?><a class="btn btn-sm btn-danger" href="order_submit.php?order_id=<?= $orderId ?>"><i class="fa-solid fa-pen"></i> اصلاح و ارسالِ دوباره</a><?php endif; ?>
     </div>
   <?php elseif ($order['status'] === 'approved' && $isLegacyOrder): ?>
     <?php // پرونده‌ی اقساطِ قبلی تأییدِ مالی ندارد؛ کارشناس فقط آن را می‌سازد (ستونِ finance_user_id در این پرونده = سازنده) ?>
@@ -475,7 +506,7 @@ require_once __DIR__ . '/includes/layout_top.php';
           </table>
         </div>
         <?php endif; ?>
-        <?php if ($canDecide || (($isSeller || $canCollect) && in_array($order['status'], ['pending', 'rejected'], true))): ?>
+        <?php if ($__canEditInst): ?>
           <button class="btn btn-sm btn-outline-secondary mb-2" type="button" data-bs-toggle="collapse" data-bs-target="#instEdit"><i class="fa-solid fa-pen"></i> <?= $installments ? 'ویرایشِ اقساط' : 'تعیینِ اقساط' ?></button>
           <form method="post" class="collapse inst-edit mb-3" id="instEdit">
             <?= csrf_field() ?>
@@ -523,7 +554,13 @@ require_once __DIR__ . '/includes/layout_top.php';
                 <td class="small"><?= e(fin_payment_kind_label((string) $p['kind'])) ?><div class="text-muted"><?= e(in_array($p['kind'], ['transfer', 'credit'], true) ? (string) ($p['note'] ?? '') : ($methods[$p['method']] ?? (string) $p['method'])) ?><?= $p['ref'] ? ' — <span dir="ltr">' . e($p['ref']) . '</span>' : '' ?></div></td>
                 <td class="small"><?= e($p['recorder_name'] ?? '—') ?><?php if ($p['note']): ?><div class="text-muted"><?= e($p['note']) ?></div><?php endif; ?></td>
                 <td><?= (int) $p['files_cnt'] > 0 ? '<span class="badge text-bg-light border"><i class="fa-solid fa-receipt"></i> ' . to_persian_digits((string) $p['files_cnt']) . '</span>' : '—' ?></td>
-                <td><?= fin_badge($payStatuses, (string) $p['status']) ?><?php if ($p['decision_note']): ?><div class="small text-muted"><?= e($p['decision_note']) ?></div><?php endif; ?></td>
+                <td><?= fin_badge($payStatuses, (string) $p['status']) ?><?php if ($p['decision_note']): ?><div class="small text-muted"><?= e($p['decision_note']) ?></div><?php endif; ?>
+                  <?php if ($p['status'] === 'rejected' && $p['kind'] !== 'initial' && ($isSeller || $canCollect)): ?>
+                    <form method="post" class="mt-1" onsubmit="return confirm('ایرادی که مالی گفته (مثلاً تعیینِ سررسیدِ اقساطِ بعدی) را اصلاح کرده‌اید؟ این فیش دوباره برای تأیید ارسال شود؟')">
+                      <?= csrf_field() ?><input type="hidden" name="action" value="payment_resubmit"><input type="hidden" name="payment_id" value="<?= (int) $p['id'] ?>">
+                      <button class="btn btn-sm btn-outline-danger py-0"><i class="fa-solid fa-paper-plane"></i> ارسالِ دوباره برای مالی</button>
+                    </form>
+                  <?php endif; ?></td>
                 <?php if ($canDecide): ?>
                 <td class="text-nowrap">
                   <?php if ($p['kind'] === 'credit'): ?><span class="small text-muted">از دفترِ بستانکاری</span>

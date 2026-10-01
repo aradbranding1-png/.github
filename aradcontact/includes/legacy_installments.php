@@ -199,3 +199,42 @@ function li_add_payment(PDO $pdo, array $order, array $data, array $files, array
         : 'قسط ثبت شد و بعد از تأییدِ واحد مالی، از بدهیِ مشتری کم و سهمِ عملکردش محاسبه می‌شود.';
     return $res;
 }
+
+/**
+ * سررسیدِ «اقساطِ بعدی» برای پرونده‌ی اقساطِ قبلی (همراهِ ثبتِ فیش).
+ * برنامه‌ی اقساط در سامانه به ترتیبِ سررسید با پرداخت‌ها پر می‌شود؛ پس اول بخشی از برنامه که با پولِ دریافت‌شده
+ * (تأییدشده + در انتظار، شاملِ همین فیش) پوشش داده شده نگه داشته می‌شود و بعد قسط‌های بعدی اضافه می‌شوند.
+ * @param array $next خروجیِ fin_parse_installment_post (amount, due_date به میلادی)
+ */
+function li_set_next_installments(PDO $pdo, int $orderId, array $next, int $userId): array
+{
+    $order = orders_get($pdo, $orderId);
+    if (!$order) return ['ok' => false, 'message' => 'پرونده پیدا نشد.'];
+    $f = li_summary($pdo, $order);
+    $covered = (int) $f['paid'] + (int) $f['pending_paid'];
+    $remaining = max(0, (int) $order['total_amount'] - $covered);
+    $sumNext = array_sum(array_map(static fn($r) => (int) $r['amount'], $next));
+    if ($sumNext > $remaining) {
+        return ['ok' => false, 'message' => 'سررسیدها ذخیره نشد: جمعِ اقساطِ بعدی (' . number_format($sumNext) . ') از مانده‌ی بدهی (' . number_format($remaining) . ' تومان) بیشتر است؛ اگر بدهی بیشتر است اول «مبلغِ کلِ بدهی» را اصلاح کنید.'];
+    }
+    $rows = [];
+    $acc = 0;
+    $existing = fin_installments($pdo, $orderId);
+    usort($existing, static fn($a, $b) => strcmp((string) $a['due_date'], (string) $b['due_date']));
+    foreach ($existing as $e) {
+        if ($acc >= $covered) break;
+        $take = min((int) $e['amount'], $covered - $acc);
+        $rows[] = ['amount' => $take, 'due_date' => (string) $e['due_date'], 'note' => (string) ($e['note'] ?? '')];
+        $acc += $take;
+    }
+    if ($acc < $covered) {
+        $rows[] = ['amount' => $covered - $acc, 'due_date' => date('Y-m-d'), 'note' => 'دریافت‌شده تا امروز'];
+    }
+    foreach ($next as $r) {
+        $rows[] = ['amount' => (int) $r['amount'], 'due_date' => (string) $r['due_date'], 'note' => (string) ($r['note'] ?? '')];
+    }
+    $res = fin_set_installments($pdo, $order, $rows, $userId);
+    return $res['ok']
+        ? ['ok' => true, 'message' => 'سررسیدِ ' . to_persian_digits((string) count($next)) . ' قسطِ بعدی ثبت شد.']
+        : ['ok' => false, 'message' => 'سررسیدها ذخیره نشد: ' . $res['message']];
+}
