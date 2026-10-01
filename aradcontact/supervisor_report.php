@@ -7,6 +7,7 @@ try { contact_type_backfill_v1($pdo); } catch (Throwable $e) {} // یک‌بار
 require_once __DIR__ . '/includes/customer_credit.php';
 require_once __DIR__ . '/includes/performance_functions.php';
 require_once __DIR__ . '/includes/supervisor_report.php';
+require_once __DIR__ . '/includes/team_sales.php';
 
 $isAll = is_super_admin($user) || user_can('supervisor_report_all', $user);
 $isLeader = ($user['role'] ?? '') === 'leader';
@@ -103,17 +104,43 @@ require_once __DIR__ . '/includes/layout_top.php';
           if (sup_job_group_label($m['job_group'] ?? null) === 'نامشخص') $unknown++;
       }
       $rows[] = $L + ['n' => count($members), 'covered' => $covered, 'team_eff' => $effN ? round($effSum / $effN, 1) : null, 'unknown' => $unknown,
-          'own_talk' => $talk[(int) $L['id']] ?? 0];
+          'own_talk' => $talk[(int) $L['id']] ?? 0, 'sales' => tsr_team_sales_period($pdo, (int) $L['team_id'], $from, $to)];
+  }
+  $salesTot = ['cnt' => 0, 'net' => 0, 'A' => 0, 'B' => 0, 'C' => 0, 'D' => 0];
+  foreach ($rows as $r) {
+      $salesTot['cnt'] += $r['sales']['cnt']; $salesTot['net'] += $r['sales']['net'];
+      foreach (['A', 'B', 'C', 'D'] as $__sl) $salesTot[$__sl] += $r['sales']['slots'][$__sl];
   } ?>
+  <div class="card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+      <div class="fw-bold"><i class="fa-solid fa-sack-dollar text-success"></i> فروشِ تیم‌ها <span class="small text-muted fw-normal">(سرپرست = D + نیروهای A / B / C هر تیم — سفارش‌های تأییدشده در این بازه، خالص بدونِ مالیات)</span></div>
+      <a class="btn btn-sm btn-outline-success" href="admin/admin_orders.php?<?= e(http_build_query(['view' => 'report', 'preset' => 'custom', 'from' => $jFrom, 'to' => $jTo])) ?>"><i class="fa-solid fa-chart-column"></i> گزارشِ فروشِ تیم‌ها</a>
+    </div>
+    <div class="table-responsive"><table class="table table-sm align-middle small mb-0">
+      <thead class="table-light"><tr><th>تیم</th><th>سرپرست</th><th class="text-end">A</th><th class="text-end">B</th><th class="text-end">C</th><th class="text-end">D (سرپرست)</th><th>تعداد سفارش</th><th class="text-end">فروشِ تیم</th><th>سهم از کل</th></tr></thead><tbody>
+      <?php $__byNet = $rows; usort($__byNet, static fn($a, $b) => $b['sales']['net'] <=> $a['sales']['net']);
+        foreach ($__byNet as $r): $__s = $r['sales']; ?>
+        <tr><td><?= e(team_display_name($r['team_name'] ?? null, (int) $r['team_id'])) ?></td><td><?= e($r['full_name']) ?></td>
+          <?php foreach (['A', 'B', 'C', 'D'] as $__sl): ?><td class="text-end"><?= $money($__s['slots'][$__sl]) ?></td><?php endforeach; ?>
+          <td><?= to_persian_digits((string) $__s['cnt']) ?></td><td class="text-end fw-bold"><?= $money($__s['net']) ?></td>
+          <td><?= $salesTot['net'] > 0 ? to_persian_digits((string) round($__s['net'] / $salesTot['net'] * 100, 1)) . '٪' : '—' ?></td></tr>
+      <?php endforeach; ?>
+      </tbody>
+      <?php if ($rows): ?><tfoot class="table-light fw-bold"><tr><td colspan="2">جمعِ همه‌ی تیم‌ها</td>
+        <?php foreach (['A', 'B', 'C', 'D'] as $__sl): ?><td class="text-end"><?= $money($salesTot[$__sl]) ?></td><?php endforeach; ?>
+        <td><?= to_persian_digits((string) $salesTot['cnt']) ?></td><td class="text-end"><?= $money($salesTot['net']) ?></td><td></td></tr></tfoot><?php endif; ?>
+    </table></div>
+  </div>
   <div class="card p-0"><div class="table-responsive"><table class="table table-sm align-middle small mb-0">
-    <thead class="table-light"><tr><th>تیم</th><th>سرپرست</th><th>نیروها</th><th>پوششِ ارتباطِ سرپرست</th><th>راندمانِ تیم</th><th>مکالمه‌ی خودِ سرپرست (دقیقه)</th><th></th></tr></thead><tbody>
+    <thead class="table-light"><tr><th>تیم</th><th>سرپرست</th><th>نیروها</th><th>پوششِ ارتباطِ سرپرست</th><th>راندمانِ تیم</th><th>مکالمه‌ی خودِ سرپرست (دقیقه)</th><th>فروشِ تیم (خالص)</th><th></th></tr></thead><tbody>
     <?php foreach ($rows as $r): ?>
       <tr><td><?= to_persian_digits((string) $r['team_id']) ?></td><td><?= e($r['full_name']) ?></td><td><?= to_persian_digits((string) $r['n']) ?></td>
         <td><?= to_persian_digits((string) $r['covered']) ?> از <?= to_persian_digits((string) $r['n']) ?><?= $r['n'] ? ' (' . to_persian_digits((string) round($r['covered'] / $r['n'] * 100)) . '٪)' : '' ?></td>
         <td><?= $effBadge($r['team_eff']) ?></td><td><?= $fmtMin($r['own_talk']) ?></td>
+        <td class="fw-bold"><?= $money($r['sales']['net']) ?> <span class="text-muted fw-normal">(<?= to_persian_digits((string) $r['sales']['cnt']) ?> سفارش)</span></td>
         <td><a class="btn btn-sm btn-outline-primary py-0" href="?<?= e(http_build_query(['leader' => (int) $r['id']] + $_GET)) ?>">جزئیات</a></td></tr>
     <?php endforeach; ?>
-    <?php if (!$rows): ?><tr><td colspan="7" class="text-center text-muted py-3">تیمی با سرپرست تعریف نشده.</td></tr><?php endif; ?>
+    <?php if (!$rows): ?><tr><td colspan="8" class="text-center text-muted py-3">تیمی با سرپرست تعریف نشده.</td></tr><?php endif; ?>
   </tbody></table></div></div>
 
 <?php else:
@@ -159,6 +186,21 @@ require_once __DIR__ . '/includes/layout_top.php';
           ['فروشِ تأییدشده (خالص)', $money($own['sales_net'])], ['سهمِ عملکرد', $money($own['share'])]] as [$l, $v]): ?>
         <div class="col-6 col-md-3 col-xl-2"><div class="stat"><div class="small text-muted"><?= e($l) ?></div><div class="v"><?= $v ?></div></div></div>
       <?php endforeach; ?>
+    </div>
+  </div>
+  <?php $ts = tsr_team_sales_period($pdo, (int) $team['id'], $from, $to); ?>
+  <div class="card p-3 mb-3" style="border-top:3px solid #16a34a">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+      <div class="fw-bold"><i class="fa-solid fa-sack-dollar text-success"></i> فروشِ تیم <span class="small text-muted fw-normal">(سرپرست = D + نیروهای A / B / C — سفارش‌های تأییدشده در این بازه، خالص بدونِ مالیات)</span></div>
+      <a class="btn btn-sm btn-outline-success" href="admin/admin_orders.php?<?= e(http_build_query(['view' => 'report', 'preset' => 'custom', 'from' => $jFrom, 'to' => $jTo, 'team' => (int) $team['id']])) ?>"><i class="fa-solid fa-chart-column"></i> جزئیات در گزارشِ فروش</a>
+    </div>
+    <div class="row g-2">
+      <div class="col-12 col-md-4 col-xl-2"><div class="stat" style="background:#f0fdf4"><div class="small text-muted">فروشِ کلِ تیم</div><div class="v fs-5"><?= $money($ts['net']) ?></div><div class="small text-muted"><?= to_persian_digits((string) $ts['cnt']) ?> سفارش</div></div></div>
+      <?php foreach (['A' => 'واحدِ A', 'B' => 'واحدِ B', 'C' => 'واحدِ C', 'D' => 'D — خودِ سرپرست'] as $__sl => $__lb): ?>
+        <div class="col-6 col-md-4 col-xl-2"><div class="stat"><div class="small text-muted"><?= $__lb ?></div><div class="v"><?= $money($ts['slots'][$__sl]) ?></div>
+          <div class="small text-muted"><?= $ts['net'] > 0 ? to_persian_digits((string) round($ts['slots'][$__sl] / $ts['net'] * 100)) . '٪ از فروشِ تیم' : '—' ?></div></div></div>
+      <?php endforeach; ?>
+      <div class="col-6 col-md-4 col-xl-2"><div class="stat"><div class="small text-muted">مبلغِ تأییدشده (با مالیات)</div><div class="v"><?= $money($ts['gross']) ?></div></div></div>
     </div>
   </div>
   <div class="row g-3 mb-3">

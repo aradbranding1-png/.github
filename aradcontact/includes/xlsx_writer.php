@@ -41,9 +41,10 @@ if (!function_exists('xlsx_output')) {
             . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
             . '</Relationships>');
+        // راست‌به‌چپ روی هر sheetView است؛ workbookView این ویژگی را ندارد (وگرنه اکسل پیغامِ «تعمیرِ فایل» می‌دهد)
         $wb = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-            . '<bookViews><workbookView rightToLeft="1"/></bookViews><sheets>';
+            . '<bookViews><workbookView/></bookViews><sheets>';
         $rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
         $used = [];

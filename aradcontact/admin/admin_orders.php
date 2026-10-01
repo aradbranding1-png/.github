@@ -8,6 +8,8 @@ $pdo = db();
 require_once __DIR__ . '/../includes/services_functions.php';
 require_once __DIR__ . '/../includes/orders_functions.php';
 require_once __DIR__ . '/../includes/payment_duplicates.php';
+require_once __DIR__ . '/../includes/team_sales.php';
+require_once __DIR__ . '/../includes/xlsx_writer.php';
 
 $ready = services_module_ready($pdo) && orders_ready($pdo);
 $statuses = orders_statuses();
@@ -21,23 +23,20 @@ $q = trim((string) ($_GET['q'] ?? ''));
 $sellerId = (int) ($_GET['seller_id'] ?? 0);
 $method = isset($methods[$_GET['method'] ?? '']) ? (string) $_GET['method'] : '';
 $preset = (string) ($_GET['preset'] ?? ($view === 'report' ? 'this_month' : 'all'));
-switch ($preset) {
-    case 'today': $from = $to = date('Y-m-d'); break;
-    case 'this_week': $from = date('Y-m-d', strtotime('-' . ((int) date('N') % 7) . ' days')); $to = date('Y-m-d'); break;
-    case 'this_month': $from = date('Y-m-01'); $to = date('Y-m-d'); break;
-    case 'last_month': $from = date('Y-m-01', strtotime('first day of last month')); $to = date('Y-m-t', strtotime('last day of last month')); break;
-    case 'custom':
-        $from = (string) (to_gregorian((string) ($_GET['from'] ?? '')) ?? date('Y-m-01'));
-        $to = (string) (to_gregorian((string) ($_GET['to'] ?? '')) ?? date('Y-m-d'));
-        break;
-    default: $preset = 'all'; $from = ''; $to = '';
-}
+// بازه‌ها بر اساسِ تقویمِ شمسی («این ماه» = از اولِ ماهِ شمسی تا امروز؛ قبلاً اولِ ماهِ میلادی بود)
+$__range = in_array($preset, ['today', 'this_week', 'this_month', 'last_month', 'custom'], true)
+    ? tsr_date_range($preset, (string) ($_GET['from'] ?? ''), (string) ($_GET['to'] ?? '')) : null;
+if ($__range) { [$from, $to] = $__range; } else { $preset = 'all'; $from = ''; $to = ''; }
+// فیلترِ تیم: '' = همه، 'none' = بدونِ تیم، عدد = همان تیم (سرپرست + اعضا)
+$teamF = (string) ($_GET['team'] ?? '');
+$teamsAll = $ready ? tsr_teams($pdo) : [];
+if ($teamF !== '' && $teamF !== 'none' && !isset($teamsAll[(int) $teamF])) $teamF = '';
 
 $rows = [];
 $counts = array_fill_keys(array_keys($statuses), 0);
 $sums = array_fill_keys(array_keys($statuses), 0);
 $sellers = [];
-$report = ['by_seller' => [], 'by_service' => [], 'by_day' => []];
+$report = ['by_seller' => [], 'by_service' => [], 'by_day' => [], 'by_team' => []];
 
 if ($ready) {
     $where = ['1=1'];
@@ -48,6 +47,18 @@ if ($ready) {
     if ($sellerId > 0) { $where[] = 'o.seller_user_id = ?'; $params[] = $sellerId; }
     if ($method !== '') { $where[] = 'o.payment_method = ?'; $params[] = $method; }
     if ($method !== '') { $__whereNS[] = 'o.payment_method = ?'; $__paramsNS[] = $method; }
+    // تیم: سفارش‌هایی که کارشناسشان عضوِ همان تیم است (در فروشِ مشترک: سهمِ اعضای همان تیم)
+    $__teamUidSql = '';
+    if ($teamF !== '') {
+        $__allTeamUids = array_keys(array_filter(tsr_user_team_map($pdo), static fn($t) => isset($teamsAll[$t])));
+        if ($teamF === 'none') {
+            $__teamUidSql = $__allTeamUids ? ' NOT IN (' . implode(',', array_map('intval', $__allTeamUids)) . ')' : ' IS NOT NULL';
+        } else {
+            $__tu = tsr_team_user_ids($pdo, (int) $teamF);
+            $__teamUidSql = ' IN (' . ($__tu ? implode(',', array_map('intval', $__tu)) : '0') . ')';
+        }
+        $where[] = 'o.seller_user_id' . $__teamUidSql;
+    }
     if ($q !== '') {
         $where[] = '(c.full_name LIKE ? OR c.mobile LIKE ? OR o.order_number LIKE ? OR o.payment_ref LIKE ?)';
         $like = '%' . normalize_digits($q) . '%';
@@ -78,8 +89,51 @@ if ($ready) {
         $listParams[] = $status;
     }
 
+    if ($view === 'list') {
+        $st = $pdo->prepare($listSql . ' ORDER BY ' . ($status === 'pending' ? 'o.submitted_at ASC' : 'o.id DESC') . ' LIMIT 300');
+        $st->execute($listParams);
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+    if ($view !== 'list' || isset($_GET['export'])) {
+        $ap = array_merge($params, []);
+        // فروش به تفکیکِ کارشناس — «فروشِ مشترک»: اگر مالی عددِ فروشِ سفارشی را بینِ چند نفر تفکیک کرده، هر نفر سهمِ خودش را می‌گیرد
+        // (فقط نمایشی؛ سهم عملکرد جداست). اگر عددِ سفارش بعداً عوض شده باشد، تفکیک به همان نسبت اعمال می‌شود.
+        $__splitReady = false;
+        try { require_once __DIR__ . '/../includes/sales_credit.php'; $__splitReady = scr_ready($pdo); } catch (Throwable $e) {}
+        if ($__splitReady) {
+            $__bNS = 'FROM sales_orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE ' . implode(' AND ', $__whereNS) . " AND o.status = 'approved'";
+            $__sql = "SELECT x.uid, u.full_name, u.role, COUNT(DISTINCT x.order_id) cnt, SUM(x.amt) amt, SUM(x.shared) shared_cnt FROM (
+                    SELECT o.id order_id, o.seller_user_id uid, COALESCE(o.confirmed_amount,o.total_amount) amt, 0 shared $__bNS
+                        AND NOT EXISTS (SELECT 1 FROM sales_order_credit_splits sp0 WHERE sp0.order_id = o.id)
+                    UNION ALL
+                    SELECT o.id, sp.user_id, ROUND(sp.amount * COALESCE(o.confirmed_amount,o.total_amount) / NULLIF(t.tot, 0)), 1
+                        FROM sales_order_credit_splits sp
+                        JOIN (SELECT order_id, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id) t ON t.order_id = sp.order_id
+                        JOIN sales_orders o ON o.id = sp.order_id LEFT JOIN customers c ON c.id = o.customer_id
+                        WHERE " . implode(' AND ', $__whereNS) . " AND o.status = 'approved'
+                ) x LEFT JOIN users u ON u.id = x.uid WHERE 1=1" . ($sellerId > 0 ? ' AND x.uid = ?' : '') . ($__teamUidSql !== '' ? ' AND x.uid' . $__teamUidSql : '') . "
+                GROUP BY x.uid, u.full_name, u.role ORDER BY amt DESC";
+            $st = $pdo->prepare($__sql);
+            $st->execute(array_merge($__paramsNS, $__paramsNS, $sellerId > 0 ? [$sellerId] : []));
+        } else {
+            $st = $pdo->prepare("SELECT o.seller_user_id uid, s.full_name, s.role, COUNT(*) cnt, SUM(COALESCE(o.confirmed_amount,o.total_amount)) amt, 0 shared_cnt $base AND o.status = 'approved' GROUP BY o.seller_user_id, s.full_name, s.role ORDER BY amt DESC");
+            $st->execute($ap);
+        }
+        $report['by_seller'] = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $report['by_team'] = tsr_aggregate($pdo, $report['by_seller']);
+        $st = $pdo->prepare("SELECT i.title, SUM(i.quantity) qty, SUM(i.amount) amt, COUNT(DISTINCT o.id) orders_cnt FROM sales_order_items i JOIN sales_orders o ON o.id = i.order_id LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN users s ON s.id = o.seller_user_id WHERE " . implode(' AND ', $where) . " AND o.status = 'approved' GROUP BY i.title ORDER BY amt DESC LIMIT 20");
+        $st->execute($ap);
+        $report['by_service'] = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $st = $pdo->prepare("SELECT DATE(o.decided_at) d, SUM(COALESCE(o.confirmed_amount,o.total_amount)) amt $base AND o.status = 'approved' GROUP BY DATE(o.decided_at) ORDER BY d");
+        $st->execute($ap);
+        $report['by_day'] = $st->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
+    }
+
     if (isset($_GET['export'])) {
-        // خروجیِ اکسل: هر خدمتِ فروخته‌شده یک سطرِ جدا (نه چند خدمت پشتِ هم در یک خانه)
+        // خروجیِ اکسل (xlsx) — دقیقاً با همان فیلترها و جستجوی صفحه:
+        //   ۱) «سفارش‌ها»: هر خدمتِ فروخته‌شده یک سطر + تیم و سرپرستِ کارشناس
+        //   ۲) «تیم‌ها»: فروشِ تأییدشده‌ی هر تیم به تفکیکِ A / B / C / D (سرپرست)
+        //   ۳) «کارشناسان»: فروشِ تأییدشده‌ی هر نفر (با فروشِ مشترک) و تیمش   ۴) «فیلترها»
         $st = $pdo->prepare($listSql . ' ORDER BY o.id DESC LIMIT 20000');
         $st->execute($listParams);
         $orderRows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -95,19 +149,13 @@ if ($ready) {
                 $itemsBy[(int) $it['order_id']][] = $it;
             }
         }
-        // تاریخِ شمسی بدونِ «/» — مثلاً 14050707 (ارقامِ انگلیسی تا اکسل عدد بشناسد و مرتب/فیلتر کند)
-        $jcompact = static function (?string $g): string {
+        // تاریخِ شمسی بدونِ «/» — مثلاً 14050707 (عدد، تا اکسل مرتب/فیلتر کند)
+        $jcompact = static function (?string $g) {
             if (empty($g) || str_starts_with((string) $g, '0000')) return '';
             [$gy, $gm, $gd] = array_map('intval', explode('-', substr((string) $g, 0, 10)));
             [$jy, $jm, $jd] = gregorian_to_jalali_arr($gy, $gm, $gd);
-            return sprintf('%04d%02d%02d', $jy, $jm, $jd);
+            return (int) sprintf('%04d%02d%02d', $jy, $jm, $jd);
         };
-        header('Content-Type: text/csv; charset=UTF-8');
-        header('Content-Disposition: attachment; filename="sales_' . date('Ymd_His') . '.csv"');
-        $out = fopen('php://output', 'w');
-        fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['شماره فاکتور', 'تاریخ ثبت', 'مشتری', 'موبایل', 'کارشناس', 'خدمت', 'دسته خدمت', 'دپارتمان', 'تعداد', 'واحد',
-            'قیمت واحد', 'مبلغ این خدمت', 'مبلغ کل فاکتور', 'پرداختی', 'تأییدشده', 'روش پرداخت', 'شماره پیگیری', 'وضعیت', 'توضیح مالی', 'فروش مشترک (تفکیک)']);
         $__splitTxt = [];
         try {
             require_once __DIR__ . '/../includes/sales_credit.php';
@@ -118,62 +166,72 @@ if ($ready) {
                 }
             }
         } catch (Throwable $e) {}
+        $__map = tsr_user_team_map($pdo);
+        $__teamOf = static function (int $uid) use ($__map, $teamsAll): array {
+            $t = $teamsAll[$__map[$uid] ?? 0] ?? null;
+            return $t ? [$t['label'], $t['leader_name']] : ['بدونِ تیم', ''];
+        };
+        $oRows = [];
         foreach ($orderRows as $r) {
+            [$tl, $tld] = $__teamOf((int) $r['seller_user_id']);
             $items = $itemsBy[(int) $r['id']] ?? [['title' => '', 'unit' => '', 'quantity' => '', 'unit_price' => '', 'amount' => '', 'category' => '', 'ticket_department' => '']];
             foreach ($items as $n => $it) {
                 $first = $n === 0; // مبالغِ کلِ فاکتور فقط در سطرِ اول (تا جمعِ ستون در اکسل دوبار حساب نشود)
-                $qty = $it['quantity'] === '' ? '' : rtrim(rtrim(number_format((float) $it['quantity'], 2, '.', ''), '0'), '.');
-                fputcsv($out, [
-                    $r['order_number'], $jcompact($r['created_at']), $r['customer_name'], $r['customer_mobile'], $r['seller_name'],
-                    $it['title'], (string) ($it['category'] ?? ''), (string) ($it['ticket_department'] ?? ''), $qty, (string) ($it['unit'] ?? ''),
-                    $it['unit_price'], $it['amount'],
-                    $first ? $r['total_amount'] : '', $first ? $r['paid_amount'] : '', $first ? $r['confirmed_amount'] : '',
-                    $methods[$r['payment_method']] ?? $r['payment_method'], $r['payment_ref'],
-                    $statuses[$r['status']]['label'] ?? $r['status'], $first ? $r['finance_note'] : '',
+                $oRows[] = [
+                    (string) $r['order_number'], $jcompact($r['created_at']), $jcompact($r['decided_at'] ?? null), (string) $r['customer_name'], (string) $r['customer_mobile'],
+                    (string) $r['seller_name'], role_label((string) $r['seller_role']), $tl, $tld,
+                    (string) $it['title'], (string) ($it['category'] ?? ''), (string) ($it['ticket_department'] ?? ''),
+                    $it['quantity'] === '' ? '' : (float) $it['quantity'], (string) ($it['unit'] ?? ''),
+                    $it['unit_price'] === '' ? '' : (int) $it['unit_price'], $it['amount'] === '' ? '' : (int) $it['amount'],
+                    $first ? (int) $r['total_amount'] : '', $first ? (int) $r['paid_amount'] : '', $first && $r['confirmed_amount'] !== null ? (int) $r['confirmed_amount'] : '',
+                    $methods[$r['payment_method']] ?? (string) $r['payment_method'], (string) $r['payment_ref'],
+                    $statuses[$r['status']]['label'] ?? (string) $r['status'], $first ? (string) $r['finance_note'] : '',
                     $first ? implode(' | ', $__splitTxt[(int) $r['id']] ?? []) : '',
-                ]);
+                ];
             }
         }
-        fclose($out);
-        exit;
-    }
-
-    if ($view === 'list') {
-        $st = $pdo->prepare($listSql . ' ORDER BY ' . ($status === 'pending' ? 'o.submitted_at ASC' : 'o.id DESC') . ' LIMIT 300');
-        $st->execute($listParams);
-        $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    } else {
-        $ap = array_merge($params, []);
-        // فروش به تفکیکِ کارشناس — «فروشِ مشترک»: اگر مالی عددِ فروشِ سفارشی را بینِ چند نفر تفکیک کرده، هر نفر سهمِ خودش را می‌گیرد
-        // (فقط نمایشی؛ سهم عملکرد جداست). اگر عددِ سفارش بعداً عوض شده باشد، تفکیک به همان نسبت اعمال می‌شود.
-        $__splitReady = false;
-        try { require_once __DIR__ . '/../includes/sales_credit.php'; $__splitReady = scr_ready($pdo); } catch (Throwable $e) {}
-        if ($__splitReady) {
-            $__bNS = 'FROM sales_orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE ' . implode(' AND ', $__whereNS) . " AND o.status = 'approved'";
-            $__sql = "SELECT u.full_name, u.role, COUNT(DISTINCT x.order_id) cnt, SUM(x.amt) amt, SUM(x.shared) shared_cnt FROM (
-                    SELECT o.id order_id, o.seller_user_id uid, COALESCE(o.confirmed_amount,o.total_amount) amt, 0 shared $__bNS
-                        AND NOT EXISTS (SELECT 1 FROM sales_order_credit_splits sp0 WHERE sp0.order_id = o.id)
-                    UNION ALL
-                    SELECT o.id, sp.user_id, ROUND(sp.amount * COALESCE(o.confirmed_amount,o.total_amount) / NULLIF(t.tot, 0)), 1
-                        FROM sales_order_credit_splits sp
-                        JOIN (SELECT order_id, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id) t ON t.order_id = sp.order_id
-                        JOIN sales_orders o ON o.id = sp.order_id LEFT JOIN customers c ON c.id = o.customer_id
-                        WHERE " . implode(' AND ', $__whereNS) . " AND o.status = 'approved'
-                ) x LEFT JOIN users u ON u.id = x.uid" . ($sellerId > 0 ? ' WHERE x.uid = ?' : '') . "
-                GROUP BY x.uid, u.full_name, u.role ORDER BY amt DESC";
-            $st = $pdo->prepare($__sql);
-            $st->execute(array_merge($__paramsNS, $__paramsNS, $sellerId > 0 ? [$sellerId] : []));
-        } else {
-            $st = $pdo->prepare("SELECT s.full_name, s.role, COUNT(*) cnt, SUM(COALESCE(o.confirmed_amount,o.total_amount)) amt, 0 shared_cnt $base AND o.status = 'approved' GROUP BY o.seller_user_id, s.full_name, s.role ORDER BY amt DESC");
-            $st->execute($ap);
+        $grand = array_sum(array_map(static fn($t) => $t['amt'], $report['by_team']));
+        $tRows = [];
+        $tTot = ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0, 'سایر' => 0, 'cnt' => 0, 'amt' => 0];
+        foreach ($report['by_team'] as $t) {
+            $tRows[] = [$t['label'], $t['leader_name'], $t['slots']['A'], $t['slots']['B'], $t['slots']['C'], $t['slots']['D'], $t['slots']['سایر'], $t['cnt'], $t['amt'],
+                $grand > 0 ? round($t['amt'] / $grand * 100, 1) : 0];
+            foreach (['A', 'B', 'C', 'D', 'سایر'] as $__sl) $tTot[$__sl] += $t['slots'][$__sl];
+            $tTot['cnt'] += $t['cnt'];
+            $tTot['amt'] += $t['amt'];
         }
-        $report['by_seller'] = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        $st = $pdo->prepare("SELECT i.title, SUM(i.quantity) qty, SUM(i.amount) amt, COUNT(DISTINCT o.id) orders_cnt FROM sales_order_items i JOIN sales_orders o ON o.id = i.order_id LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN users s ON s.id = o.seller_user_id WHERE " . implode(' AND ', $where) . " AND o.status = 'approved' GROUP BY i.title ORDER BY amt DESC LIMIT 20");
-        $st->execute($ap);
-        $report['by_service'] = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        $st = $pdo->prepare("SELECT DATE(o.decided_at) d, SUM(COALESCE(o.confirmed_amount,o.total_amount)) amt $base AND o.status = 'approved' GROUP BY DATE(o.decided_at) ORDER BY d");
-        $st->execute($ap);
-        $report['by_day'] = $st->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
+        $sRows = [];
+        foreach ($report['by_team'] as $t) {
+            foreach ($t['members'] as $m) {
+                $sRows[] = [$t['label'], (string) $m['full_name'], role_label((string) $m['role']), $m['slot'], (int) $m['cnt'], (int) $m['amt'], (int) ($m['shared_cnt'] ?? 0)];
+            }
+        }
+        $fRows = [
+            ['بازه', $from !== '' ? to_jalali($from) . ' تا ' . to_jalali($to) : 'همه‌ی تاریخ‌ها'],
+            ['مبنای تاریخ', 'تاریخِ ثبتِ سفارش'],
+            ['وضعیت (برگه‌ی سفارش‌ها)', $status === 'all' ? 'همه' : ($statuses[$status]['label'] ?? $status)],
+            ['تیم', $teamF === '' ? 'همه' : ($teamF === 'none' ? 'بدونِ تیم' : ($teamsAll[(int) $teamF]['label'] ?? $teamF))],
+            ['کارشناس', $sellerId > 0 ? (string) ($pdo->query('SELECT full_name FROM users WHERE id = ' . (int) $sellerId)->fetchColumn() ?: $sellerId) : 'همه'],
+            ['روش پرداخت', $method !== '' ? ($methods[$method] ?? $method) : 'همه'],
+            ['جستجو', $q !== '' ? $q : '—'],
+            ['برگه‌های «تیم‌ها» و «کارشناسان»', 'فقط سفارش‌های تأییدشده (مبلغِ تأییدشده؛ فروشِ مشترک به نسبتِ تفکیکِ مالی)'],
+            ['تاریخِ تهیه', to_jalali(date('Y-m-d')) . ' ' . date('H:i')],
+        ];
+        $fn = 'sales_' . ($from !== '' ? str_replace('/', '', normalize_digits(to_jalali($from))) . '_' . str_replace('/', '', normalize_digits(to_jalali($to))) : 'all')
+            . ($teamF !== '' ? '_team_' . preg_replace('/\W/', '', $teamF) : '');
+        xlsx_output($fn, [
+            ['name' => 'سفارش‌ها', 'header' => ['شماره فاکتور', 'تاریخ ثبت', 'تاریخ تأیید مالی', 'مشتری', 'موبایل', 'کارشناس', 'نقش', 'تیم', 'سرپرستِ تیم',
+                'خدمت', 'دسته خدمت', 'دپارتمان', 'تعداد', 'واحد', 'قیمت واحد', 'مبلغ این خدمت', 'مبلغ کل فاکتور', 'پرداختی', 'تأییدشده',
+                'روش پرداخت', 'شماره پیگیری', 'وضعیت', 'توضیح مالی', 'فروش مشترک (تفکیک)'],
+             'rows' => $oRows, 'widths' => [16, 11, 13, 24, 14, 22, 10, 18, 20, 30, 16, 14, 8, 10, 14, 16, 16, 14, 14, 14, 18, 14, 30, 30], 'text_cols' => [0, 4, 20]],
+            ['name' => 'تیم‌ها', 'header' => ['تیم', 'سرپرست', 'A', 'B', 'C', 'D (سرپرست)', 'سایر', 'تعداد سفارش', 'جمعِ فروشِ تیم', 'درصد از کل'],
+             'rows' => $tRows, 'footer' => $tRows ? [['جمع', '', $tTot['A'], $tTot['B'], $tTot['C'], $tTot['D'], $tTot['سایر'], $tTot['cnt'], $tTot['amt'], 100]] : [],
+             'widths' => [22, 22, 16, 16, 16, 16, 12, 12, 18, 10]],
+            ['name' => 'کارشناسان', 'header' => ['تیم', 'کارشناس', 'نقش', 'جایگاه', 'تعداد سفارش', 'مبلغ فروش', 'سفارشِ مشترک'],
+             'rows' => $sRows, 'footer' => $sRows ? [['جمع', '', '', '', $tTot['cnt'], $tTot['amt'], '']] : [], 'widths' => [22, 26, 12, 8, 12, 18, 12]],
+            ['name' => 'فیلترها', 'header' => ['فیلتر', 'مقدار'], 'rows' => $fRows, 'widths' => [32, 70]],
+        ]);
+        exit;
     }
 }
 
@@ -321,6 +379,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
         <?php foreach (['all' => 'همه‌ی تاریخ‌ها', 'today' => 'امروز', 'this_week' => 'این هفته', 'this_month' => 'این ماه', 'last_month' => 'ماه گذشته', 'custom' => 'بازه دلخواه'] as $pk => $pl): $q3 = $_GET; $q3['preset'] = $pk; ?>
           <a class="chip <?= $preset === $pk ? 'active' : '' ?>" href="?<?= e(http_build_query($q3)) ?>"><?= $pl ?></a>
         <?php endforeach; ?>
+        <?php if ($from !== ''): ?><span class="small text-muted align-self-center">بازه: <?= to_jalali($from) ?> تا <?= to_jalali($to) ?></span><?php endif; ?>
       </div>
       <input type="hidden" name="preset" value="<?= e($preset) ?>">
       <?php if ($preset === 'custom'): ?>
@@ -334,13 +393,18 @@ require_once __DIR__ . '/../includes/layout_top.php';
           <?php foreach ($statuses as $sk => $sm): ?><option value="<?= e($sk) ?>" <?= $status === $sk ? 'selected' : '' ?>><?= e($sm['label']) ?></option><?php endforeach; ?>
         </select></div>
       <div class="col-md-3"><label class="form-label small mb-1">کارشناس</label><?= $sellerPicker($sellers, $sellerId, 'main') ?></div>
+      <div class="col-md-2"><label class="form-label small mb-1">تیم</label>
+        <select name="team" class="form-select form-select-sm"><option value="">همه‌ی تیم‌ها</option>
+          <?php foreach ($teamsAll as $__t): ?><option value="<?= (int) $__t['id'] ?>" <?= $teamF === (string) $__t['id'] ? 'selected' : '' ?>><?= e($__t['label'] . ($__t['leader_name'] !== '' ? ' — ' . $__t['leader_name'] : '')) ?></option><?php endforeach; ?>
+          <option value="none" <?= $teamF === 'none' ? 'selected' : '' ?>>بدونِ تیم</option>
+        </select></div>
       <div class="col-md-2"><label class="form-label small mb-1">روش پرداخت</label>
         <select name="method" class="form-select form-select-sm"><option value="">همه</option>
           <?php foreach ($methods as $mk => $ml): ?><option value="<?= e($mk) ?>" <?= $method === $mk ? 'selected' : '' ?>><?= e($ml) ?></option><?php endforeach; ?>
         </select></div>
       <div class="col-md-auto d-flex gap-2">
         <button class="btn btn-sm btn-success">اعمال</button>
-        <a class="btn btn-sm btn-outline-success" href="?<?= e(http_build_query(array_merge($_GET, ['export' => 1, 'status' => $status]))) ?>"><i class="fa-solid fa-file-csv"></i> خروجی اکسل</a>
+        <a class="btn btn-sm btn-outline-success" href="?<?= e(http_build_query(array_merge($_GET, ['export' => 1, 'status' => $status]))) ?>" title="با همین فیلترها و جستجو: سفارش‌ها + فروشِ تیم‌ها + فروشِ کارشناسان"><i class="fa-solid fa-file-excel"></i> خروجی اکسل</a>
       </div>
     </form>
   </div>
@@ -390,12 +454,46 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <div class="col-lg-12">
         <div class="card p-3"><h6 class="fw-bold mb-2">فروشِ تأییدشده به تفکیکِ روز</h6><canvas id="chDay" height="90"></canvas></div>
       </div>
+      <?php $__grand = array_sum(array_map(static fn($t) => $t['amt'], $report['by_team'])); ?>
+      <div class="col-lg-12">
+        <div class="card p-3" id="by-team">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <h6 class="fw-bold mb-0"><i class="fa-solid fa-people-group text-success"></i> فروش به تفکیکِ تیم <span class="small text-muted fw-normal">(تیم = سرپرست «D» + نیروهای A / B / C همان تیم — سفارش‌های تأییدشده)</span></h6>
+            <span class="small text-muted">برای جزئیاتِ هر تیم روی نامش بزنید؛ با فیلترِ «تیم» بالا هم فقط همان تیم را ببینید.</span>
+          </div>
+          <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+            <thead class="table-light"><tr><th>تیم</th><th>سرپرست</th><th class="text-end">A</th><th class="text-end">B</th><th class="text-end">C</th><th class="text-end">D (سرپرست)</th><th>تعداد</th><th class="text-end">جمعِ فروشِ تیم</th><th style="min-width:110px">سهم از کل</th></tr></thead><tbody>
+            <?php if (!$report['by_team']): ?><tr><td colspan="9" class="text-center text-muted py-3">فروشِ تأییدشده‌ای در این بازه نیست.</td></tr><?php endif; ?>
+            <?php foreach ($report['by_team'] as $t): $__pct = $__grand > 0 ? round($t['amt'] / $__grand * 100, 1) : 0; $__q = $_GET; $__q['team'] = $t['team_id'] ?: 'none'; ?>
+              <tr>
+                <td><details><summary class="fw-semibold"><?= e($t['label']) ?></summary>
+                  <table class="table table-sm small mb-0 mt-1"><tbody>
+                    <?php foreach ($t['members'] as $m): ?><tr><td><?= e((string) $m['full_name']) ?></td><td><span class="badge text-bg-light border"><?= e($m['slot']) ?></span></td><td><?= to_persian_digits((string) $m['cnt']) ?> سفارش</td><td class="text-end"><?= format_toman((int) $m['amt']) ?></td></tr><?php endforeach; ?>
+                  </tbody></table>
+                  <a class="small" href="?<?= e(http_build_query($__q)) ?>">فقط همین تیم ←</a></details></td>
+                <td class="small"><?= e($t['leader_name'] ?: '—') ?></td>
+                <?php foreach (['A', 'B', 'C', 'D'] as $__sl): ?><td class="text-end small"><?= format_toman($t['slots'][$__sl]) ?></td><?php endforeach; ?>
+                <td><?= to_persian_digits((string) $t['cnt']) ?></td>
+                <td class="text-end fw-bold"><?= format_toman($t['amt']) ?></td>
+                <td><div class="progress" style="height:6px"><div class="progress-bar bg-success" style="width:<?= $__pct ?>%"></div></div><span class="small text-muted"><?= to_persian_digits((string) $__pct) ?>٪</span></td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+            <?php if (count($report['by_team']) > 1): $__tt = ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0, 'cnt' => 0];
+              foreach ($report['by_team'] as $t) { foreach (['A', 'B', 'C', 'D'] as $__sl) $__tt[$__sl] += $t['slots'][$__sl]; $__tt['cnt'] += $t['cnt']; } ?>
+              <tfoot class="table-light fw-bold"><tr><td colspan="2">جمع</td><?php foreach (['A', 'B', 'C', 'D'] as $__sl): ?><td class="text-end small"><?= format_toman($__tt[$__sl]) ?></td><?php endforeach; ?>
+                <td><?= to_persian_digits((string) $__tt['cnt']) ?></td><td class="text-end"><?= format_toman($__grand) ?></td><td></td></tr></tfoot>
+            <?php endif; ?>
+          </table></div>
+        </div>
+      </div>
       <div class="col-lg-6">
         <div class="card p-3 h-100">
           <h6 class="fw-bold mb-2">فروش به تفکیکِ کارشناس</h6>
-          <table class="table table-sm mb-0"><thead class="table-light"><tr><th>کارشناس</th><th>واحد</th><th>تعداد</th><th class="text-end">مبلغ</th></tr></thead><tbody>
-            <?php if (!$report['by_seller']): ?><tr><td colspan="4" class="text-center text-muted py-3">فروشِ تأییدشده‌ای در این بازه نیست.</td></tr><?php endif; ?>
-            <?php foreach ($report['by_seller'] as $r): ?><tr><td><?= e((string) $r['full_name']) ?><?php if ((int) ($r['shared_cnt'] ?? 0) > 0): ?> <span class="badge text-bg-light border" style="color:#6d28d9" title="سفارش‌هایی که عددِ فروششان با کارشناسانِ دیگر تفکیک شده"><i class="fa-solid fa-people-group"></i> <?= to_persian_digits((string) (int) $r['shared_cnt']) ?> مشترک</span><?php endif; ?></td><td class="small"><?= e(role_label((string) $r['role'])) ?></td><td><?= to_persian_digits((string) $r['cnt']) ?></td><td class="text-end"><?= format_toman((int) $r['amt']) ?></td></tr><?php endforeach; ?>
+          <table class="table table-sm mb-0"><thead class="table-light"><tr><th>کارشناس</th><th>واحد</th><th>تیم</th><th>تعداد</th><th class="text-end">مبلغ</th></tr></thead><tbody>
+            <?php if (!$report['by_seller']): ?><tr><td colspan="5" class="text-center text-muted py-3">فروشِ تأییدشده‌ای در این بازه نیست.</td></tr><?php endif; ?>
+            <?php $__umap = tsr_user_team_map($pdo); ?>
+            <?php foreach ($report['by_seller'] as $r): ?><tr><td><?= e((string) $r['full_name']) ?><?php if ((int) ($r['shared_cnt'] ?? 0) > 0): ?> <span class="badge text-bg-light border" style="color:#6d28d9" title="سفارش‌هایی که عددِ فروششان با کارشناسانِ دیگر تفکیک شده"><i class="fa-solid fa-people-group"></i> <?= to_persian_digits((string) (int) $r['shared_cnt']) ?> مشترک</span><?php endif; ?></td><td class="small"><?= e(role_label((string) $r['role'])) ?></td><td class="small"><?= e($teamsAll[$__umap[(int) ($r['uid'] ?? 0)] ?? 0]['label'] ?? '—') ?></td><td><?= to_persian_digits((string) $r['cnt']) ?></td><td class="text-end"><?= format_toman((int) $r['amt']) ?></td></tr><?php endforeach; ?>
           </tbody></table>
         </div>
       </div>
