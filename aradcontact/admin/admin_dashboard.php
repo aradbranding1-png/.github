@@ -29,9 +29,9 @@ if (user_can('finance_orders_view', $user) && is_file(__DIR__ . '/../includes/or
         $recvSumDash = fin_receivables_summary(fin_receivables($pdo));
     }
 }
-$abtPendingCnt = 0; // تیکت‌های آراد برندینگِ ارسال‌نشده (در صف/ناموفق)
+$abtPendingCnt = 0; // تیکت‌های آراد برندینگِ ارسال‌نشده (در صف/ناموفق) — همان فهرستِ صفحه‌ی «ارسال تیکت‌ها» (فقط سفارش‌های تأییدشده)
 if (user_can('finance_orders_decide', $user) || user_can('finance_settings', $user)) {
-    try { $abtPendingCnt = (int) $pdo->query("SELECT COUNT(DISTINCT customer_id) FROM aradbranding_tickets WHERE status IN ('queued','failed')")->fetchColumn(); } catch (Throwable $e) {}
+    try { $abtPendingCnt = (int) $pdo->query("SELECT COUNT(DISTINCT t.customer_id) FROM aradbranding_tickets t JOIN sales_orders o ON o.id = t.order_id WHERE t.status IN ('queued','failed') AND o.status = 'approved'")->fetchColumn(); } catch (Throwable $e) {}
 }
 $pendingUsers = 0;
 if (user_can('admin_users_approve', $user)) {

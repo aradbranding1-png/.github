@@ -85,6 +85,8 @@ function scr_cleanup_tiny_v2(PDO $pdo): void
 //   بدهیِ خدماتِ قبل از سامانه‌اند و فروشِ جدید حساب نمی‌شوند — مثلِ قبل؛ سهمِ عملکردشان جداست.)
 //  همه‌ی مبلغ‌ها «خالص» = بدونِ مالیات، به نسبتِ همان سفارش: مبلغ × (کلِ سفارش − مالیات) ÷ کلِ سفارش.
 //  فروشِ مشترک: سهمِ هر نفر به نسبتِ تفکیکِ مالی (sales_order_credit_splits).
+//  صاحبِ فروش (بدونِ تفکیکِ مالی) = ثبت‌کننده‌ی سفارش **فقط اگر** طبقِ قوانینِ سهمِ عملکرد در همان سفارش جایگاهی (A/B/C/سرپرست)
+//  گرفته باشد (ps_order_snapshots)؛ وگرنه فروش به نامِ «سازمان آراد برندینگ» (uid = 0) — همان چیزی که برگه‌ی سهمِ عملکردِ سفارش نشان می‌دهد.
 
 /** خالصِ یک مبلغ برای سفارشِ $o (SQL) */
 function sales_net_sql(string $amountExpr, string $o = 'o'): string
@@ -133,20 +135,43 @@ function sales_user_events_sql(PDO $pdo, string $orderWhere = '1=1'): string
            WHERE o.status = 'approved' AND p.status = 'confirmed' AND p.kind = 'extra' AND p.decided_at BETWEEN ? AND ?"
            . (sales_has_legacy_col($pdo) ? ' AND COALESCE(o.is_legacy, 0) = 0' : '');
     }
+    $credit = sales_credit_uid_sql($pdo);
+    $snapJoin = sales_snapshots_ready($pdo) ? ' LEFT JOIN ps_order_snapshots snap ON snap.order_id = o.id' : '';
     if (scr_ready($pdo)) {
-        return "SELECT ev.order_id, COALESCE(sp.user_id, o.seller_user_id) uid, ev.at, ev.kind, ev.payment_id,
+        return "SELECT ev.order_id, COALESCE(sp.user_id, $credit) uid, ev.at, ev.kind, ev.payment_id,
                     CASE WHEN sp.user_id IS NULL THEN ev.gross ELSE ROUND(sp.amount * ev.gross / NULLIF(t.tot, 0)) END gross,
                     CASE WHEN sp.user_id IS NULL THEN ev.net ELSE ROUND(sp.amount * ev.net / NULLIF(t.tot, 0)) END net,
                     CASE WHEN sp.user_id IS NULL THEN 0 ELSE 1 END shared
                 FROM ($ev) ev
                 JOIN sales_orders o ON o.id = ev.order_id
-                LEFT JOIN customers c ON c.id = o.customer_id
+                LEFT JOIN customers c ON c.id = o.customer_id$snapJoin
                 LEFT JOIN sales_order_credit_splits sp ON sp.order_id = o.id
                 LEFT JOIN (SELECT order_id, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id) t ON t.order_id = o.id
                 WHERE ($orderWhere)";
     }
-    return "SELECT ev.order_id, o.seller_user_id uid, ev.at, ev.kind, ev.payment_id, ev.gross, ev.net, 0 shared
-            FROM ($ev) ev JOIN sales_orders o ON o.id = ev.order_id LEFT JOIN customers c ON c.id = o.customer_id WHERE ($orderWhere)";
+    return "SELECT ev.order_id, $credit uid, ev.at, ev.kind, ev.payment_id, ev.gross, ev.net, 0 shared
+            FROM ($ev) ev JOIN sales_orders o ON o.id = ev.order_id LEFT JOIN customers c ON c.id = o.customer_id$snapJoin WHERE ($orderWhere)";
+}
+
+function sales_snapshots_ready(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $pdo->query('SELECT owners_json FROM ps_order_snapshots LIMIT 0');
+        return $ok = true;
+    } catch (Throwable $e) {
+        return $ok = false;
+    }
+}
+
+/** صاحبِ فروشِ سفارش (SQL، alias o و snap): ثبت‌کننده اگر در snapshotِ سهمِ عملکرد جایگاه دارد، وگرنه 0 = سازمان */
+function sales_credit_uid_sql(PDO $pdo): string
+{
+    if (!sales_snapshots_ready($pdo)) return 'o.seller_user_id';
+    return "CASE WHEN snap.owners_json IS NULL THEN o.seller_user_id
+                 WHEN snap.owners_json LIKE CONCAT('%\"user_id\":', o.seller_user_id, ',%') THEN o.seller_user_id
+                 ELSE 0 END";
 }
 
 /** پارامترهای sales_user_events_sql برای بازه‌ی [from, to] (تاریخِ میلادی؛ خالی = بدونِ محدودیت) + پارامترهای $orderWhere */

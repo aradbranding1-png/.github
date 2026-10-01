@@ -97,9 +97,10 @@ function tsr_aggregate(PDO $pdo, array $userRows): array
         $uid = (int) ($r['uid'] ?? 0);
         $tid = $map[$uid] ?? 0;
         if (!isset($teams[$tid])) $tid = 0;
+        if ($uid === 0) $tid = -1; // فروشی که طبقِ قوانینِ سهم به هیچ کارشناسی نرسیده ← سازمان
         if (!isset($out[$tid])) {
             $out[$tid] = [
-                'team_id' => $tid, 'label' => $tid ? $teams[$tid]['label'] : 'بدونِ تیم', 'leader_name' => $tid ? $teams[$tid]['leader_name'] : '',
+                'team_id' => $tid, 'label' => $tid === -1 ? 'سازمان آراد برندینگ' : ($tid ? $teams[$tid]['label'] : 'بدونِ تیم'), 'leader_name' => $tid > 0 ? $teams[$tid]['leader_name'] : '',
                 'slots' => ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0, 'سایر' => 0], 'cnt' => 0, 'amt' => 0, 'members' => [],
             ];
         }

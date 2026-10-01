@@ -116,14 +116,19 @@ if ($ready) {
             LEFT JOIN users u ON u.id = y.uid GROUP BY y.uid, u.full_name, u.role ORDER BY amt DESC");
         $st->execute($__evParams);
         $report['by_seller'] = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        // uid = 0: فروشی که طبقِ قوانینِ سهمِ عملکرد به هیچ کارشناسی نرسیده (ثبت‌کننده در آن سفارش جایگاهی ندارد) ← سازمان
+        foreach ($report['by_seller'] as &$__bs) if ((int) $__bs['uid'] === 0) { $__bs['full_name'] = 'سازمان آراد برندینگ'; $__bs['role'] = ''; }
+        unset($__bs);
         $report['by_team'] = tsr_aggregate($pdo, $report['by_seller']);
 
         // ─── ریزِ هر عدد: کلیک روی مبلغ/تعدادِ هر کارشناس (du) یا تیم (dt) ← همان سفارش‌هایی که این عدد را ساخته‌اند ───
-        $detailUid = (int) ($_GET['du'] ?? 0);
+        $detailUid = (int) ($_GET['du'] ?? 0); // -1 = سازمان آراد برندینگ
         $detailTeam = (string) ($_GET['dt'] ?? '');
-        if ($detailUid > 0 || $detailTeam !== '') {
+        if ($detailUid > 0 || $detailUid === -1 || $detailTeam !== '') {
             $dUids = [];
-            if ($detailUid > 0) {
+            if ($detailUid === -1) {
+                $dUids = [0];
+            } elseif ($detailUid > 0) {
                 $dUids = [$detailUid];
             } else {
                 foreach ($report['by_team'][$detailTeam === 'none' ? 0 : (int) $detailTeam]['members'] ?? [] as $__m) $dUids[] = (int) $__m['uid'];
@@ -153,9 +158,9 @@ if ($ready) {
                 usort($dRows, static fn($a, $b) => strcmp((string) ($dOrders[(int) $b['order_id']]['created_at'] ?? ''), (string) ($dOrders[(int) $a['order_id']]['created_at'] ?? '')));
             }
             $report['detail'] = [
-                'title' => $detailUid > 0 ? ($dNames[$detailUid] ?? ('کارشناس #' . $detailUid))
-                    : ($detailTeam === 'none' ? 'بدونِ تیم' : ($teamsAll[(int) $detailTeam]['label'] ?? ('تیم ' . $detailTeam))),
-                'rows' => $dRows, 'orders' => $dOrders, 'splits' => $dSplits, 'names' => $dNames, 'is_team' => $detailUid <= 0,
+                'title' => $detailUid === -1 ? 'سازمان آراد برندینگ' : ($detailUid > 0 ? ($dNames[$detailUid] ?? ('کارشناس #' . $detailUid))
+                    : ($detailTeam === 'none' ? 'بدونِ تیم' : ($detailTeam === '-1' ? 'سازمان آراد برندینگ' : ($teamsAll[(int) $detailTeam]['label'] ?? ('تیم ' . $detailTeam))))),
+                'rows' => $dRows, 'orders' => $dOrders, 'splits' => $dSplits, 'names' => $dNames + [0 => 'سازمان آراد برندینگ'], 'is_team' => $detailUid === 0,
             ];
         }
         $st = $pdo->prepare("SELECT i.title, SUM(i.quantity) qty, SUM(i.amount) amt, COUNT(DISTINCT o.id) orders_cnt FROM sales_order_items i JOIN sales_orders o ON o.id = i.order_id LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN users s ON s.id = o.seller_user_id WHERE " . implode(' AND ', $where) . " AND o.status = 'approved' GROUP BY i.title ORDER BY amt DESC LIMIT 20");
@@ -542,9 +547,10 @@ require_once __DIR__ . '/../includes/layout_top.php';
               <tr>
                 <td><details><summary class="fw-semibold"><?= e($t['label']) ?></summary>
                   <table class="table table-sm small mb-0 mt-1"><tbody>
-                    <?php foreach ($t['members'] as $m): ?><tr><td><?= e((string) $m['full_name']) ?><?php if ((int) ($m['shared_cnt'] ?? 0) > 0): ?> <span class="badge text-bg-light border" style="color:#6d28d9" title="شاملِ سهم از فروشِ مشترک">مشترک</span><?php endif; ?></td><td><span class="badge text-bg-light border"><?= e($m['slot']) ?></span></td><td><?= $__dl(['du' => (int) $m['uid']], to_persian_digits((string) $m['cnt']) . ' سفارش') ?></td><td class="text-end"><?= $__dl(['du' => (int) $m['uid']], format_toman((int) $m['amt'])) ?></td></tr><?php endforeach; ?>
+                    <?php foreach ($t['members'] as $m): ?><tr><td><?= e((string) $m['full_name']) ?><?php if ((int) ($m['shared_cnt'] ?? 0) > 0): ?> <span class="badge text-bg-light border" style="color:#6d28d9" title="شاملِ سهم از فروشِ مشترک">مشترک</span><?php endif; ?></td><td><span class="badge text-bg-light border"><?= e($m['slot']) ?></span></td><td><?= $__dl(['du' => ((int) $m['uid'] ?: -1)], to_persian_digits((string) $m['cnt']) . ' سفارش') ?></td><td class="text-end"><?= $__dl(['du' => ((int) $m['uid'] ?: -1)], format_toman((int) $m['amt'])) ?></td></tr><?php endforeach; ?>
                   </tbody></table>
-                  <a class="small" href="?<?= e(http_build_query($__q)) ?>">فقط همین تیم ←</a></details></td>
+                  <?php if ((int) $t['team_id'] === -1): ?><div class="small text-muted mt-1">سفارش‌هایی که ثبت‌کننده‌شان طبقِ قوانینِ سهمِ عملکرد در آن سفارش جایگاهی ندارد (همان «سازمان آراد برندینگ» در برگه‌ی سهمِ سفارش).</div>
+                  <?php else: ?><a class="small" href="?<?= e(http_build_query($__q)) ?>">فقط همین تیم ←</a><?php endif; ?></details></td>
                 <td class="small"><?= e($t['leader_name'] ?: '—') ?></td>
                 <?php foreach (['A', 'B', 'C', 'D'] as $__sl): ?><td class="text-end small"><?= format_toman($t['slots'][$__sl]) ?></td><?php endforeach; ?>
                 <td><?= $__dl(['dt' => $t['team_id'] ?: 'none'], to_persian_digits((string) $t['cnt'])) ?></td>
@@ -568,7 +574,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
           <table class="table table-sm mb-0"><thead class="table-light"><tr><th>کارشناس</th><th>واحد</th><th>تیم</th><th>تعداد</th><th class="text-end">مبلغ</th></tr></thead><tbody>
             <?php if (!$report['by_seller']): ?><tr><td colspan="5" class="text-center text-muted py-3">فروشِ تأییدشده‌ای در این بازه نیست.</td></tr><?php endif; ?>
             <?php $__umap = tsr_user_team_map($pdo); ?>
-            <?php foreach ($report['by_seller'] as $r): ?><tr><td><?= e((string) $r['full_name']) ?><?php if ((int) ($r['shared_cnt'] ?? 0) > 0): ?> <span class="badge text-bg-light border" style="color:#6d28d9" title="سفارش‌هایی که عددِ فروششان با کارشناسانِ دیگر تفکیک شده"><i class="fa-solid fa-people-group"></i> <?= to_persian_digits((string) (int) $r['shared_cnt']) ?> مشترک</span><?php endif; ?></td><td class="small"><?= e(role_label((string) $r['role'])) ?></td><td class="small"><?= e($teamsAll[$__umap[(int) ($r['uid'] ?? 0)] ?? 0]['label'] ?? '—') ?></td><td><?= $__dl(['du' => (int) ($r['uid'] ?? 0)], to_persian_digits((string) $r['cnt'])) ?></td><td class="text-end"><?= $__dl(['du' => (int) ($r['uid'] ?? 0)], format_toman((int) $r['amt'])) ?></td></tr><?php endforeach; ?>
+            <?php foreach ($report['by_seller'] as $r): ?><tr><td><?= e((string) $r['full_name']) ?><?php if ((int) ($r['shared_cnt'] ?? 0) > 0): ?> <span class="badge text-bg-light border" style="color:#6d28d9" title="سفارش‌هایی که عددِ فروششان با کارشناسانِ دیگر تفکیک شده"><i class="fa-solid fa-people-group"></i> <?= to_persian_digits((string) (int) $r['shared_cnt']) ?> مشترک</span><?php endif; ?></td><td class="small"><?= e(role_label((string) $r['role'])) ?></td><td class="small"><?= e($teamsAll[$__umap[(int) ($r['uid'] ?? 0)] ?? 0]['label'] ?? '—') ?></td><td><?= $__dl(['du' => ((int) ($r['uid'] ?? 0) ?: -1)], to_persian_digits((string) $r['cnt'])) ?></td><td class="text-end"><?= $__dl(['du' => ((int) ($r['uid'] ?? 0) ?: -1)], format_toman((int) $r['amt'])) ?></td></tr><?php endforeach; ?>
           </tbody></table>
         </div>
       </div>
