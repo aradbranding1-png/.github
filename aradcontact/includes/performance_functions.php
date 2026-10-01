@@ -13,7 +13,7 @@
  *   B: همه برای B (یا سازمان) — B هم مثلِ A و C فقط «یک نفر» است (قانونِ B1/B2 به بعد حذف شد)
  *   ارجاعِ هم‌سطح: B می‌تواند مشتریِ خودش را به B دیگری، و C به C دیگری (حتی از تیمِ دیگر) ارجاع دهد؛
  *      از آن لحظه گیرنده جایگزینِ قبلی می‌شود و سرپرستِ تیمِ «گیرنده» سهمِ D آن جایگاه را می‌گیرد.
- *   D: مساوی بینِ جایگاه‌های پُرِ A/B/C ← سرپرستِ تیمِ صاحبِ همان جایگاه (جایگاهِ خالی حساب نمی‌شود)؛
+ *   D: سه سهمِ ثابت — هر جایگاهِ A/B/C یک سهم برای سرپرستِ تیمِ صاحبِ همان جایگاه (جایگاهِ خالی یا بدونِ سرپرست ← سهمِ همان جایگاه به سازمان)؛
  *      اگر سفارش را سرپرست مستقیم ثبت کرده: سهمِ D مساوی بینِ سرپرست‌های متمایزِ درگیر + خودِ او
  *   هیچ‌کس سهمِ بخشِ دیگری را نمی‌گیرد؛ جایگاهِ خالیِ A/B/C ← سازمان
  * گرد کردن: هر تقسیم رو به پایین (تومانِ کامل)؛ همه‌ی باقی‌مانده‌ها به سازمان ← جمع = Pool دقیقاً.
@@ -30,7 +30,7 @@ function perf_ready(PDO $pdo): bool
 {
     static $ready = null;
     if ($ready !== null) return $ready;
-    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); } return $ready; }
+    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); ps_a_d_rule_v13($pdo); } return $ready; }
     $ddl = [
         "CREATE TABLE IF NOT EXISTS ps_base_versions (id INT UNSIGNED NOT NULL AUTO_INCREMENT, percent DECIMAL(6,3) NOT NULL, effective_from DATETIME NOT NULL,
           note VARCHAR(500) DEFAULT NULL, created_by INT UNSIGNED DEFAULT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id), KEY idx_psbv_from (effective_from)
@@ -387,25 +387,20 @@ function ps_distribute(int $pool, array $own): array
         }
         $org($lines, 'D', 'D-round', $unit - $each * count($leaders), 'باقی‌مانده‌ی گرد کردنِ تقسیمِ D ← سازمان');
     } else {
-        // حالتِ عادی: سهمِ D مساوی بینِ جایگاه‌های «پُر» (A / B مؤثر / C)؛ سهمِ هر جایگاه به سرپرستِ تیمِ صاحبِ آن جایگاه.
-        // جایگاهِ خالی حساب نمی‌شود (اگر فقط یک نفر نقش داشته، کلِ سهمِ D به سرپرستِ همان یک نفر می‌رسد).
-        $filled = [];
-        foreach (['A' => $a, 'B' => $bEff, 'C' => $c] as $slot => $o) if ($o) $filled[$slot] = $o;
-        if (!$filled) {
-            $org($lines, 'D', 'D', $unit, 'هیچ جایگاهی (A/B/C) پُر نیست ← سهمِ D به سازمان');
-        } else {
-            $each = intdiv($unit, count($filled));
-            foreach ($filled as $slot => $o) {
-                if (!empty($o['leader_id'])) {
-                    $lines[] = ['unit' => 'D', 'slot' => 'D(' . $slot . ')', 'user_id' => (int) $o['leader_id'], 'team_id' => $o['team_id'] ?? null, 'amount' => $each,
-                        'reason' => 'جایگاهِ ' . $slot . ' ← تیم ' . ($o['team_id'] ?? '?') . ' ← سرپرست ' . ($o['leader_name'] ?? '#' . $o['leader_id'])
-                            . ' ← ' . (count($filled) === 1 ? 'تنها جایگاهِ پُر: کلِ سهمِ D' : 'یک سهم از ' . count($filled) . ' جایگاهِ پُر')];
-                } else {
-                    $org($lines, 'D', 'D(' . $slot . ')', $each, 'تیمِ صاحبِ جایگاهِ ' . $slot . ' سرپرست ندارد ← سازمان');
-                }
+        // حالتِ عادی: سهمِ D سه قسمتِ ثابت است — یک قسمت برای هر جایگاه (A / B / C)؛ قسمتِ هر جایگاه به سرپرستِ تیمِ صاحبِ همان جایگاه.
+        // جایگاهِ خالی (یا صاحبِ بدونِ سرپرست) ← قسمتِ همان جایگاه به سازمان (سهمِ سرپرستِ دیگر زیاد نمی‌شود).
+        $each = intdiv($unit, 3);
+        foreach (['A' => $a, 'B' => $bEff, 'C' => $c] as $slot => $o) {
+            if ($o && !empty($o['leader_id'])) {
+                $lines[] = ['unit' => 'D', 'slot' => 'D(' . $slot . ')', 'user_id' => (int) $o['leader_id'], 'team_id' => $o['team_id'] ?? null, 'amount' => $each,
+                    'reason' => 'جایگاهِ ' . $slot . ' ← تیم ' . ($o['team_id'] ?? '?') . ' ← سرپرست ' . ($o['leader_name'] ?? '#' . $o['leader_id']) . ' ← یک سهم از ۳ سهمِ D'];
+            } elseif ($o) {
+                $org($lines, 'D', 'D(' . $slot . ')', $each, 'تیمِ صاحبِ جایگاهِ ' . $slot . ' سرپرست ندارد ← یک سهم از ۳ سهمِ D به سازمان');
+            } else {
+                $org($lines, 'D', 'D(' . $slot . ')', $each, 'جایگاهِ ' . $slot . ' خالی است (کارشناس ندارد) ← یک سهم از ۳ سهمِ D به سازمان');
             }
-            $org($lines, 'D', 'D-round', $unit - $each * count($filled), 'باقی‌مانده‌ی گرد کردنِ تقسیمِ D ← سازمان');
         }
+        $org($lines, 'D', 'D-round', $unit - $each * 3, 'باقی‌مانده‌ی گرد کردنِ تقسیمِ D ← سازمان');
     }
     $org($lines, 'O', 'round', $rem0, 'باقی‌مانده‌ی گرد کردنِ تقسیمِ ۲۵٪ها ← سازمان');
 
@@ -881,7 +876,10 @@ function ps_order_snapshot(PDO $pdo, int $orderId, ?array $registrant, string $s
     $own = ps_owners($pdo, (int) $order['customer_id']);
     $slim = static fn($x) => $x ? ['user_id' => (int) $x['user_id'], 'name' => $x['full_name'], 'team_id' => $x['team_id'] ? (int) $x['team_id'] : null,
         'leader_id' => $x['leader_id'] ? (int) $x['leader_id'] : null, 'leader_name' => $x['leader_name'], 'position' => (int) $x['position']] : null;
-    $snap = ['A' => $slim($own['A']), 'B' => array_map($slim, $own['B']), 'C' => $slim($own['C']), 'direct_d' => null];
+    // قانونِ A: فقط اگر همین A مشتری را واردِ سامانه کرده یا از Box A گرفته باشد (یا مدیر دستی تعیین کرده باشد)؛ وگرنه سهمِ A ← سازمان
+    $aOwn = $own['A'];
+    if ($aOwn && ($aOwn['source'] ?? '') !== 'manual' && !ps_a_eligible($pdo, (int) $order['customer_id'], (int) $aOwn['user_id'])) $aOwn = null;
+    $snap = ['A' => $slim($aOwn), 'B' => array_map($slim, $own['B']), 'C' => $slim($own['C']), 'direct_d' => null];
     $regId = $registrant ? (int) $registrant['id'] : (int) $order['seller_user_id'];
     $reg = ps_user_row($pdo, $regId);
     if ($reg && $reg['role'] === 'leader') $snap['direct_d'] = ['user_id' => $regId, 'name' => $reg['full_name'], 'team_id' => $reg['team_id'] ? (int) $reg['team_id'] : null];
@@ -1876,5 +1874,64 @@ function ps_a_rule_v11(PDO $pdo): void
         }
     } catch (Throwable $e) {
         error_log('ps_a_rule_v11: ' . $e->getMessage());
+    }
+}
+
+/**
+ * یک‌بار (نسخه‌ی ۱۳):
+ *   ۱) قانونِ A برای همه: A فقط وقتی معتبر است که همین کارشناس مشتری را واردِ سامانه کرده باشد یا از Box A گرفته باشد.
+ *      A‌های خودکاری که این شرط را ندارند (از هر منبعی: ثبتِ فیش، Box، انتقال‌های قبلی …) از snapshotِ سفارش و از مالکیتِ مشتری برداشته می‌شوند.
+ *      فقط تعیینِ دستیِ مدیر (مالکیتِ «دستی» یا ویرایشِ دستیِ سهمِ سفارش) دست نمی‌خورد.
+ *   ۲) قانونِ جدیدِ D (سه سهمِ ثابت: هر جایگاه یک سهم برای سرپرستِ خودش؛ جایگاهِ خالی ← سازمان) ← همه‌ی سفارش‌ها دوباره محاسبه می‌شوند.
+ */
+function ps_a_d_rule_v13(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $flag = __DIR__ . '/../storage/.perf_share_a_d_rule_v13';
+    if (is_file($flag)) return;
+    @file_put_contents($flag, (string) time());
+    @set_time_limit(1800);
+    $whyA = 'قانونِ A: این کارشناس مشتری را نه واردِ سامانه کرده و نه از Box A گرفته ← سهمِ A برای سازمان';
+    $why = 'قانونِ A (فقط واردکننده یا دریافت از Box A) + قانونِ جدیدِ D (هر جایگاه یک سهم) — محاسبه‌ی مجدد';
+    try {
+        // ۱) مالکیتِ A (پروفایلِ ۳۶۰): هر A ِ غیرِ دستی که شرط را ندارد پاک می‌شود
+        $rows = $pdo->query("SELECT o.*, (SELECT c.id FROM customers c WHERE c.id = o.customer_id LIMIT 1) AS cid FROM ps_owners o WHERE o.slot = 'A' AND o.source <> 'manual'")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        foreach ($rows as $r) {
+            $cid = (int) ($r['cid'] ?: $r['person_key']);
+            if (ps_a_eligible($pdo, $cid, (int) $r['user_id'])) continue;
+            $pdo->prepare('DELETE FROM ps_owners WHERE id = ?')->execute([(int) $r['id']]);
+            perf_audit($pdo, 0, 'owner_remove', 'ps_owners', (int) $r['person_key'], $r, null, $whyA);
+        }
+        // ۲) snapshotِ سفارش‌ها
+        $snaps = $pdo->query("SELECT s.order_id, s.owners_json, s.person_key, o.customer_id FROM ps_order_snapshots s JOIN sales_orders o ON o.id = s.order_id
+            WHERE s.owners_json LIKE '%\"A\":{%'")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $upd = $pdo->prepare('UPDATE ps_order_snapshots SET owners_json = ? WHERE order_id = ?');
+        $man = $pdo->prepare("SELECT 1 FROM ps_owners WHERE person_key = ? AND slot = 'A' AND source = 'manual' AND user_id = ? LIMIT 1");
+        foreach ($snaps as $sn) {
+            $ow = json_decode((string) $sn['owners_json'], true) ?: [];
+            if (!empty($ow['manual_edit'])) continue;
+            $aUid = (int) ($ow['A']['user_id'] ?? 0);
+            if ($aUid <= 0) continue;
+            $man->execute([(int) $sn['person_key'], $aUid]);
+            if ($man->fetchColumn()) continue; // مدیر دستی تعیین کرده
+            if (ps_a_eligible($pdo, (int) $sn['customer_id'], $aUid)) continue;
+            $old = $ow['A'];
+            $ow['A'] = null;
+            $upd->execute([json_encode($ow, JSON_UNESCAPED_UNICODE), (int) $sn['order_id']]);
+            perf_audit($pdo, 0, 'a_rule_fix', 'sales_orders', (int) $sn['order_id'], ['A' => $old], ['A' => null], $whyA);
+        }
+        // ۳) محاسبه‌ی مجددِ همه‌ی سفارش‌ها (A اصلاح‌شده + قانونِ جدیدِ D)
+        $ids = $pdo->query('SELECT DISTINCT order_id FROM ps_payment_calcs WHERE voided_at IS NULL')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $vc = $pdo->prepare('UPDATE ps_payment_calcs SET voided_at = ?, void_reason = ? WHERE order_id = ? AND voided_at IS NULL');
+        $vl = $pdo->prepare('UPDATE ps_lines l JOIN ps_payment_calcs c ON c.id = l.calc_id SET l.voided = 1 WHERE c.order_id = ? AND c.void_reason = ? AND l.voided = 0');
+        foreach ($ids as $oid) {
+            $vc->execute([date('Y-m-d H:i:s'), $why, (int) $oid]);
+            $vl->execute([(int) $oid, $why]);
+            ps_sync_order($pdo, (int) $oid, 0);
+        }
+    } catch (Throwable $e) {
+        error_log('ps_a_d_rule_v13: ' . $e->getMessage());
     }
 }
