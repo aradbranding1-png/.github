@@ -927,6 +927,7 @@ if (!function_exists('perm_page_map')) {
         $map['reception_pipeline.php']        = ['reception_agent_panel', 'admin_reception_candidates', 'admin_reception_reports', 'admin_reception_staff'];
         $map['reception_pipeline_action.php'] = ['reception_agent_panel', 'reception_supervisor_meetings_view', 'admin_reception_candidates', 'admin_reception_reports', 'admin_reception_staff'];
         $map['admin_reception_funnel.php']    = ['admin_reception_reports'];
+        $map['admin_reception_overview.php']  = ['admin_reception_reports']; // داشبوردِ واحدِ استخدام
         $map['reception_leaderboard.php']     = ['reception_agent_panel', 'admin_reception_reports', 'admin_reception_candidates', 'admin_reception_staff'];
         $map['quote_pdf.php']             = ['quotes_manage', 'finance_orders_view', 'orders_view_own'];
         // قرارداد

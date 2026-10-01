@@ -89,85 +89,12 @@ if (!function_exists('rrp_jalali_to_gregorian')) {
 /* =====================================================================
    محاسبه بازه تاریخی (با try/catch برای جلوگیری از خطای 500)
    ===================================================================== */
-try {
-    $today = new DateTime('today');
-    switch ($preset) {
-        case 'today':
-            $from = (clone $today);
-            $to   = (clone $today);
-            break;
-
-        case 'yesterday':
-            $from = (clone $today)->modify('-1 day');
-            $to   = (clone $from);
-            break;
-
-        case 'this_week':
-            $from = (clone $today)->modify('-' . ((int) $today->format('N') % 7) . ' days');
-            $to   = (clone $today);
-            break;
-
-        case 'last_week':
-            $from = (clone $today)->modify('-' . (((int) $today->format('N') % 7) + 7) . ' days');
-            $to   = (clone $from)->modify('+6 days');
-            break;
-
-        case 'last_month':
-            $from = (clone $today)->modify('first day of last month');
-            $to   = (clone $today)->modify('last day of last month');
-            break;
-
-        case 'custom':
-            $fromRaw = isset($_GET['from']) ? trim((string)$_GET['from']) : '';
-            $toRaw   = isset($_GET['to'])   ? trim((string)$_GET['to'])   : '';
-
-            $fromGreg = null;
-            $toGreg   = null;
-            if ($fromRaw !== '') {
-                if (function_exists('to_gregorian')) {
-                    $fromGreg = to_gregorian(rrp_normalize_digits($fromRaw));
-                } elseif (function_exists('jalali_to_gregorian')) {
-                    $fromGreg = jalali_to_gregorian(rrp_normalize_digits($fromRaw));
-                } else {
-                    $fromGreg = rrp_jalali_to_gregorian($fromRaw);
-                }
-            }
-            if ($toRaw !== '') {
-                if (function_exists('to_gregorian')) {
-                    $toGreg = to_gregorian(rrp_normalize_digits($toRaw));
-                } elseif (function_exists('jalali_to_gregorian')) {
-                    $toGreg = jalali_to_gregorian(rrp_normalize_digits($toRaw));
-                } else {
-                    $toGreg = rrp_jalali_to_gregorian($toRaw);
-                }
-            }
-
-            $from = $fromGreg ? DateTime::createFromFormat('Y-m-d', $fromGreg) : null;
-            $to   = $toGreg   ? DateTime::createFromFormat('Y-m-d', $toGreg)   : null;
-
-            if (!$from) $from = (clone $today)->modify('first day of this month');
-            if (!$to)   $to   = (clone $today);
-
-            if ($from > $to) {
-                [$from, $to] = [$to, $from];
-            }
-            $preset = 'custom';
-            break;
-
-        case 'this_month':
-        default:
-            $from = (clone $today)->modify('first day of this month');
-            $to   = (clone $today);
-            $preset = 'this_month';
-            break;
-    }
-} catch (Throwable $e) {
-    error_log('Reception reports date error: ' . $e->getMessage());
-    $today = new DateTime('today');
-    $from = (clone $today)->modify('first day of this month');
-    $to   = (clone $today);
-    $preset = 'this_month';
-}
+// بازه بر اساسِ تقویمِ شمسی (هفته از شنبه) — همان تعریفِ «داشبورد استخدام» (rm_range)
+if (!isset(rm_presets()[$preset])) $preset = 'this_month';
+[$__rf, $__rt] = rm_range($preset, (string) ($_GET['from'] ?? ''), (string) ($_GET['to'] ?? ''));
+$today = new DateTime('today');
+$from = new DateTime($__rf);
+$to = new DateTime($__rt);
 
 $fromStr = $from->format('Y-m-d') . ' 00:00:00';
 $toStr   = $to->format('Y-m-d') . ' 23:59:59';
@@ -309,7 +236,8 @@ if ($moduleReady) {
         $kpis['remaining_queue'] = (int) $pdo->query('SELECT COUNT(*) FROM reception_applicants WHERE assigned_agent_id IS NULL')->fetchColumn();
 
         // ─── کلِ تماس‌ها و نتایج: همه از جدول reception_calls ───
-        $whereReceptionCall = 'c.started_at BETWEEN ? AND ? AND EXISTS (SELECT 1 FROM users uc WHERE uc.id = c.agent_user_id AND uc.service_access_role = \'reception_agent\' AND uc.is_active = 1)';
+        // همه‌ی کارشناسانِ پذیرش (حتی اگر بعداً غیرفعال شده باشند) — همان تعریفِ «داشبورد استخدام»
+        $whereReceptionCall = 'c.started_at BETWEEN ? AND ?';
         $paramsReceptionCall = [$fromStr, $toStr];
         if ($agentFilter > 0) { $whereReceptionCall .= ' AND c.agent_user_id = ?'; $paramsReceptionCall[] = $agentFilter; }
 
@@ -431,6 +359,22 @@ if ($moduleReady) {
     }
 }
 
+// ─── شاخص‌های اصلی از «منبعِ واحد» (همان اعدادِ داشبورد استخدام و صفحه‌های دیگر) ───
+// وقتی فیلترِ سرپرست/وضعیت زده نشده، این شاخص‌ها دقیقاً همان عددهای admin_reception_overview.php هستند.
+$rmUnified = false;
+if ($moduleReady && function_exists('rm_overview') && $supervisorFilter === 0 && $statusFilter === '') {
+    $__rm = rm_overview($pdo, $from->format('Y-m-d'), $to->format('Y-m-d'), $agentFilter)['total'];
+    $kpis['total_in'] = $kpis['employment_requests'] = (int) $__rm['imported'];
+    $kpis['total_assigned'] = (int) $__rm['assigned'];
+    $kpis['total_calls'] = $kpis['reviewed_leads'] = (int) $__rm['logged'];
+    $kpis['success_calls'] = (int) $__rm['success'];
+    $kpis['remote_meetings'] = (int) $__rm['inv_online'];
+    $kpis['inperson_meetings'] = (int) $__rm['inv_inperson'];
+    $kpis['inperson_done'] = (int) $__rm['present_inperson'];
+    $kpis['inperson_no_show'] = (int) $__rm['absent_inperson'];
+    $kpis['referred'] = (int) $__rm['referred'];
+    $rmUnified = true;
+}
 $pageTitle = 'گزارش آماری پذیرش';
 require_once __DIR__ . '/../includes/layout_top.php';
 ?>
@@ -458,8 +402,12 @@ require_once __DIR__ . '/../includes/layout_top.php';
 
 <div class="admin-page-header d-flex justify-content-between align-items-center mb-3">
   <h5 class="mb-0"><i class="fa-solid fa-chart-column"></i> گزارش آماری پذیرش</h5>
-  <a href="admin_reception_hub.php" class="btn btn-sm btn-outline-secondary">بازگشت به پذیرش کارشناس</a>
+  <div class="d-flex gap-2"><a href="admin_reception_overview.php?<?= e(http_build_query(['preset' => $preset, 'from' => $_GET['from'] ?? '', 'to' => $_GET['to'] ?? '', 'agent' => $agentFilter])) ?>" class="btn btn-sm btn-warning"><i class="fa-solid fa-gauge-high"></i> داشبورد استخدام (کلِ مسیر)</a>
+  <a href="admin_reception_hub.php" class="btn btn-sm btn-outline-secondary">بازگشت به پذیرش کارشناس</a></div>
 </div>
+<?php if (!empty($rmUnified)): ?>
+  <div class="alert alert-light border py-2 small"><i class="fa-solid fa-link text-success"></i> شاخص‌های اصلیِ این صفحه (ورودی، واگذاری، تماس، تماسِ موفق، دعوتِ آنلاین/حضوری، حاضر/غایبِ حضوری بر اساسِ <b>تاریخِ جلسه</b>، ارجاع به سرپرست) از <b>همان منبعِ «داشبورد استخدام»</b> خوانده می‌شوند و با آن یکسان‌اند. بازه: <?= to_jalali($from->format('Y-m-d')) ?> تا <?= to_jalali($to->format('Y-m-d')) ?>.</div>
+<?php endif; ?>
 
 <?php if (!$moduleReady): ?>
   <div class="alert alert-warning py-2">جدول‌های ماژولِ پذیرش کارشناس هنوز روی سرور ایجاد نشده‌اند؛ ابتدا بروزرسانیِ سیستم را اجرا کنید.</div>
@@ -537,8 +485,8 @@ require_once __DIR__ . '/../includes/layout_top.php';
       'reviewed_leads' => 'تعداد لیدهای دریافت شده و بررسی شده',
       'remote_meetings' => 'دعوت به میتینگ آنلاین',
       'inperson_meetings' => 'دعوت به مصاحبه حضوری',
-      'inperson_done' => 'حضور یافته (حضوری)',
-      'inperson_no_show' => 'عدم حضور (حضوری)',
+      'inperson_done' => 'حضور یافته (حضوری، به تاریخِ جلسه)',
+      'inperson_no_show' => 'عدم حضور (حضوری، به تاریخِ جلسه)',
       'total_assigned' => 'کلِ واگذارشده', 'total_calls' => 'کلِ تماس‌ها',
       'success_calls' => 'تماسِ موفق', 'no_answer' => 'عدمِ پاسخ', 'cancelled' => 'انصرافی',
       'followup' => 'نیازمندِ پیگیری', 'referred' => 'ارجاع به سرپرست', 'accepted' => 'پذیرش‌شده',

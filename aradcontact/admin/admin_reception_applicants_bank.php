@@ -42,6 +42,17 @@ if ($moduleReady) {
         $where[] = 'ra.status = ?';
         $params[] = $status;
     }
+    // باکسِ پذیرش و شهر/نوع آگهی (reception_extras)
+    $rxOn = function_exists('rx_ready') && rx_ready($pdo);
+    $boxF = $rxOn ? (string) ($_GET['box'] ?? '') : '';
+    $freeF = !empty($_GET['free']);
+    if ($boxF === 'none') { $where[] = "(ra.intake_box IS NULL OR ra.intake_box = '')"; }
+    elseif ($boxF !== '' && isset(rx_intake_boxes()[$boxF])) { $where[] = 'ra.intake_box = ?'; $params[] = $boxF; }
+    if ($freeF) { $where[] = 'ra.assigned_agent_id IS NULL'; }
+    if ($rxOn && $q !== '') { // جستجو در شهر و نوع آگهی هم
+        $where[0] = '(' . substr($where[0], 1, -1) . ' OR ra.city LIKE ? OR ra.ad_type LIKE ? OR ra.lead_source LIKE ?)';
+        array_splice($params, 5, 0, ['%' . $q . '%', '%' . $q . '%', '%' . $q . '%']);
+    }
     if ($meetType === 'online' && $__slotsOk) {
         $where[] = "EXISTS (SELECT 1 FROM reception_meeting_bookings b WHERE b.applicant_id = ra.id AND b.status = 'booked')";
     } elseif ($meetType === 'inperson' && $__ipOk) {
@@ -131,8 +142,28 @@ require_once __DIR__ . '/../includes/layout_top.php';
   <div class="alert alert-warning py-2">جدول‌های ماژولِ پذیرش کارشناس هنوز روی سرور ایجاد نشده‌اند؛ ابتدا بروزرسانیِ سیستم را اجرا کنید.</div>
 <?php else: ?>
 
+<?php if ($rxOn): $__bc = []; $__bf = [];
+  foreach ($pdo->query("SELECT COALESCE(NULLIF(intake_box,''),'none') b, COUNT(*) n, SUM(assigned_agent_id IS NULL) f FROM reception_applicants GROUP BY b")->fetchAll(PDO::FETCH_ASSOC) ?: [] as $__r) { $__bc[$__r['b']] = (int) $__r['n']; $__bf[$__r['b']] = (int) $__r['f']; } ?>
+<div class="row g-2 mb-3">
+  <?php foreach (['none' => 'عمومی (بدونِ باکس)'] + rx_intake_boxes() as $__k => $__l): $__qq = array_merge($_GET, ['box' => $__k, 'free' => 1, 'page' => 1]); ?>
+    <div class="col-6 col-md-3"><a class="card p-2 text-center text-decoration-none h-100 <?= $boxF === $__k ? 'border-primary' : '' ?>" href="?<?= e(http_build_query($__qq)) ?>">
+      <div class="small text-muted">باکس <?= e($__l) ?></div>
+      <div class="fs-5 fw-bold <?= ($__bf[$__k] ?? 0) < 20 ? 'text-danger' : 'text-success' ?>"><?= to_persian_digits((string) ($__bf[$__k] ?? 0)) ?></div>
+      <div class="small text-muted">شماره‌ی آزاد در صف (از <?= to_persian_digits((string) ($__bc[$__k] ?? 0)) ?>)<?= ($__bf[$__k] ?? 0) < 20 ? ' — <b class="text-danger">نیاز به شارژ</b>' : '' ?></div>
+    </a></div>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
 <div class="card p-3 mb-3">
   <form method="get" class="row g-2 align-items-end">
+    <?php if ($rxOn): ?>
+    <div class="col-md-2">
+      <label class="form-label small text-muted mb-1">باکس</label>
+      <select name="box" class="form-select"><option value="">همه</option><option value="none" <?= $boxF === 'none' ? 'selected' : '' ?>>عمومی</option>
+        <?php foreach (rx_intake_boxes() as $__k => $__l): ?><option value="<?= e($__k) ?>" <?= $boxF === $__k ? 'selected' : '' ?>><?= e($__l) ?></option><?php endforeach; ?></select>
+      <div class="form-check small mt-1"><input class="form-check-input" type="checkbox" name="free" value="1" id="bkFree" <?= $freeF ? 'checked' : '' ?>><label class="form-check-label" for="bkFree">فقط آزاد (بدونِ کارشناس)</label></div>
+    </div>
+    <?php endif; ?>
     <div class="col-md-4">
       <label class="form-label small text-muted mb-1">جستجو (نام / نام خانوادگی / موبایل)</label>
       <input type="text" name="q" class="form-control" value="<?= e($q) ?>" placeholder="مثلاً: احمدی یا 0912...">
@@ -169,14 +200,14 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <table class="table table-sm align-middle mb-0">
       <thead>
         <tr>
-          <th>ردیف</th><th>نام و نام خانوادگی</th><th>موبایل</th><th>تاریخ ورود</th><th>منبع ورود</th>
+          <th>ردیف</th><th>نام و نام خانوادگی</th><th>موبایل</th><th>تاریخ ورود</th><th>منبع ورود</th><?php if ($rxOn): ?><th>باکس / شهر / آگهی</th><?php endif; ?>
           <th>کارشناس پذیرش</th><th>وضعیت</th><th>سرپرست</th><th>تاریخ ارجاع</th>
           <th>نوع جلسه</th><th>آخرین پیگیری</th><th>تعداد تماس</th><th>آخرین فعالیت</th><th>عملیات</th>
         </tr>
       </thead>
       <tbody>
         <?php if (!$rows): ?>
-        <tr><td colspan="14" class="text-center text-muted py-4">موردی یافت نشد.</td></tr>
+        <tr><td colspan="<?= $rxOn ? 15 : 14 ?>" class="text-center text-muted py-4">موردی یافت نشد.</td></tr>
         <?php endif; ?>
         <?php foreach ($rows as $i => $r): ?>
         <tr>
@@ -184,7 +215,9 @@ require_once __DIR__ . '/../includes/layout_top.php';
           <td><?= e(trim($r['first_name'] . ' ' . $r['last_name'])) ?></td>
           <td dir="ltr"><?= e($r['mobile']) ?></td>
           <td class="small text-muted"><?= to_jalali($r['created_at']) ?></td>
-          <td class="small"><?= e($r['source']) ?></td>
+          <td class="small"><?= e($r['source']) ?><?= !empty($r['lead_source']) ? '<div class="text-muted">' . e((string) $r['lead_source']) . '</div>' : '' ?></td>
+          <?php if ($rxOn): ?><td class="small"><span class="badge text-bg-light border"><?= e(rx_intake_box_label($r['intake_box'] ?? null)) ?></span>
+            <?= !empty($r['city']) ? '<div>' . e((string) $r['city']) . '</div>' : '' ?><?= !empty($r['ad_type']) ? '<div class="text-muted">' . e((string) $r['ad_type']) . '</div>' : '' ?></td><?php endif; ?>
           <td class="small"><?= e($r['agent_name'] ?? '—') ?></td>
           <td><span class="badge badge-status bg-<?= e(reception_status_color($pdo, $r['status'])) ?>"><?= e(reception_status_label($pdo, $r['status'])) ?></span></td>
           <td class="small"><?= e($r['supervisor_name'] ?? '—') ?></td>

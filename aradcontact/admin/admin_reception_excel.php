@@ -98,6 +98,14 @@ if ($moduleReady && $_SERVER['REQUEST_METHOD'] === 'POST' && $isAjax) {
             echo json_encode(['ok' => false, 'error' => 'ستون‌های «نام و نام خانوادگی» و «شماره موبایل» در فایل پیدا نشد.'], JSON_UNESCAPED_UNICODE);
             exit;
         }
+        // ستون‌های اختیاری (شهر، نوع آگهی، منبع، باکس) + پیش‌فرض‌های فرم برای همه‌ی سطرها
+        $rxOn = function_exists('rx_ready') && rx_ready($pdo);
+        $extraCols = $rxOn ? rx_detect_extra_columns($header) : [];
+        $extraDefaults = [
+            'ad_type' => (string) ($_POST['default_ad_type'] ?? ''), 'lead_source' => (string) ($_POST['default_lead_source'] ?? ''),
+            'intake_box' => (string) ($_POST['default_intake_box'] ?? ''), 'city' => (string) ($_POST['default_city'] ?? ''),
+        ];
+        $updRowExtra = $rxOn ? $pdo->prepare('UPDATE reception_excel_import_rows SET extra_json = ? WHERE id = ?') : null;
 
         try {
             $pdo->beginTransaction();
@@ -119,6 +127,9 @@ if ($moduleReady && $_SERVER['REQUEST_METHOD'] === 'POST' && $isAjax) {
                 $fullName  = preg_replace('/\s+/u', ' ', $fullName) ?? $fullName;
                 $rawMobile = trim((string) ($row[$colMobile] ?? ''));
                 $insRow->execute([$importId, $rowNumber, $fullName, $rawMobile, $rawMobile]);
+                if ($updRowExtra && ($rx = rx_row_extra($row, $extraCols, $extraDefaults))) {
+                    $updRowExtra->execute([json_encode($rx, JSON_UNESCAPED_UNICODE), (int) $pdo->lastInsertId()]);
+                }
                 $pendingCount++;
             }
 
@@ -132,6 +143,7 @@ if ($moduleReady && $_SERVER['REQUEST_METHOD'] === 'POST' && $isAjax) {
                 'total' => $pendingCount,
                 'assignment_mode' => $assignmentMode,
                 'assigned_agent_id' => $assignedAgentId,
+                'extra_columns' => array_values(array_map(static fn($k) => rx_extra_fields()[$k], array_keys($extraCols))),
             ], JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -156,7 +168,8 @@ if ($moduleReady && $_SERVER['REQUEST_METHOD'] === 'POST' && $isAjax) {
 
         $assignedAgentIdForInsert = ($assignmentMode === 'agent' && $assignedAgentId > 0) ? $assignedAgentId : null;
 
-        $stmt = $pdo->prepare("SELECT id, `row_number`, raw_full_name, raw_mobile FROM reception_excel_import_rows WHERE import_id = ? AND status = 'pending' ORDER BY id ASC LIMIT {$batchSize}");
+        $rxOn = function_exists('rx_ready') && rx_ready($pdo);
+        $stmt = $pdo->prepare("SELECT id, `row_number`, raw_full_name, raw_mobile" . ($rxOn ? ', extra_json' : ', NULL AS extra_json') . " FROM reception_excel_import_rows WHERE import_id = ? AND status = 'pending' ORDER BY id ASC LIMIT {$batchSize}");
         $stmt->execute([$importId]);
         $pendingRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
@@ -332,6 +345,10 @@ if ($moduleReady && $_SERVER['REQUEST_METHOD'] === 'POST' && $isAjax) {
             }
 
             try { $updRow->execute([$firstName, $lastName, $status, $errorMessage, $newApplicantId, $newUserId, $rowId]); } catch (Throwable $e) {}
+            // شهر / نوع آگهی / منبع / باکس روی پرونده‌ی متقاضی (برای اپراتور هنگامِ تماس)
+            if ($rxOn && $status === 'success' && $newApplicantId && !empty($prow['extra_json'])) {
+                rx_apply_extra($pdo, (int) $newApplicantId, (array) json_decode((string) $prow['extra_json'], true), true);
+            }
 
             $processed[] = [
                 'row' => $rowNumber,
@@ -517,7 +534,8 @@ require_once __DIR__ . '/../includes/layout_top.php';
 <div class="card p-4 mb-4" id="reiUploadCard">
   <p class="text-muted small mb-3">
     این بخش برای ثبت ورودی افراد متقاضی فعالیت در بخش کارشناس توسعه تجارت می‌باشد.
-    فایل باید سطرِ اول عنوانِ ستون‌ها باشد و دقیقاً شاملِ این دو ستون باشد: <b>نام و نام خانوادگی</b>، <b>شماره موبایل</b>.
+    فایل باید سطرِ اول عنوانِ ستون‌ها باشد و شاملِ این دو ستون باشد: <b>نام و نام خانوادگی</b>، <b>شماره موبایل</b>
+    (ستون‌های اختیاری: <b>شهر</b>، <b>نوع آگهی</b>، <b>منبع ورود</b>، <b>باکس</b>).
   </p>
 
   <form id="reiForm" enctype="multipart/form-data">
@@ -572,6 +590,21 @@ require_once __DIR__ . '/../includes/layout_top.php';
         <i class="fa-solid fa-circle-info"></i> در این حالت شماره‌ها به هیچ کارشناسی اختصاص داده نمی‌شوند.
       </div>
     </div>
+
+    <?php if (function_exists('rx_intake_boxes')): ?>
+    <div class="mb-3 p-3 rounded-3" style="background:#fffbeb;border:1px dashed #f59e0b">
+      <div class="fw-bold mb-1"><i class="fa-solid fa-circle-info text-warning"></i> اطلاعاتِ بیشتر برای اپراتور (اختیاری)</div>
+      <div class="small text-muted mb-2">اگر فایل این ستون‌ها را داشته باشد خودکار خوانده می‌شوند: <b>شهر</b>، <b>نوع آگهی</b>، <b>منبع ورود</b>، <b>باکس</b> (حضوری / دورکار / زبانی). وگرنه مقدارهای زیر برای همه‌ی سطرهای همین فایل ثبت می‌شود. این اطلاعات در پرونده‌ی متقاضی به اپراتور نشان داده می‌شود.</div>
+      <div class="row g-2">
+        <div class="col-md-3"><label class="form-label small mb-1">باکسِ پذیرش</label>
+          <select name="default_intake_box" id="reiDefBox" class="form-select form-select-sm"><option value="">عمومی (بدونِ باکس)</option>
+            <?php foreach (rx_intake_boxes() as $__k => $__l): ?><option value="<?= e($__k) ?>"><?= e($__l) ?></option><?php endforeach; ?></select></div>
+        <div class="col-md-3"><label class="form-label small mb-1">نوعِ آگهی</label><input name="default_ad_type" id="reiDefAd" class="form-control form-control-sm" placeholder="مثلاً استخدام اداری"></div>
+        <div class="col-md-3"><label class="form-label small mb-1">منبعِ ورود</label><input name="default_lead_source" id="reiDefSrc" class="form-control form-control-sm" placeholder="مثلاً دیوار، جابینجا"></div>
+        <div class="col-md-3"><label class="form-label small mb-1">شهر</label><input name="default_city" id="reiDefCity" class="form-control form-control-sm" placeholder="مثلاً قم"></div>
+      </div>
+    </div>
+    <?php endif; ?>
 
     <div class="mb-3">
       <input type="file" name="reception_file" id="reiFileInput" class="form-control" accept=".xlsx,.xls,.csv" required <?= !$moduleReady ? 'disabled' : '' ?>>
@@ -828,6 +861,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
       prepFd.append('ajax_action', 'prepare');
       prepFd.append('assignment_mode', mode);
       prepFd.append('assigned_agent_id', String(agentId));
+      ['default_intake_box', 'default_ad_type', 'default_lead_source', 'default_city'].forEach(function (n) { if (form[n]) prepFd.append(n, form[n].value); });
       prepFd.append('reception_file', form.reception_file.files[0]);
       const csrfInput = form.querySelector('input[name="csrf_token"]');
       if (csrfInput) prepFd.append('csrf_token', csrfInput.value);

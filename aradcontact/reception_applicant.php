@@ -38,7 +38,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $action = (string) ($_POST['action'] ?? '');
 
-        if ($action === 'delete_note') {
+        if ($action === 'save_extra' && function_exists('rx_ready') && rx_ready($pdo)) {
+            // شهر / نوع آگهی / منبع / باکس (همان اطلاعاتی که هنگامِ ورود از اکسل ثبت می‌شود)
+            $__ex = [];
+            foreach (array_keys(rx_extra_fields()) as $__k) {
+                $__v = trim((string) ($_POST['rx_' . $__k] ?? ''));
+                $__ex[$__k] = $__k === 'intake_box' ? (isset(rx_intake_boxes()[$__v]) ? $__v : null) : ($__v !== '' ? mb_substr($__v, 0, 150) : null);
+            }
+            $pdo->prepare('UPDATE reception_applicants SET city = ?, ad_type = ?, lead_source = ?, intake_box = ? WHERE id = ?')
+                ->execute([$__ex['city'], $__ex['ad_type'], $__ex['lead_source'], $__ex['intake_box'], $applicantId]);
+            reception_log_action($pdo, $applicantId, (int) $user['id'], 'extra_info', 'ویرایشِ شهر / نوع آگهی / منبع / باکس');
+            $applicant = reception_get_applicant($pdo, $applicantId) ?: $applicant;
+            $success = 'اطلاعاتِ متقاضی ذخیره شد.';
+        } elseif ($action === 'delete_note') {
             $noteId = (int) ($_POST['note_id'] ?? 0);
             if ($noteId <= 0) {
                 $errors[] = 'یادداشتِ انتخاب‌شده معتبر نیست.';
@@ -107,73 +119,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } elseif ($action === 'assign_supervisor') {
-            $supervisorId = (int) ($_POST['supervisor_id'] ?? 0);
-            $chk = $pdo->prepare("SELECT * FROM users WHERE id = ? AND role = 'leader' LIMIT 1");
-            $chk->execute([$supervisorId]);
-            $supervisor = $chk->fetch(PDO::FETCH_ASSOC);
-            if (!$supervisor) {
-                $errors[] = 'سرپرستِ انتخاب‌شده معتبر نیست.';
+            // منطقِ مشترک (همین‌جا و بعد از «حاضر شد» در مصاحبه‌ی حضوری) — includes/reception_extras.php
+            $__r = rx_refer_to_supervisor($pdo, $applicantId, (int) ($_POST['supervisor_id'] ?? 0), $user, (int) ($_POST['interview_id'] ?? 0) ?: null);
+            if ($__r['ok']) {
+                $success = 'متقاضی با موفقیت به سرپرست ارجاع داده شد.';
+                $applicant = reception_get_applicant($pdo, $applicantId);
             } else {
-                try {
-                    $pdo->beginTransaction();
-                    $oldStatus = $applicant['status'];
-                    $stmt = $pdo->prepare("UPDATE reception_applicants SET supervisor_user_id = ?, referred_at = NOW(), referred_by = ?, status = 'referred_to_supervisor', last_activity_at = NOW() WHERE id = ?");
-                    $stmt->execute([$supervisorId, (int) $user['id'], $applicantId]);
-                    reception_record_status_change($pdo, $applicantId, $oldStatus, 'referred_to_supervisor', (int) $user['id']);
-
-                    // افزودنِ کارشناس به تیمِ سرپرست (در صورتِ وجودِ حسابِ کاربریِ متقاضی و جدولِ teams)
-                    if (!empty($applicant['user_id'])) {
-                        try {
-                            $teamStmt = $pdo->prepare('SELECT id FROM teams WHERE leader_user_id = ? LIMIT 1');
-                            $teamStmt->execute([$supervisorId]);
-                            $teamId = $teamStmt->fetchColumn();
-                            if ($teamId !== false) {
-                                $pdo->prepare('UPDATE users SET team_id = ? WHERE id = ?')->execute([(int) $teamId, (int) $applicant['user_id']]);
-                            }
-                        } catch (Throwable $e) {
-                            // اگر جدولِ teams در دسترس نبود، از این مرحله بی‌سروصدا عبور می‌کنیم.
-                        }
-                    }
-
-                    reception_notify(
-                        $pdo,
-                        $supervisorId,
-                        $applicantId,
-                        'ارجاعِ کارشناسِ جدید',
-                        trim($applicant['first_name'] . ' ' . $applicant['last_name']) . ' (' . $applicant['mobile'] . ') توسطِ ' . $user['full_name'] . ' در تاریخِ ' . to_jalali(date('Y-m-d H:i:s')) . ' به شما ارجاع داده شد.',
-                        '../reception_applicant.php?id=' . $applicantId
-                    );
-
-                    // پیامِ خوش‌آمدگویی خودکار از سرپرست به کارشناس (best-effort).
-                    if (!empty($applicant['user_id']) && !empty($supervisor['meeting_url'])) {
-                        $welcomeText = reception_supervisor_welcome_message(
-                            $applicant['first_name'],
-                            $supervisor['full_name'],
-                            $supervisor['meeting_url'],
-                            $supervisor['mobile']
-                        );
-                        reception_send_chat_message($pdo, $supervisorId, (int) $applicant['user_id'], $welcomeText);
-                    }
-
-                    // در جهتِ عکس هم یک پیامِ خودکار از طرفِ خودِ کارشناس برای سرپرست فرستاده می‌شود
-                    // تا سرپرست هم در همان گفتگو از اضافه‌شدنِ این عضوِ جدید به تیمش مطلع شود.
-                    if (!empty($applicant['user_id'])) {
-                        $joinText = reception_specialist_join_message(
-                            trim($applicant['first_name'] . ' ' . $applicant['last_name']),
-                            $applicant['mobile']
-                        );
-                        reception_send_chat_message($pdo, (int) $applicant['user_id'], $supervisorId, $joinText);
-                    }
-
-                    reception_log_action($pdo, $applicantId, (int) $user['id'], 'assign_supervisor', 'ارجاع به سرپرست #' . $supervisorId);
-                    $pdo->commit();
-                    rp_on_joined($pdo, $applicantId, (int) $user['id'], 'ارجاع به سرپرست: ' . $supervisor['full_name']);
-                    $success = 'متقاضی با موفقیت به سرپرست ارجاع داده شد.';
-                    $applicant = reception_get_applicant($pdo, $applicantId);
-                } catch (Throwable $e) {
-                    if ($pdo->inTransaction()) { $pdo->rollBack(); }
-                    $errors[] = 'خطا در ارجاع به سرپرست.';
-                }
+                $errors[] = $__r['message'];
             }
         } elseif ($action === 'book_meeting_slot') {
             $slotId = (int) ($_POST['slot_id'] ?? 0);
@@ -397,6 +349,11 @@ require_once __DIR__ . '/includes/layout_top.php';
     <div>
       <h5 class="mb-1"><?= e(trim($applicant['first_name'] . ' ' . $applicant['last_name'])) ?></h5>
       <p class="small mb-0" dir="ltr"><?= e($applicant['mobile']) ?></p>
+      <?php if (function_exists('rx_intake_boxes')): $__tags = array_filter([
+          !empty($applicant['intake_box']) ? 'باکس ' . rx_intake_box_label($applicant['intake_box']) : '', (string) ($applicant['city'] ?? ''),
+          (string) ($applicant['ad_type'] ?? ''), !empty($applicant['lead_source']) ? 'منبع: ' . $applicant['lead_source'] : '']); ?>
+        <?php if ($__tags): ?><div class="mt-1 d-flex gap-1 flex-wrap"><?php foreach ($__tags as $__t): ?><span class="badge text-bg-light border"><?= e($__t) ?></span><?php endforeach; ?></div><?php endif; ?>
+      <?php endif; ?>
     </div>
     <span class="badge badge-status bg-<?= e(reception_status_color($pdo, $applicant['status'])) ?>"><?= e(reception_status_label($pdo, $applicant['status'])) ?></span>
   </div>
@@ -465,13 +422,30 @@ if ($rpRow && $rpBox !== 'closed' && (int) $applicant['assigned_agent_id'] === (
       <h6 class="fw-bold mb-3"><i class="fa-solid fa-id-card text-warning"></i> اطلاعاتِ متقاضی</h6>
       <table class="table table-sm mb-0">
         <tr><th class="text-muted small">تاریخِ ورود</th><td class="small"><?= to_jalali($applicant['created_at']) ?></td></tr>
-        <tr><th class="text-muted small">منبعِ ورود</th><td class="small"><?= e($applicant['source']) ?></td></tr>
+        <tr><th class="text-muted small">منبعِ ورود</th><td class="small"><?= e($applicant['source']) ?><?= !empty($applicant['lead_source']) ? ' — ' . e((string) $applicant['lead_source']) : '' ?></td></tr>
+        <?php if (function_exists('rx_intake_boxes')): ?>
+        <tr><th class="text-muted small">شهر</th><td class="small"><?= e((string) ($applicant['city'] ?? '') ?: '—') ?></td></tr>
+        <tr><th class="text-muted small">نوعِ آگهی</th><td class="small"><?= e((string) ($applicant['ad_type'] ?? '') ?: '—') ?></td></tr>
+        <tr><th class="text-muted small">باکس</th><td class="small"><?= e(rx_intake_box_label($applicant['intake_box'] ?? null)) ?></td></tr>
+        <?php endif; ?>
         <tr><th class="text-muted small">کارشناسِ پذیرش</th><td class="small"><?= e($applicant['agent_name'] ?? '—') ?></td></tr>
         <tr><th class="text-muted small">سرپرست</th><td class="small"><?= e($applicant['supervisor_name'] ?? '—') ?></td></tr>
         <tr><th class="text-muted small">تاریخِ ارجاع</th><td class="small"><?= $applicant['referred_at'] ? to_jalali($applicant['referred_at']) : '—' ?></td></tr>
         <tr><th class="text-muted small">تعدادِ تماس</th><td class="small"><?= to_persian_digits((string) $applicant['call_count']) ?></td></tr>
         <tr><th class="text-muted small">آخرین فعالیت</th><td class="small"><?= $applicant['last_activity_at'] ? to_jalali($applicant['last_activity_at']) : '—' ?></td></tr>
       </table>
+      <?php if (function_exists('rx_ready') && rx_ready($pdo)): ?>
+      <details class="mt-2"><summary class="small text-primary">ویرایشِ شهر / نوع آگهی / منبع / باکس</summary>
+        <form method="post" class="mt-2"><?= csrf_field() ?><input type="hidden" name="action" value="save_extra">
+          <input name="rx_city" class="form-control form-control-sm mb-1" placeholder="شهر" value="<?= e((string) ($applicant['city'] ?? '')) ?>">
+          <input name="rx_ad_type" class="form-control form-control-sm mb-1" placeholder="نوعِ آگهی" value="<?= e((string) ($applicant['ad_type'] ?? '')) ?>">
+          <input name="rx_lead_source" class="form-control form-control-sm mb-1" placeholder="منبعِ ورود" value="<?= e((string) ($applicant['lead_source'] ?? '')) ?>">
+          <select name="rx_intake_box" class="form-select form-select-sm mb-2"><option value="">عمومی (بدونِ باکس)</option>
+            <?php foreach (rx_intake_boxes() as $__k => $__l): ?><option value="<?= e($__k) ?>" <?= ($applicant['intake_box'] ?? '') === $__k ? 'selected' : '' ?>><?= e($__l) ?></option><?php endforeach; ?></select>
+          <button class="btn btn-sm btn-outline-primary w-100">ذخیره</button>
+        </form>
+      </details>
+      <?php endif; ?>
 
       <div class="mt-2 d-flex flex-wrap gap-2">
         <?php foreach ($phones as $ph): ?>

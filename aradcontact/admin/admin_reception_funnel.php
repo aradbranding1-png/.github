@@ -59,6 +59,18 @@ $agentId = (int) ($_GET['agent'] ?? 0);
 $agents = $ready ? rp_agents($pdo) : [];
 
 $f = $ready ? rp_funnel($pdo, $from, $to, $agentId) : ['steps' => [], 'metrics' => [], 'per_agent' => [], 'reasons' => [], 'outcomes' => []];
+// عددهای مشترک با «داشبورد استخدام» از همان منبعِ واحد (reception_metrics) — تماس، دعوت، حاضر، غایب، تعیین تکلیف، پیوست
+if ($ready && function_exists('rm_overview')) {
+    $__rm = rm_overview($pdo, $from, $to, $agentId);
+    $__map = ['calls' => 'calls', 'invited' => 'invited', 'attended' => 'present', 'no_show' => 'absent', 'decided' => 'closed', 'joined' => 'joined'];
+    foreach ($__map as $fk => $rk) $f['metrics'][$fk] = (int) $__rm['total'][$rk];
+    foreach ($f['steps'] as &$__st) if (isset($__map[$__st['key']])) $__st['n'] = (int) $__rm['total'][$__map[$__st['key']]];
+    unset($__st);
+    foreach ($f['per_agent'] as $__a => &$__row) {
+        foreach ($__map as $fk => $rk) $__row[$fk] = (int) ($__rm['per_agent'][$__a][$rk] ?? 0);
+    }
+    unset($__row);
+}
 $live = $ready ? rp_counts($pdo, $agentId > 0 ? [$agentId] : []) : null;
 $settings = $ready ? rp_settings($pdo) : rp_default_settings();
 
@@ -111,6 +123,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <div class="small mt-1">عملکردِ واقعیِ هر نیرو: نه فقط تعدادِ تماس، بلکه چند نفر را در مسیر جلو برده است.</div>
     </div>
     <div class="d-flex gap-2">
+      <a class="btn btn-sm btn-warning" href="admin_reception_overview.php?<?= e(http_build_query(['preset' => 'custom', 'from' => to_jalali($from), 'to' => to_jalali($to), 'agent' => $agentId])) ?>"><i class="fa-solid fa-gauge-high"></i> داشبورد استخدام</a>
       <a class="btn btn-sm btn-light" href="../reception_pipeline.php<?= $agentId ? '?agent=' . $agentId : '' ?>"><i class="fa-solid fa-route"></i> مسیرِ پیگیری</a>
       <a class="btn btn-sm btn-warning" href="../reception_leaderboard.php"><i class="fa-solid fa-trophy"></i> جدولِ رقابت</a>
       <a class="btn btn-sm btn-outline-light" href="../reception_supervisor_meetings.php"><i class="fa-solid fa-user-check"></i> ثبتِ حضورِ جلسات</a>

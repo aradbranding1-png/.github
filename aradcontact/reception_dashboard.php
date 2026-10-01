@@ -16,7 +16,7 @@ if ($moduleReady && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?
     if (!csrf_verify()) {
         $assignError = 'نشست شما منقضی شده است، صفحه را رفرش کرده و دوباره تلاش کنید.';
     } else {
-        $res = reception_assign_next_applicant($pdo, (int) $user['id']);
+        $res = reception_assign_next_applicant($pdo, (int) $user['id'], (string) ($_POST['intake_box'] ?? ''));
         if ($res['ok']) {
             redirect('reception_applicant.php?id=' . $res['applicant_id']);
         } else {
@@ -177,13 +177,26 @@ require_once __DIR__ . '/includes/layout_top.php';
 
 <?php if ($assignError): ?><div class="alert alert-danger py-2"><?= e($assignError) ?></div><?php endif; ?>
 
+<?php $__rq = function_exists('rx_queue_counts') ? rx_queue_counts($pdo, (int) $user['id']) : null; ?>
 <div class="card p-4 mb-4 text-center">
   <form method="post">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="request_applicant">
+    <?php if ($__rq): ?>
+      <div class="d-flex justify-content-center gap-2 flex-wrap mb-3" role="group" aria-label="باکس">
+        <?php foreach (['' => 'همه'] + rx_intake_boxes() as $__bk => $__bl):
+          $__n = $__bk === '' ? $__rq['mine'] + $__rq['shared'] : ($__rq['mine_by_box'][$__bk] ?? 0) + ($__rq['shared_by_box'][$__bk] ?? 0); ?>
+          <input type="radio" class="btn-check" name="intake_box" id="ib<?= e($__bk ?: 'all') ?>" value="<?= e($__bk) ?>" <?= $__bk === '' ? 'checked' : '' ?>>
+          <label class="btn btn-sm btn-outline-secondary" for="ib<?= e($__bk ?: 'all') ?>"><?= e($__bl) ?> <span class="badge text-bg-light border"><?= to_persian_digits((string) $__n) ?></span></label>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
     <button type="submit" class="btn btn-primary rdb-request-btn"><i class="fa-solid fa-user-plus"></i> درخواست پذیرنده</button>
   </form>
-  <div class="text-muted small mt-2"><?= to_persian_digits((string) $kpi['remaining_queue']) ?> متقاضی در صفِ انتظار باقی مانده است.</div>
+  <?php if ($__rq && $__rq['mine'] > 0): ?>
+    <div class="alert alert-warning py-2 small mt-3 mb-0"><i class="fa-solid fa-star"></i> <b><?= to_persian_digits((string) $__rq['mine']) ?> شماره‌ی اختصاصیِ شما</b> در صف است — با «درخواست پذیرنده» <b>اول همین‌ها</b> به شما داده می‌شوند، بعد شماره‌های عمومی.</div>
+  <?php endif; ?>
+  <div class="text-muted small mt-2"><?= to_persian_digits((string) $kpi['remaining_queue']) ?> متقاضی در صفِ عمومی (بدونِ کارشناس) باقی مانده است.</div>
 </div>
 
 <?php

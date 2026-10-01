@@ -32,6 +32,27 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') 
     redirect('reception_inperson.php' . ($qs ? '?' . http_build_query($qs) : ''));
 }
 
+// ─── ارجاع به سرپرست بعد از حضور (کدام سرپرست / واحد) ───
+if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'refer_supervisor') {
+    if (!csrf_verify()) {
+        flash_set('danger', 'نشست منقضی شده است.');
+    } else {
+        $ivId = (int) ($_POST['interview_id'] ?? 0);
+        $iv = $pdo->prepare("SELECT applicant_id, agent_user_id, status FROM reception_inperson_interviews WHERE id = ?");
+        $iv->execute([$ivId]);
+        $iv = $iv->fetch(PDO::FETCH_ASSOC);
+        if (!$iv || $iv['status'] !== 'done') {
+            flash_set('danger', 'ارجاع فقط بعد از ثبتِ «حضور یافت» ممکن است.');
+        } elseif (!$canAll && (int) $iv['agent_user_id'] !== (int) $user['id']) {
+            flash_set('danger', 'اجازه‌ی این کار را ندارید.');
+        } else {
+            $r = rx_refer_to_supervisor($pdo, (int) $iv['applicant_id'], (int) ($_POST['supervisor_id'] ?? 0), $user, $ivId);
+            flash_set($r['ok'] ? 'success' : 'danger', $r['message']);
+        }
+    }
+    redirect('reception_inperson.php' . ($_GET ? '?' . http_build_query($_GET) : ''));
+}
+
 // ─── فیلترها ───
 $preset = (string) ($_GET['preset'] ?? 'this_month');
 $today = date('Y-m-d');
@@ -39,8 +60,9 @@ switch ($preset) {
     case 'today':     $from = $to = $today; break;
     case 'tomorrow':  $from = $to = date('Y-m-d', strtotime('+1 day')); break;
     case 'upcoming':  $from = $today; $to = date('Y-m-d', strtotime('+60 days')); break;
-    case 'this_week': $from = date('Y-m-d', strtotime('-' . ((int) date('N') % 7) . ' days')); $to = date('Y-m-d', strtotime($from . ' +6 days')); break;
-    case 'last_month':$from = date('Y-m-01', strtotime('first day of last month')); $to = date('Y-m-t', strtotime('last day of last month')); break;
+    // هفته از شنبه و ماه بر اساسِ تقویمِ شمسی
+    case 'this_week': $from = date('Y-m-d', strtotime('-' . (((int) date('N') + 1) % 7) . ' days')); $to = date('Y-m-d', strtotime($from . ' +6 days')); break;
+    case 'last_month':[$from, $to] = rx_jalali_month(-1); break;
     case 'all':       $from = ''; $to = ''; break;
     case 'custom':
         $from = (string) (to_gregorian((string) ($_GET['from'] ?? '')) ?? '');
@@ -49,8 +71,7 @@ switch ($preset) {
     case 'this_month':
     default:
         $preset = 'this_month';
-        $from = date('Y-m-01');
-        $to = date('Y-m-t');
+        [$from, $to] = rx_jalali_month(0);
 }
 $filters = [
     'from' => $from, 'to' => $to,
@@ -92,7 +113,9 @@ if ($ready) {
     $st->execute($params);
     $total = (int) $st->fetchColumn();
 
-    $selectCols = "ii.*, ra.first_name, ra.last_name, ra.mobile, ra.status AS applicant_status, ag.full_name AS agent_name, su.full_name AS supervisor_name";
+    $rxRef = function_exists('rx_ready') && rx_ready($pdo);
+    $selectCols = "ii.*, ra.first_name, ra.last_name, ra.mobile, ra.status AS applicant_status, ag.full_name AS agent_name, su.full_name AS supervisor_name"
+        . ($rxRef ? ", (SELECT full_name FROM users WHERE id = ii.referred_supervisor_id) AS referred_name" : ", NULL AS referred_name");
 
     // خروجیِ اکسل (CSV)
     if (isset($_GET['export'])) {
@@ -102,13 +125,13 @@ if ($ready) {
         header('Content-Disposition: attachment; filename="inperson_interviews_' . date('Ymd_His') . '.csv"');
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['تاریخ مصاحبه', 'ساعت', 'نام متقاضی', 'موبایل', 'وضعیت مصاحبه', 'مصاحبه‌کننده/سرپرست', 'ثبت‌کننده', 'محل', 'یادداشت', 'نتیجه', 'تاریخ ثبت']);
+        fputcsv($out, ['تاریخ مصاحبه', 'ساعت', 'نام متقاضی', 'موبایل', 'وضعیت مصاحبه', 'مصاحبه‌کننده/سرپرست', 'ثبت‌کننده', 'محل', 'یادداشت', 'نتیجه', 'تاریخ ثبت', 'ارجاع به سرپرست']);
         foreach ($st as $r) {
             fputcsv($out, [
                 to_jalali($r['interview_date']), $r['interview_time'] ? substr((string) $r['interview_time'], 0, 5) : '',
                 trim($r['first_name'] . ' ' . $r['last_name']), $r['mobile'], reception_inperson_status_label((string) $r['status']),
                 $r['supervisor_name'] ?? '', $r['agent_name'] ?? '', $r['location'] ?? '', $r['notes'] ?? '', $r['result_note'] ?? '',
-                to_jalali($r['created_at']),
+                to_jalali($r['created_at']), $r['referred_name'] ?? '',
             ]);
         }
         fclose($out);
@@ -126,6 +149,7 @@ if ($ready) {
         $agents = $pdo->query("SELECT DISTINCT u.id, u.full_name FROM reception_inperson_interviews ii JOIN users u ON u.id = ii.agent_user_id ORDER BY u.full_name")->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
     $supervisors = $pdo->query("SELECT id, full_name FROM users WHERE role = 'leader' AND is_active = 1 ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $referTargets = $rxRef ? rx_supervisors($pdo) : [];
 }
 $pages = $pages ?? 1;
 
@@ -217,9 +241,9 @@ require_once __DIR__ . '/includes/layout_top.php';
   <div class="card p-0">
     <div class="table-responsive">
       <table class="table table-hover mb-0">
-        <thead><tr><th>تاریخ و ساعت</th><th>متقاضی</th><th>موبایل</th><th>وضعیت مصاحبه</th><th>سرپرست</th><?php if ($canAll): ?><th>ثبت‌کننده</th><?php endif; ?><th>محل / یادداشت</th><th>نتیجه</th><th></th></tr></thead>
+        <thead><tr><th>تاریخ و ساعت</th><th>متقاضی</th><th>موبایل</th><th>وضعیت مصاحبه</th><th>سرپرست</th><?php if ($canAll): ?><th>ثبت‌کننده</th><?php endif; ?><th>محل / یادداشت</th><th>نتیجه</th><th>ارجاع به سرپرست</th><th></th></tr></thead>
         <tbody>
-        <?php if (!$rows): ?><tr><td colspan="9" class="text-center text-muted py-4">موردی در این بازه پیدا نشد.</td></tr><?php endif; ?>
+        <?php if (!$rows): ?><tr><td colspan="10" class="text-center text-muted py-4">موردی در این بازه پیدا نشد.</td></tr><?php endif; ?>
         <?php foreach ($rows as $r):
             $meta = $statuses[$r['status']] ?? ['label' => $r['status'], 'color' => 'secondary', 'icon' => 'fa-circle'];
             $isPast = $r['interview_date'] < $today;
@@ -234,6 +258,18 @@ require_once __DIR__ . '/includes/layout_top.php';
             <?php if ($canAll): ?><td><?= e($r['agent_name'] ?? '—') ?></td><?php endif; ?>
             <td class="small"><?= e((string) ($r['location'] ?? '')) ?><?php if (!empty($r['notes'])): ?><div class="text-muted"><?= e(mb_strimwidth((string) $r['notes'], 0, 80, '…')) ?></div><?php endif; ?></td>
             <td class="small"><?= e((string) ($r['result_note'] ?? '')) ?></td>
+            <td class="small">
+              <?php if (!empty($r['referred_name'])): ?>
+                <span class="badge text-bg-success"><i class="fa-solid fa-user-tie"></i> <?= e((string) $r['referred_name']) ?></span>
+                <div class="text-muted" style="font-size:11px"><?= to_jalali((string) $r['referred_at']) ?></div>
+              <?php elseif ($r['status'] === 'done' && ($canAll || (int) $r['agent_user_id'] === (int) $user['id']) && $rxRef): ?>
+                <form method="post" class="d-flex gap-1"><?= csrf_field() ?><input type="hidden" name="action" value="refer_supervisor"><input type="hidden" name="interview_id" value="<?= (int) $r['id'] ?>">
+                  <select name="supervisor_id" class="form-select form-select-sm" style="min-width:140px" required><option value="">به کدام سرپرست؟</option>
+                    <?php foreach ($referTargets as $__sv): ?><option value="<?= (int) $__sv['id'] ?>"><?= e($__sv['full_name'] . (!empty($__sv['team_id']) ? ' — ' . team_display_name($__sv['team_name'] ?? null, (int) $__sv['team_id']) : '')) ?></option><?php endforeach; ?></select>
+                  <button class="btn btn-sm btn-success" title="ارجاع"><i class="fa-solid fa-share"></i></button></form>
+              <?php elseif ($r['status'] === 'done'): ?><span class="text-warning">ارجاع نشده</span>
+              <?php else: ?><span class="text-muted">—</span><?php endif; ?>
+            </td>
             <td class="text-nowrap">
               <?php if ($canAll || (int) $r['agent_user_id'] === (int) $user['id']): ?>
               <form method="post" class="d-inline-flex gap-1">

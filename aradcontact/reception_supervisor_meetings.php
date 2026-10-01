@@ -18,6 +18,37 @@ if ($ready) {
     rp_sync($pdo, 1500);
 }
 $slotsReady = reception_meeting_slots_ready($pdo);
+$rxOn = function_exists('rx_ready') && rx_ready($pdo);
+// ─── بعد از «حاضر» در جلسه‌ی حضوری: به کدام سرپرست/واحد ارجاع شد + اعلامِ حضورِ برگزارکننده ───
+if ($rxOn && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $back = 'reception_supervisor_meetings.php' . ($_GET ? '?' . http_build_query($_GET) : '');
+    if (!csrf_verify()) { flash_set('danger', 'نشست منقضی شده است.'); redirect($back); }
+    $act = (string) ($_POST['action'] ?? '');
+    if ($act === 'refer_supervisor') {
+        $ivId = (int) ($_POST['interview_id'] ?? 0);
+        $iv = $pdo->prepare("SELECT applicant_id, supervisor_user_id, status FROM reception_inperson_interviews WHERE id = ?");
+        $iv->execute([$ivId]);
+        $iv = $iv->fetch(PDO::FETCH_ASSOC);
+        if (!$iv || $iv['status'] !== 'done') {
+            flash_set('danger', 'ارجاع فقط بعد از ثبتِ «حاضر» ممکن است.');
+        } elseif (!$isManager && (int) $iv['supervisor_user_id'] !== (int) $user['id']) {
+            flash_set('danger', 'اجازه‌ی این کار را ندارید.');
+        } else {
+            $r = rx_refer_to_supervisor($pdo, (int) $iv['applicant_id'], (int) ($_POST['supervisor_id'] ?? 0), $user, $ivId);
+            flash_set($r['ok'] ? 'success' : 'danger', $r['message']);
+        }
+    } elseif ($act === 'host_checkin') {
+        $hk = (string) ($_POST['kind'] ?? '');
+        $hh = (int) ($_POST['host_id'] ?? 0);
+        if (!$isManager && $hh !== (int) $user['id']) {
+            flash_set('danger', 'فقط خودِ برگزارکننده می‌تواند اعلامِ حضور کند.');
+        } else {
+            $r = rx_host_checkin($pdo, $hk, $hh, (string) ($_POST['meet_date'] ?? ''), (string) ($_POST['meet_time'] ?? ''), (int) $user['id']);
+            flash_set($r['ok'] ? 'success' : 'danger', $r['message']);
+        }
+    }
+    redirect($back);
+}
 $ipReady = reception_inperson_table_ready($pdo);
 
 $hostId = (int) $user['id'];
@@ -65,7 +96,7 @@ if ($slotsReady) {
 }
 if ($ipReady) {
     try {
-        $sql = "SELECT 'inperson' AS kind, ii.id AS ref, ii.applicant_id, ii.interview_date AS mdate, ii.interview_time AS mtime, ii.supervisor_user_id AS host_id,
+        $sql = "SELECT 'inperson' AS kind, ii.id AS ref, ii.applicant_id, " . ($rxOn ? "(SELECT full_name FROM users WHERE id = ii.referred_supervisor_id) AS referred_name," : "NULL AS referred_name,") . " ii.interview_date AS mdate, ii.interview_time AS mtime, ii.supervisor_user_id AS host_id,
                    CASE ii.status WHEN 'done' THEN 'attended' WHEN 'no_show' THEN 'no_show' ELSE NULL END AS attendance, ii.result_note AS attendance_reason,
                    ra.first_name, ra.last_name, ra.mobile, ra.mobile_normalized, ag.full_name AS agent_name, ho.full_name AS host_name
                 FROM reception_inperson_interviews ii
@@ -107,6 +138,7 @@ foreach ($rows as $r) {
     if ($r['p'] && $r['linked'] && in_array($r['p']['reminder_status'], ['confirmed'], true)) $sum['confirmed']++;
 }
 $remStates = rp_reminder_states();
+$referTargets = $rxOn ? rx_supervisors($pdo) : [];
 $reasons = rp_noshow_reasons();
 
 $pageTitle = 'جلسات پذیرش — ثبت حضور';
@@ -158,6 +190,32 @@ require_once __DIR__ . '/includes/layout_top.php';
     <div class="col-4 col-md"><div class="k"><b class="text-warning"><?= to_persian_digits((string) $sum['pending']) ?></b><small class="text-muted">ثبت‌نشده</small></div></div>
   </div>
 
+  <?php if ($rxOn && $rows): $__sess = rm_sessions($pdo, $d, $d, $hostId); $__states = rm_session_states(); ?>
+    <div class="card p-3 mb-3">
+      <div class="fw-bold small mb-2"><i class="fa-solid fa-door-open text-warning"></i> جلسه‌های این روز — اعلامِ حضورِ جلسه‌رونده
+        <span class="text-muted fw-normal">(جلسه‌رونده قبل از شروع «حضورم را ثبت کن» را بزند؛ جلسه‌ای که وقتش گذشته و نه حضوری اعلام شده و نه حاضر/غایبی ثبت شده، «بدونِ آمار — احتمالاً جلسه‌رونده حاضر نبوده» حساب می‌شود)</span></div>
+      <div class="table-responsive"><table class="table table-sm small align-middle mb-0">
+        <thead class="table-light"><tr><th>ساعت</th><th>نوع</th><th>جلسه‌رونده</th><th>دعوت‌شده</th><th>حاضر</th><th>غایب</th><th>ثبت‌نشده</th><th>وضعیت</th><th></th></tr></thead><tbody>
+        <?php foreach ($__sess as $__s): $__st = $__states[$__s['state']];
+          // دکمه‌ی «اعلامِ حضور» فقط از ۳۰ دقیقه قبل از شروع نشان داده می‌شود
+          $__early = ($__ts = strtotime($__s['d'] . ' ' . rx_hhmm((string) $__s['t']) . ':00')) !== false && time() < $__ts - 1800;
+          $__s['checkin_soon'] = $__early && !$__s['checkin'] && $__s['host'] > 0 && ($isManager || $__s['host'] === (int) $user['id']); ?>
+          <tr><td dir="ltr" class="fw-bold"><?= e($__s['t']) ?></td><td><?= $__s['kind'] === 'online' ? 'آنلاین' : 'حضوری' ?></td><td><?= e($__s['host_name']) ?></td>
+            <td><?= to_persian_digits((string) $__s['invited']) ?><?= $__s['cap'] ? ' / ' . to_persian_digits((string) $__s['cap']) : '' ?></td>
+            <td class="text-success"><?= to_persian_digits((string) $__s['att']) ?></td><td class="text-danger"><?= to_persian_digits((string) $__s['ns']) ?></td><td class="text-warning"><?= to_persian_digits((string) $__s['pending']) ?></td>
+            <td><span class="badge text-bg-<?= e($__st['color']) ?>"><?= e($__st['label']) ?></span>
+              <?php if ($__s['checkin']): ?><div class="text-success" style="font-size:11px"><i class="fa-solid fa-circle-check"></i> اعلامِ حضور: <?= e(substr((string) $__s['checkin'], 11, 5)) ?></div><?php endif; ?></td>
+            <td><?php if (!$__s['checkin'] && $d === date('Y-m-d') && ($isManager || $__s['host'] === (int) $user['id']) && $__s['host'] > 0 && !$__early && !in_array($__s['state'], ['held'], true)): ?>
+              <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="host_checkin"><input type="hidden" name="kind" value="<?= e($__s['kind']) ?>">
+                <input type="hidden" name="host_id" value="<?= (int) $__s['host'] ?>"><input type="hidden" name="meet_date" value="<?= e($__s['d']) ?>"><input type="hidden" name="meet_time" value="<?= e($__s['t']) ?>">
+                <button class="btn btn-sm btn-warning py-0"><i class="fa-solid fa-hand"></i> <?= $__s['host'] === (int) $user['id'] ? 'حضورم را ثبت کن' : 'ثبتِ حضورِ جلسه‌رونده' ?></button></form>
+            <?php elseif ($__s['checkin_soon'] ?? false): ?><span class="text-muted" style="font-size:11px">اعلامِ حضور از ۳۰ دقیقه قبل</span>
+            <?php endif; ?></td></tr>
+        <?php endforeach; ?>
+        </tbody></table></div>
+    </div>
+  <?php endif; ?>
+
   <?php if (!$rows): ?>
     <div class="card p-4 text-center text-muted">برای این روز جلسه‌ای ثبت نشده است.</div>
   <?php endif; ?>
@@ -183,6 +241,16 @@ require_once __DIR__ . '/includes/layout_top.php';
       <div class="d-flex gap-2 flex-wrap align-items-center">
         <?php if ($r['attendance'] === 'attended'): ?>
           <span class="badge text-bg-success fs-6"><i class="fa-solid fa-user-check"></i> حاضر</span>
+          <?php if ($r['kind'] === 'inperson' && $rxOn): ?>
+            <?php if (!empty($r['referred_name'])): ?>
+              <span class="badge text-bg-light border fs-6"><i class="fa-solid fa-user-tie text-success"></i> ارجاع به: <?= e((string) $r['referred_name']) ?></span>
+            <?php elseif ($isManager || (int) $r['host_id'] === (int) $user['id']): ?>
+              <form method="post" class="d-flex gap-1 align-items-center"><?= csrf_field() ?><input type="hidden" name="action" value="refer_supervisor"><input type="hidden" name="interview_id" value="<?= (int) $r['ref'] ?>">
+                <select name="supervisor_id" class="form-select form-select-sm" style="min-width:170px" required><option value="">ارجاع به کدام سرپرست؟</option>
+                  <?php foreach ($referTargets as $__sv): ?><option value="<?= (int) $__sv['id'] ?>"><?= e($__sv['full_name'] . (!empty($__sv['team_id']) ? ' — ' . team_display_name($__sv['team_name'] ?? null, (int) $__sv['team_id']) : '')) ?></option><?php endforeach; ?></select>
+                <button class="btn btn-sm btn-success"><i class="fa-solid fa-share"></i> ارجاع</button></form>
+            <?php endif; ?>
+          <?php endif; ?>
         <?php elseif ($r['attendance'] === 'no_show'): ?>
           <span class="badge text-bg-danger fs-6"><i class="fa-solid fa-user-xmark"></i> غایب<?= $r['attendance_reason'] ? ' — ' . e($reasons[$r['attendance_reason']] ?? $r['attendance_reason']) : '' ?></span>
         <?php endif; ?>

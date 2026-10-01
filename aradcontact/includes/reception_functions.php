@@ -505,8 +505,12 @@ if (!function_exists('reception_next_unassigned_applicant_id')) {
 }
 
 if (!function_exists('reception_assign_next_applicant')) {
-    function reception_assign_next_applicant(PDO $pdo, int $agentUserId): array
+    function reception_assign_next_applicant(PDO $pdo, int $agentUserId, string $intakeBox = ''): array
     {
+        // اولویت: شماره‌های اختصاصیِ همین کارشناس، بعد عمومی (+ انتخابِ باکس) — reception_extras.php
+        if (function_exists('rx_pull_next') && rx_ready($pdo)) {
+            return rx_pull_next($pdo, $agentUserId, $intakeBox);
+        }
         try {
             $pdo->beginTransaction();
             $id = reception_next_unassigned_applicant_id($pdo);
@@ -1155,3 +1159,6 @@ if (!function_exists('rp_current_actor')) {
 
 // ماژولِ «مسیرِ پیگیریِ متقاضیان» (قیفِ پذیرش)
 require_once __DIR__ . '/reception_pipeline.php';
+// صفِ با اولویت، اطلاعاتِ اضافه‌ی شماره، باکس‌ها، ارجاع به سرپرست، اعلامِ حضورِ برگزارکننده + آمارِ واحد
+require_once __DIR__ . '/reception_extras.php';
+require_once __DIR__ . '/reception_metrics.php';

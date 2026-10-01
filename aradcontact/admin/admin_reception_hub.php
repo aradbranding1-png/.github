@@ -145,6 +145,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
 
 <?php
 $hubCards = [
+    ['admin_reception_reports', 'admin_reception_overview.php', 'fa-gauge-high', 'داشبورد استخدام (کلِ مسیر)', 'از ورود شماره تا تعیین تکلیف در یک صفحه با یک منبعِ آمار: تماس، دعوت، جلسات، حاضر/غایب، جلسه‌های بدونِ آمار، ارجاع به سرپرست؛ روی هر عدد بزنید.'],
     ['admin_reception_import', 'admin_reception_excel.php', 'fa-file-excel', 'اکسل ورودی', 'ثبتِ ورودیِ افرادِ متقاضیِ فعالیت در بخشِ کارشناس توسعه تجارت.'],
     ['admin_reception_candidates', 'admin_reception_applicants_bank.php', 'fa-database', 'بانک متقاضیان', 'فهرستِ کاملِ متقاضیان با جستجو، وضعیت، کارشناس و سرپرست.'],
     ['admin_reception_inperson', '../reception_inperson.php', 'fa-building-user', 'مصاحبه‌های حضوری', 'پیدا کردنِ متقاضیانی که برای مصاحبه‌ی حضوری ثبت شده‌اند + نتیجه‌ی حضور.'],
