@@ -144,3 +144,28 @@ function tsr_team_sales_period(PDO $pdo, int $teamId, string $from, string $to):
     }
     return $res;
 }
+
+/**
+ * قانونِ تعدادِ نیروی تیمِ سرپرست: هر ۸ نیروی «عملیات» یک نیروی «توسعه» و هر ۲ نیروی «ستادی» یک نیروی «توسعه» لازم دارد.
+ *   عملیات ≤ ۸ × توسعه   و   ستادی ≤ ۲ × توسعه
+ * نیروی «نامشخص» (گروهِ شغلیِ تعیین‌نشده) در قانون حساب نمی‌شود و جدا هشدار داده می‌شود.
+ * @param array{توسعه:int,عملیات:int,ستادی:int,نامشخص?:int} $grp
+ */
+function tsr_staff_rule(array $grp): array
+{
+    $dev = (int) ($grp['توسعه'] ?? 0);
+    $ops = (int) ($grp['عملیات'] ?? 0);
+    $stf = (int) ($grp['ستادی'] ?? 0);
+    $opsMax = 8 * $dev;
+    $stfMax = 2 * $dev;
+    $needDev = max((int) ceil($ops / 8), (int) ceil($stf / 2));
+    $ok = $ops <= $opsMax && $stf <= $stfMax;
+    $why = [];
+    if ($ops > $opsMax) $why[] = 'عملیات ' . to_persian_digits((string) $ops) . ' نفر — مجاز: ' . to_persian_digits((string) $opsMax);
+    if ($stf > $stfMax) $why[] = 'ستادی ' . to_persian_digits((string) $stf) . ' نفر — مجاز: ' . to_persian_digits((string) $stfMax);
+    return [
+        'ok' => $ok, 'ops_max' => $opsMax, 'staff_max' => $stfMax, 'need_dev' => $needDev, 'dev_short' => max(0, $needDev - $dev),
+        'unknown' => (int) ($grp['نامشخص'] ?? 0),
+        'text' => $ok ? 'رعایت شده' : 'رعایت نشده: ' . implode('، ', $why) . ' — توسعه‌ی لازم: ' . to_persian_digits((string) $needDev) . ' نفر (کمبود ' . to_persian_digits((string) max(0, $needDev - $dev)) . ')',
+    ];
+}

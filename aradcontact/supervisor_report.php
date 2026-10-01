@@ -59,6 +59,15 @@ $detailLink = static function (int $staffId) use ($isAll, $jFrom, $jTo): string 
     $q = http_build_query(['staff' => $staffId, 'preset' => 'custom', 'from' => $jFrom, 'to' => $jTo]);
     return $isAll ? 'admin/admin_staff_report.php?' . $q : 'reports.php?' . $q;
 };
+// قانونِ تعدادِ نیرو: هر ۸ عملیات ← ۱ توسعه، هر ۲ ستادی ← ۱ توسعه (تیک / ضربدر)
+$ruleBadge = static function (array $rule, bool $long = false): string {
+    $h = $rule['ok']
+        ? '<span class="badge text-bg-success" title="' . e($rule['text']) . '"><i class="fa-solid fa-check"></i>' . ($long ? ' رعایت شده' : '') . '</span>'
+        : '<span class="badge text-bg-danger" title="' . e($rule['text']) . '"><i class="fa-solid fa-xmark"></i>' . ($long ? ' رعایت نشده' : '') . '</span>';
+    if (!$rule['ok']) $h .= '<div class="text-danger" style="font-size:11px">' . e(preg_replace('/^رعایت نشده: /u', '', $rule['text'])) . '</div>';
+    if ($rule['unknown'] > 0) $h .= '<div class="text-warning" style="font-size:11px">' . to_persian_digits((string) $rule['unknown']) . ' نامشخص حساب نشده</div>';
+    return $h;
+};
 $talk = sup_talk_by_user($pdo, $from, $to);
 $roleAvg = sup_role_averages($pdo, $talk);
 
@@ -81,6 +90,7 @@ if ($isAll && !$leaderId) {
           $grpN[sup_job_group_label($m['job_group'] ?? null)]++;
       }
       $rows[] = $L + ['n' => count($members), 'covered' => $covered, 'team_eff' => $effN ? round($effSum / $effN, 1) : null, 'unknown' => $grpN['نامشخص'], 'grp' => $grpN,
+          'rule' => tsr_staff_rule($grpN),
           'own_talk' => $talk[(int) $L['id']] ?? 0, 'sales' => tsr_team_sales_period($pdo, (int) $L['team_id'], $from, $to)];
   }
   foreach ($rows as $r) {
@@ -98,6 +108,7 @@ if ($isAll && !$leaderId) {
       $lRows = [];
       foreach ($rows as $r) {
           $lRows[] = [$__tName($r), (string) $r['full_name'], $r['n'], $r['grp']['توسعه'], $r['grp']['عملیات'], $r['grp']['ستادی'], $r['grp']['نامشخص'],
+              $r['rule']['ok'] ? '✔ رعایت شده' : '✘ رعایت نشده', $r['rule']['ops_max'], $r['rule']['staff_max'], $r['rule']['need_dev'], $r['rule']['ok'] ? '' : preg_replace('/^رعایت نشده: /u', '', $r['rule']['text']),
               $r['covered'], $r['n'] ? round($r['covered'] / $r['n'] * 100) : 0, $r['team_eff'] ?? '', $__min($r['own_talk']), $r['sales']['cnt'], $r['sales']['net']];
       }
       $sRows = [];
@@ -108,11 +119,12 @@ if ($isAll && !$leaderId) {
               $r['sales']['cnt'], $r['sales']['net'], $salesTot['net'] > 0 ? round($r['sales']['net'] / $salesTot['net'] * 100, 1) : 0];
       }
       xlsx_output('supervisor_report_' . str_replace('/', '', normalize_digits($jFrom)) . '_' . str_replace('/', '', normalize_digits($jTo)), [
-          ['name' => 'سرپرست‌ها', 'header' => ['تیم', 'سرپرست', 'تعداد نیرو', 'توسعه', 'عملیات', 'ستادی', 'نامشخص', 'نیروهایی که سرپرست با آن‌ها صحبت کرده', 'پوششِ ارتباط (٪)',
+          ['name' => 'سرپرست‌ها', 'header' => ['تیم', 'سرپرست', 'تعداد نیرو', 'توسعه', 'عملیات', 'ستادی', 'نامشخص', 'قانونِ تعداد', 'حداکثر عملیاتِ مجاز', 'حداکثر ستادیِ مجاز', 'توسعه‌ی لازم', 'توضیحِ قانون', 'نیروهایی که سرپرست با آن‌ها صحبت کرده', 'پوششِ ارتباط (٪)',
               'راندمانِ تیم (٪)', 'مکالمه‌ی خودِ سرپرست (دقیقه)', 'تعداد سفارشِ تیم', 'فروشِ تیم (خالص، تومان)'],
-           'rows' => $lRows, 'footer' => $lRows ? [['جمع', '', $overTot['n'], $grpTot['توسعه'], $grpTot['عملیات'], $grpTot['ستادی'], $grpTot['نامشخص'], $overTot['covered'],
+           'rows' => $lRows, 'footer' => $lRows ? [['جمع', '', $overTot['n'], $grpTot['توسعه'], $grpTot['عملیات'], $grpTot['ستادی'], $grpTot['نامشخص'],
+              to_persian_digits((string) count(array_filter($rows, static fn($r) => $r['rule']['ok']))) . ' از ' . to_persian_digits((string) count($rows)) . ' تیم', '', '', '', '', $overTot['covered'],
               $overTot['n'] ? round($overTot['covered'] / $overTot['n'] * 100) : 0, '', $__min($overTot['own_talk']), $salesTot['cnt'], $salesTot['net']]] : [],
-           'widths' => [20, 22, 10, 10, 10, 10, 10, 18, 14, 14, 18, 14, 20]],
+           'widths' => [20, 22, 10, 10, 10, 10, 10, 16, 14, 14, 12, 40, 18, 14, 14, 18, 14, 20]],
           ['name' => 'فروشِ تیم‌ها', 'header' => ['تیم', 'سرپرست', 'A', 'B', 'C', 'D (سرپرست)', 'تعداد سفارش', 'فروشِ تیم (خالص، تومان)', 'سهم از کل (٪)'],
            'rows' => $sRows, 'footer' => $sRows ? [['جمع', '', $salesTot['A'], $salesTot['B'], $salesTot['C'], $salesTot['D'], $salesTot['cnt'], $salesTot['net'], 100]] : [],
            'widths' => [20, 22, 16, 16, 16, 16, 12, 20, 12]],
@@ -120,6 +132,7 @@ if ($isAll && !$leaderId) {
               ['بازه', $rl . ': ' . $jFrom . ' تا ' . $jTo],
               ['فروش', 'سفارش‌های تأییدشده با تاریخِ تأییدِ مالی در بازه — خالص بدونِ مالیات؛ تیم = سرپرست (D) + نیروهای A/B/C'],
               ['تعداد نیرو', 'نیروهای فعالِ تیم (بدونِ خودِ سرپرست) = توسعه + عملیات + ستادی + نامشخص'],
+              ['قانونِ تعداد', 'هر ۸ نیروی عملیات یک نیروی توسعه و هر ۲ نیروی ستادی یک نیروی توسعه: عملیات ≤ ۸ × توسعه و ستادی ≤ ۲ × توسعه (نامشخص حساب نمی‌شود)'],
               ['تاریخِ تهیه', to_jalali(date('Y-m-d')) . ' ' . date('H:i')],
            ], 'widths' => [16, 90]],
       ]);
@@ -179,24 +192,27 @@ require_once __DIR__ . '/includes/layout_top.php';
   </div>
   <div class="card p-0"><div class="table-responsive"><table class="table table-sm align-middle small mb-0">
     <?php $__showUnk = $grpTot['نامشخص'] > 0; ?>
-    <thead class="table-light"><tr><th>تیم</th><th>سرپرست</th><th>نیروها</th><th>توسعه</th><th>عملیات</th><th>ستادی</th><?php if ($__showUnk): ?><th class="text-danger" title="گروهِ شغلی تعیین نشده — در جزئیاتِ هر تیم قابلِ اصلاح است">نامشخص</th><?php endif; ?><th>پوششِ ارتباطِ سرپرست</th><th>راندمانِ تیم</th><th>مکالمه‌ی خودِ سرپرست (دقیقه)</th><th>فروشِ تیم (خالص)</th><th></th></tr></thead><tbody>
+    <thead class="table-light"><tr><th>تیم</th><th>سرپرست</th><th>نیروها</th><th>توسعه</th><th>عملیات</th><th>ستادی</th><?php if ($__showUnk): ?><th class="text-danger" title="گروهِ شغلی تعیین نشده — در جزئیاتِ هر تیم قابلِ اصلاح است">نامشخص</th><?php endif; ?><th title="هر ۸ عملیات ← ۱ توسعه، هر ۲ ستادی ← ۱ توسعه">قانونِ تعداد</th><th>پوششِ ارتباطِ سرپرست</th><th>راندمانِ تیم</th><th>مکالمه‌ی خودِ سرپرست (دقیقه)</th><th>فروشِ تیم (خالص)</th><th></th></tr></thead><tbody>
     <?php foreach ($rows as $r): ?>
       <tr><td><?= to_persian_digits((string) $r['team_id']) ?></td><td><?= e($r['full_name']) ?></td><td class="fw-bold"><?= to_persian_digits((string) $r['n']) ?></td>
         <?php foreach (['توسعه', 'عملیات', 'ستادی'] as $__g): ?><td><?= to_persian_digits((string) $r['grp'][$__g]) ?></td><?php endforeach; ?>
         <?php if ($__showUnk): ?><td class="<?= $r['grp']['نامشخص'] ? 'text-danger fw-bold' : 'text-muted' ?>"><?= to_persian_digits((string) $r['grp']['نامشخص']) ?></td><?php endif; ?>
+        <td><?= $ruleBadge($r['rule']) ?></td>
         <td><?= to_persian_digits((string) $r['covered']) ?> از <?= to_persian_digits((string) $r['n']) ?><?= $r['n'] ? ' (' . to_persian_digits((string) round($r['covered'] / $r['n'] * 100)) . '٪)' : '' ?></td>
         <td><?= $effBadge($r['team_eff']) ?></td><td><?= $fmtMin($r['own_talk']) ?></td>
         <td class="fw-bold"><?= $money($r['sales']['net']) ?> <span class="text-muted fw-normal">(<?= to_persian_digits((string) $r['sales']['cnt']) ?> سفارش)</span></td>
         <td><a class="btn btn-sm btn-outline-primary py-0" href="?<?= e(http_build_query(['leader' => (int) $r['id']] + $_GET)) ?>">جزئیات</a></td></tr>
     <?php endforeach; ?>
-    <?php if (!$rows): ?><tr><td colspan="<?= $__showUnk ? 12 : 11 ?>" class="text-center text-muted py-3">تیمی با سرپرست تعریف نشده.</td></tr><?php endif; ?>
+    <?php if (!$rows): ?><tr><td colspan="<?= $__showUnk ? 13 : 12 ?>" class="text-center text-muted py-3">تیمی با سرپرست تعریف نشده.</td></tr><?php endif; ?>
   </tbody>
   <?php if ($rows): ?><tfoot class="table-light fw-bold"><tr><td colspan="2">جمع</td><td><?= to_persian_digits((string) $overTot['n']) ?></td>
     <?php foreach (['توسعه', 'عملیات', 'ستادی'] as $__g): ?><td><?= to_persian_digits((string) $grpTot[$__g]) ?></td><?php endforeach; ?>
     <?php if ($__showUnk): ?><td class="text-danger"><?= to_persian_digits((string) $grpTot['نامشخص']) ?></td><?php endif; ?>
+    <td class="small"><?= to_persian_digits((string) count(array_filter($rows, static fn($r) => $r['rule']['ok']))) ?> از <?= to_persian_digits((string) count($rows)) ?> تیم <i class="fa-solid fa-check text-success"></i></td>
     <td><?= to_persian_digits((string) $overTot['covered']) ?> از <?= to_persian_digits((string) $overTot['n']) ?></td><td></td><td><?= $fmtMin($overTot['own_talk']) ?></td>
     <td><?= $money($salesTot['net']) ?> <span class="text-muted fw-normal">(<?= to_persian_digits((string) $salesTot['cnt']) ?> سفارش)</span></td><td></td></tr></tfoot><?php endif; ?>
   </table></div></div>
+  <div class="small text-muted mt-1"><b>قانونِ تعداد:</b> هر ۸ نیروی عملیات یک نیروی توسعه و هر ۲ نیروی ستادی یک نیروی توسعه (عملیات ≤ ۸ × توسعه و ستادی ≤ ۲ × توسعه). نشانگرِ ماوس روی تیک/ضربدر جزئیات را نشان می‌دهد.</div>
   <?php if ($__showUnk): ?><div class="small text-muted mt-1">«نامشخص» = نیرویی که گروهِ شغلی‌اش تعیین نشده؛ با «جزئیات» هر تیم می‌توانید همان‌جا تعیینش کنید. جمعِ توسعه + عملیات + ستادی<?= $__showUnk ? ' + نامشخص' : '' ?> = تعداد نیروها.</div><?php endif; ?>
 
 <?php else:
@@ -269,6 +285,12 @@ require_once __DIR__ . '/includes/layout_top.php';
     </div></div>
     <div class="col-lg-4"><div class="card p-3 h-100"><div class="fw-bold small mb-2"><i class="fa-solid fa-layer-group"></i> گروهِ شغلی</div>
       <?php foreach ($grp as $l => $c): ?><div class="d-flex justify-content-between small border-bottom py-1"><span><?= $l ?></span><b class="<?= $l === 'نامشخص' && $c ? 'text-danger' : '' ?>"><?= to_persian_digits((string) $c) ?></b></div><?php endforeach; ?>
+      <?php $__rule = tsr_staff_rule($grp); ?>
+      <div class="mt-2 p-2 rounded-3 small" style="background:<?= $__rule['ok'] ? '#f0fdf4' : '#fef2f2' ?>">
+        <div class="d-flex justify-content-between align-items-center"><b>قانونِ تعداد</b><?= $ruleBadge($__rule, true) ?></div>
+        <div class="text-muted mt-1">مجاز با <?= to_persian_digits((string) $grp['توسعه']) ?> توسعه: حداکثر <?= to_persian_digits((string) $__rule['ops_max']) ?> عملیات و <?= to_persian_digits((string) $__rule['staff_max']) ?> ستادی
+          <span class="d-block" style="font-size:11px">(هر ۸ عملیات ← ۱ توسعه، هر ۲ ستادی ← ۱ توسعه)</span></div>
+      </div>
       <?php if ($unknownList): ?>
         <div class="small mt-2"><b class="text-danger">نامشخص‌ها:</b> <?= e(implode('، ', array_map(static fn($m) => $m['full_name'], $unknownList))) ?></div>
         <a class="btn btn-sm btn-outline-danger mt-2 py-0" href="?<?= e(http_build_query(['unknown' => $onlyUnknown ? null : 1] + $_GET)) ?>"><?= $onlyUnknown ? 'نمایشِ همه' : 'فقط نامشخص‌ها در جدول' ?></a>

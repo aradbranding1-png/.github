@@ -6,6 +6,7 @@ $pdo = db();
 require_once __DIR__ . '/includes/services_functions.php';
 require_once __DIR__ . '/includes/orders_functions.php';
 require_once __DIR__ . '/includes/consent_functions.php';
+require_once __DIR__ . '/includes/team_sales.php';
 
 $ready = services_module_ready($pdo) && orders_ready($pdo);
 $statuses = orders_statuses();
@@ -36,6 +37,8 @@ if ($ready) {
 $rows = [];
 $counts = array_fill_keys(array_keys($statuses), 0);
 $approvedMonth = 0;
+// «این ماه» = از اولِ ماهِ شمسی تا امروز (قبلاً اولِ ماهِ میلادی بود؛ مثلاً ۹ مهر فقط «امروز» را می‌شمرد)
+[$monthFrom, $monthTo] = tsr_date_range('this_month');
 if ($ready) {
     $where = [];
     $params = [];
@@ -59,8 +62,8 @@ if ($ready) {
     foreach ($st->fetchAll(PDO::FETCH_KEY_PAIR) ?: [] as $k => $c) {
         if (isset($counts[$k])) $counts[$k] = (int) $c;
     }
-    $st = $pdo->prepare("SELECT COALESCE(SUM(COALESCE(o.confirmed_amount, o.total_amount)),0) $base AND o.status = 'approved' AND o.decided_at >= ?");
-    $st->execute(array_merge($params, [date('Y-m-01 00:00:00')]));
+    $st = $pdo->prepare("SELECT COALESCE(SUM(COALESCE(o.confirmed_amount, o.total_amount)),0) $base AND o.status = 'approved' AND o.decided_at >= ? AND o.decided_at <= ?");
+    $st->execute(array_merge($params, [$monthFrom . ' 00:00:00', $monthTo . ' 23:59:59']));
     $approvedMonth = (int) $st->fetchColumn();
 
     $sql = "SELECT o.*, c.full_name AS customer_name, c.mobile AS customer_mobile, s.full_name AS seller_name $base";
@@ -103,7 +106,7 @@ require_once __DIR__ . '/includes/layout_top.php';
       <h5><i class="fa-solid fa-cart-shopping"></i> سفارش‌های من</h5>
       <p>برای ثبتِ سفارشِ جدید: پرونده‌ی مشتری ← پیش‌فاکتور ← قفل ← «تبدیل به فاکتور و ثبت سفارش».</p>
     </div>
-    <div class="text-end"><div class="small">فروشِ تأییدشده‌ی این ماه</div><div class="fs-5 fw-bold"><?= format_toman($approvedMonth) ?></div></div>
+    <div class="text-end"><div class="small">فروشِ تأییدشده‌ی این ماه <span style="opacity:.8">(<?= to_jalali($monthFrom) ?> تا <?= to_jalali($monthTo) ?>)</span></div><div class="fs-5 fw-bold"><?= format_toman($approvedMonth) ?></div></div>
   </div>
 
   <?php if (!$ready): ?>
