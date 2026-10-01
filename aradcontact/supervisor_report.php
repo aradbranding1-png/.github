@@ -62,6 +62,71 @@ $detailLink = static function (int $staffId) use ($isAll, $jFrom, $jTo): string 
 $talk = sup_talk_by_user($pdo, $from, $to);
 $roleAvg = sup_role_averages($pdo, $talk);
 
+// ─── نمای کلی: همه‌ی سرپرست‌ها (همین داده هم در جدول و هم در خروجیِ اکسل) ───
+$__groups = ['توسعه', 'عملیات', 'ستادی', 'نامشخص'];
+$rows = [];
+$salesTot = ['cnt' => 0, 'net' => 0, 'A' => 0, 'B' => 0, 'C' => 0, 'D' => 0];
+$grpTot = array_fill_keys($__groups, 0);
+$overTot = ['n' => 0, 'covered' => 0, 'own_talk' => 0];
+if ($isAll && !$leaderId) {
+  foreach (sup_leaders($pdo) as $L) {
+      $members = sup_members($pdo, (int) $L['team_id'], (int) $L['id']);
+      $contacts = sup_leader_member_contacts($pdo, (int) $L['id'], $members, $from, $to);
+      $covered = 0; $effSum = 0; $effN = 0;
+      $grpN = array_fill_keys($__groups, 0);
+      foreach ($members as $m) {
+          if (!empty($contacts[(int) $m['id']]['connected'])) $covered++;
+          $e = sup_efficiency($talk[(int) $m['id']] ?? 0, (float) ($roleAvg[$m['role']] ?? 0));
+          if ($e !== null) { $effSum += $e; $effN++; }
+          $grpN[sup_job_group_label($m['job_group'] ?? null)]++;
+      }
+      $rows[] = $L + ['n' => count($members), 'covered' => $covered, 'team_eff' => $effN ? round($effSum / $effN, 1) : null, 'unknown' => $grpN['نامشخص'], 'grp' => $grpN,
+          'own_talk' => $talk[(int) $L['id']] ?? 0, 'sales' => tsr_team_sales_period($pdo, (int) $L['team_id'], $from, $to)];
+  }
+  foreach ($rows as $r) {
+      $salesTot['cnt'] += $r['sales']['cnt']; $salesTot['net'] += $r['sales']['net'];
+      foreach (['A', 'B', 'C', 'D'] as $__sl) $salesTot[$__sl] += $r['sales']['slots'][$__sl];
+      foreach ($__groups as $__g) $grpTot[$__g] += $r['grp'][$__g];
+      $overTot['n'] += $r['n']; $overTot['covered'] += $r['covered']; $overTot['own_talk'] += $r['own_talk'];
+  }
+
+  // خروجیِ اکسل: همان جدول‌های همین صفحه، با همان بازه‌ی انتخاب‌شده
+  if (!empty($_GET['export'])) {
+      require_once __DIR__ . '/includes/xlsx_writer.php';
+      $__min = static fn(int $sec): int => (int) round($sec / 60);
+      $__tName = static fn(array $r): string => team_display_name($r['team_name'] ?? null, (int) $r['team_id']);
+      $lRows = [];
+      foreach ($rows as $r) {
+          $lRows[] = [$__tName($r), (string) $r['full_name'], $r['n'], $r['grp']['توسعه'], $r['grp']['عملیات'], $r['grp']['ستادی'], $r['grp']['نامشخص'],
+              $r['covered'], $r['n'] ? round($r['covered'] / $r['n'] * 100) : 0, $r['team_eff'] ?? '', $__min($r['own_talk']), $r['sales']['cnt'], $r['sales']['net']];
+      }
+      $sRows = [];
+      $__byNet = $rows;
+      usort($__byNet, static fn($a, $b) => $b['sales']['net'] <=> $a['sales']['net']);
+      foreach ($__byNet as $r) {
+          $sRows[] = [$__tName($r), (string) $r['full_name'], $r['sales']['slots']['A'], $r['sales']['slots']['B'], $r['sales']['slots']['C'], $r['sales']['slots']['D'],
+              $r['sales']['cnt'], $r['sales']['net'], $salesTot['net'] > 0 ? round($r['sales']['net'] / $salesTot['net'] * 100, 1) : 0];
+      }
+      xlsx_output('supervisor_report_' . str_replace('/', '', normalize_digits($jFrom)) . '_' . str_replace('/', '', normalize_digits($jTo)), [
+          ['name' => 'سرپرست‌ها', 'header' => ['تیم', 'سرپرست', 'تعداد نیرو', 'توسعه', 'عملیات', 'ستادی', 'نامشخص', 'نیروهایی که سرپرست با آن‌ها صحبت کرده', 'پوششِ ارتباط (٪)',
+              'راندمانِ تیم (٪)', 'مکالمه‌ی خودِ سرپرست (دقیقه)', 'تعداد سفارشِ تیم', 'فروشِ تیم (خالص، تومان)'],
+           'rows' => $lRows, 'footer' => $lRows ? [['جمع', '', $overTot['n'], $grpTot['توسعه'], $grpTot['عملیات'], $grpTot['ستادی'], $grpTot['نامشخص'], $overTot['covered'],
+              $overTot['n'] ? round($overTot['covered'] / $overTot['n'] * 100) : 0, '', $__min($overTot['own_talk']), $salesTot['cnt'], $salesTot['net']]] : [],
+           'widths' => [20, 22, 10, 10, 10, 10, 10, 18, 14, 14, 18, 14, 20]],
+          ['name' => 'فروشِ تیم‌ها', 'header' => ['تیم', 'سرپرست', 'A', 'B', 'C', 'D (سرپرست)', 'تعداد سفارش', 'فروشِ تیم (خالص، تومان)', 'سهم از کل (٪)'],
+           'rows' => $sRows, 'footer' => $sRows ? [['جمع', '', $salesTot['A'], $salesTot['B'], $salesTot['C'], $salesTot['D'], $salesTot['cnt'], $salesTot['net'], 100]] : [],
+           'widths' => [20, 22, 16, 16, 16, 16, 12, 20, 12]],
+          ['name' => 'بازه', 'header' => ['مورد', 'مقدار'], 'rows' => [
+              ['بازه', $rl . ': ' . $jFrom . ' تا ' . $jTo],
+              ['فروش', 'سفارش‌های تأییدشده با تاریخِ تأییدِ مالی در بازه — خالص بدونِ مالیات؛ تیم = سرپرست (D) + نیروهای A/B/C'],
+              ['تعداد نیرو', 'نیروهای فعالِ تیم (بدونِ خودِ سرپرست) = توسعه + عملیات + ستادی + نامشخص'],
+              ['تاریخِ تهیه', to_jalali(date('Y-m-d')) . ' ' . date('H:i')],
+           ], 'widths' => [16, 90]],
+      ]);
+      exit;
+  }
+}
+
 $pageTitle = 'گزارش سرپرست';
 require_once __DIR__ . '/includes/layout_top.php';
 ?>
@@ -76,6 +141,7 @@ require_once __DIR__ . '/includes/layout_top.php';
     <input name="from" class="form-control form-control-sm jalali-date" style="width:120px" placeholder="از" value="<?= e((string) ($_GET['from'] ?? '')) ?>">
     <input name="to" class="form-control form-control-sm jalali-date" style="width:120px" placeholder="تا" value="<?= e((string) ($_GET['to'] ?? '')) ?>">
     <button class="btn btn-sm btn-dark">نمایش</button>
+    <?php if ($isAll && !$leaderId): ?><button name="export" value="1" class="btn btn-sm btn-outline-success" title="جدول‌های همین صفحه با همین بازه"><i class="fa-solid fa-file-excel"></i> خروجی اکسل</button><?php endif; ?>
   </form>
 </div>
 <div class="small text-muted mb-2"><?= e($rl) ?>: <?= $jFrom ?> تا <?= $jTo ?></div>
@@ -90,27 +156,7 @@ require_once __DIR__ . '/includes/layout_top.php';
   </div>
 </details>
 
-<?php if ($isAll && !$leaderId):
-  // ─── نمای کلی: همه‌ی سرپرست‌ها ───
-  $rows = [];
-  foreach (sup_leaders($pdo) as $L) {
-      $members = sup_members($pdo, (int) $L['team_id'], (int) $L['id']);
-      $contacts = sup_leader_member_contacts($pdo, (int) $L['id'], $members, $from, $to);
-      $covered = 0; $effSum = 0; $effN = 0; $unknown = 0;
-      foreach ($members as $m) {
-          if (!empty($contacts[(int) $m['id']]['connected'])) $covered++;
-          $e = sup_efficiency($talk[(int) $m['id']] ?? 0, (float) ($roleAvg[$m['role']] ?? 0));
-          if ($e !== null) { $effSum += $e; $effN++; }
-          if (sup_job_group_label($m['job_group'] ?? null) === 'نامشخص') $unknown++;
-      }
-      $rows[] = $L + ['n' => count($members), 'covered' => $covered, 'team_eff' => $effN ? round($effSum / $effN, 1) : null, 'unknown' => $unknown,
-          'own_talk' => $talk[(int) $L['id']] ?? 0, 'sales' => tsr_team_sales_period($pdo, (int) $L['team_id'], $from, $to)];
-  }
-  $salesTot = ['cnt' => 0, 'net' => 0, 'A' => 0, 'B' => 0, 'C' => 0, 'D' => 0];
-  foreach ($rows as $r) {
-      $salesTot['cnt'] += $r['sales']['cnt']; $salesTot['net'] += $r['sales']['net'];
-      foreach (['A', 'B', 'C', 'D'] as $__sl) $salesTot[$__sl] += $r['sales']['slots'][$__sl];
-  } ?>
+<?php if ($isAll && !$leaderId): ?>
   <div class="card p-3 mb-3">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
       <div class="fw-bold"><i class="fa-solid fa-sack-dollar text-success"></i> فروشِ تیم‌ها <span class="small text-muted fw-normal">(سرپرست = D + نیروهای A / B / C هر تیم — سفارش‌های تأییدشده در این بازه، خالص بدونِ مالیات)</span></div>
@@ -132,16 +178,26 @@ require_once __DIR__ . '/includes/layout_top.php';
     </table></div>
   </div>
   <div class="card p-0"><div class="table-responsive"><table class="table table-sm align-middle small mb-0">
-    <thead class="table-light"><tr><th>تیم</th><th>سرپرست</th><th>نیروها</th><th>پوششِ ارتباطِ سرپرست</th><th>راندمانِ تیم</th><th>مکالمه‌ی خودِ سرپرست (دقیقه)</th><th>فروشِ تیم (خالص)</th><th></th></tr></thead><tbody>
+    <?php $__showUnk = $grpTot['نامشخص'] > 0; ?>
+    <thead class="table-light"><tr><th>تیم</th><th>سرپرست</th><th>نیروها</th><th>توسعه</th><th>عملیات</th><th>ستادی</th><?php if ($__showUnk): ?><th class="text-danger" title="گروهِ شغلی تعیین نشده — در جزئیاتِ هر تیم قابلِ اصلاح است">نامشخص</th><?php endif; ?><th>پوششِ ارتباطِ سرپرست</th><th>راندمانِ تیم</th><th>مکالمه‌ی خودِ سرپرست (دقیقه)</th><th>فروشِ تیم (خالص)</th><th></th></tr></thead><tbody>
     <?php foreach ($rows as $r): ?>
-      <tr><td><?= to_persian_digits((string) $r['team_id']) ?></td><td><?= e($r['full_name']) ?></td><td><?= to_persian_digits((string) $r['n']) ?></td>
+      <tr><td><?= to_persian_digits((string) $r['team_id']) ?></td><td><?= e($r['full_name']) ?></td><td class="fw-bold"><?= to_persian_digits((string) $r['n']) ?></td>
+        <?php foreach (['توسعه', 'عملیات', 'ستادی'] as $__g): ?><td><?= to_persian_digits((string) $r['grp'][$__g]) ?></td><?php endforeach; ?>
+        <?php if ($__showUnk): ?><td class="<?= $r['grp']['نامشخص'] ? 'text-danger fw-bold' : 'text-muted' ?>"><?= to_persian_digits((string) $r['grp']['نامشخص']) ?></td><?php endif; ?>
         <td><?= to_persian_digits((string) $r['covered']) ?> از <?= to_persian_digits((string) $r['n']) ?><?= $r['n'] ? ' (' . to_persian_digits((string) round($r['covered'] / $r['n'] * 100)) . '٪)' : '' ?></td>
         <td><?= $effBadge($r['team_eff']) ?></td><td><?= $fmtMin($r['own_talk']) ?></td>
         <td class="fw-bold"><?= $money($r['sales']['net']) ?> <span class="text-muted fw-normal">(<?= to_persian_digits((string) $r['sales']['cnt']) ?> سفارش)</span></td>
         <td><a class="btn btn-sm btn-outline-primary py-0" href="?<?= e(http_build_query(['leader' => (int) $r['id']] + $_GET)) ?>">جزئیات</a></td></tr>
     <?php endforeach; ?>
-    <?php if (!$rows): ?><tr><td colspan="8" class="text-center text-muted py-3">تیمی با سرپرست تعریف نشده.</td></tr><?php endif; ?>
-  </tbody></table></div></div>
+    <?php if (!$rows): ?><tr><td colspan="<?= $__showUnk ? 12 : 11 ?>" class="text-center text-muted py-3">تیمی با سرپرست تعریف نشده.</td></tr><?php endif; ?>
+  </tbody>
+  <?php if ($rows): ?><tfoot class="table-light fw-bold"><tr><td colspan="2">جمع</td><td><?= to_persian_digits((string) $overTot['n']) ?></td>
+    <?php foreach (['توسعه', 'عملیات', 'ستادی'] as $__g): ?><td><?= to_persian_digits((string) $grpTot[$__g]) ?></td><?php endforeach; ?>
+    <?php if ($__showUnk): ?><td class="text-danger"><?= to_persian_digits((string) $grpTot['نامشخص']) ?></td><?php endif; ?>
+    <td><?= to_persian_digits((string) $overTot['covered']) ?> از <?= to_persian_digits((string) $overTot['n']) ?></td><td></td><td><?= $fmtMin($overTot['own_talk']) ?></td>
+    <td><?= $money($salesTot['net']) ?> <span class="text-muted fw-normal">(<?= to_persian_digits((string) $salesTot['cnt']) ?> سفارش)</span></td><td></td></tr></tfoot><?php endif; ?>
+  </table></div></div>
+  <?php if ($__showUnk): ?><div class="small text-muted mt-1">«نامشخص» = نیرویی که گروهِ شغلی‌اش تعیین نشده؛ با «جزئیات» هر تیم می‌توانید همان‌جا تعیینش کنید. جمعِ توسعه + عملیات + ستادی<?= $__showUnk ? ' + نامشخص' : '' ?> = تعداد نیروها.</div><?php endif; ?>
 
 <?php else:
   $team = team_led_by($pdo, $leaderId);
