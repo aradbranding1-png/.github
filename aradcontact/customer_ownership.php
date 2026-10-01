@@ -1,5 +1,5 @@
 <?php
-/** عملیاتِ مالکیتِ مشتری (POST): ارجاع A→Box B، B→Box C، ورود به Box A، ثبت/جایگزینی/حذفِ دستیِ جایگاه (مدیر) */
+/** عملیاتِ مالکیتِ مشتری (POST): ارجاع A→Box B، B→Box C، احیای C→Box A، ورود به Box A، ثبت/جایگزینی/حذفِ دستیِ جایگاه (مدیر) */
 require_once __DIR__ . '/includes/auth.php';
 $user = require_login();
 $pdo = db();
@@ -23,6 +23,9 @@ try {
     } elseif ($a === 'refer_c') {
         if (!$isB && !$manage) throw new RuntimeException('فقط B همین مشتری می‌تواند به Box C ارجاع دهد.');
         $r = ps_box_add($pdo, $cid, 'C', $uid, $isB ? 'refer_b' : 'manual', trim((string) ($_POST['note'] ?? '')));
+    } elseif ($a === 'c_revive') {
+        // کارشناسِ C: مشتریِ خودش ← Box A (فقط یک بار برای هر مشتری؛ شرط‌ها در ps_c_revive_check)
+        $r = ps_c_revive_to_box_a($pdo, $cid, $user);
     } elseif ($a === 'to_box_a' && $manage) {
         $r = ps_box_add($pdo, $cid, 'A', $uid, 'manual');
     } elseif ($a === 'owner_set' && perf_can('owners', $user)) {

@@ -76,17 +76,23 @@ require_once __DIR__ . '/includes/layout_top.php';
     $myTeam = (int) ($user['team_id'] ?? 0);
     $teamCnt = 0;
     if ($myTeam) {
-        $tc = $pdo->prepare("SELECT COUNT(*) FROM ps_box_items WHERE box = ? AND status = 'open' AND (origin_team_id = ? OR entered_team_id = ?)");
-        $tc->execute([$myBox, $myTeam, $myTeam]);
+        $tc = $pdo->prepare("SELECT COUNT(*) FROM ps_box_items WHERE box = ? AND status = 'open' AND (reserved_user_id IS NULL OR reserved_user_id = ?) AND (origin_team_id = ? OR entered_team_id = ?)");
+        $tc->execute([$myBox, $uid, $myTeam, $myTeam]);
         $teamCnt = (int) $tc->fetchColumn();
     }
+    // مواردِ اختصاصیِ دیگران (مثلاً مشتریِ C ِ دیگر که به Box C برگشته) برای من قابلِ دریافت نیست
+    $myClaimable = ps_box_claimable_count($pdo, $myBox, $uid);
+    $rc = $pdo->prepare("SELECT COUNT(*) FROM ps_box_items WHERE box = ? AND status = 'open' AND reserved_user_id = ?");
+    $rc->execute([$myBox, $uid]);
+    $myReserved = (int) $rc->fetchColumn();
   ?>
   <div class="card p-4 mb-3 text-center" style="border-radius:16px">
     <div class="small text-muted">مشتریانِ آزاد در Box <?= $myBox ?></div>
-    <div class="display-6 fw-bold my-2"><?= to_persian_digits((string) ($counts[$myBox] ?? 0)) ?></div>
+    <div class="display-6 fw-bold my-2"><?= to_persian_digits((string) $myClaimable) ?></div>
+    <?php if ($myReserved): ?><div class="small mb-2"><span class="badge text-bg-primary"><?= to_persian_digits((string) $myReserved) ?> مشتریِ خودتان (اختصاصی برای شما) — اول از همه همین‌ها به شما می‌رسد</span></div><?php endif; ?>
     <?php if ($myTeam): ?><div class="small mb-2"><span class="badge text-bg-success"><?= to_persian_digits((string) $teamCnt) ?> مورد از ارجاعِ هم‌تیمی‌های شما (تیم <?= to_persian_digits((string) $myTeam) ?>) — اول همین‌ها به شما می‌رسد</span></div><?php endif; ?>
     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="claim">
-      <button class="btn btn-lg btn-warning px-5" <?= empty($counts[$myBox]) ? 'disabled' : '' ?>><i class="fa-solid fa-hand-pointer"></i> دریافتِ مشتری</button></form>
+      <button class="btn btn-lg btn-warning px-5" <?= $myClaimable ? '' : 'disabled' ?>><i class="fa-solid fa-hand-pointer"></i> دریافتِ مشتری</button></form>
     <div class="small text-muted mt-2">با دریافت، شما <b><?= $myBox ?></b>ِ این مشتری می‌شوید و پرونده‌اش در لیستِ مشتریانِ شما قرار می‌گیرد.</div>
   </div>
   <div class="card p-3 mb-3"><div class="fw-bold small mb-2">آخرین مشتریانی که دریافت کرده‌اید</div>
@@ -100,11 +106,12 @@ require_once __DIR__ . '/includes/layout_top.php';
   $total = (int) ($counts[$view] ?? 0);
   $pages = max(1, (int) ceil($total / $per));
   $page = min($pages, max(1, (int) ($_GET['page'] ?? 1)));
-  $items = $pdo->prepare("SELECT b.*, c.full_name, c.mobile, u.full_name AS entered_name FROM ps_box_items b JOIN customers c ON c.id = b.customer_id LEFT JOIN users u ON u.id = b.entered_by
+  $items = $pdo->prepare("SELECT b.*, c.full_name, c.mobile, u.full_name AS entered_name, ru.full_name AS reserved_name FROM ps_box_items b JOIN customers c ON c.id = b.customer_id
+      LEFT JOIN users u ON u.id = b.entered_by LEFT JOIN users ru ON ru.id = b.reserved_user_id
       WHERE b.box = ? AND b.status = 'open' ORDER BY b.id LIMIT $per OFFSET " . (($page - 1) * $per));
   $items->execute([$view]);
   $items = $items->fetchAll(PDO::FETCH_ASSOC) ?: [];
-  $srcL = ['import' => 'اکسل', 'staff_report' => 'گزارش کارکنان', 'customer_list' => 'لیست مشتریان', 'bulk_referral' => 'ارجاع گروهی', 'refer_a' => 'ارجاعِ A', 'refer_b' => 'ارجاعِ B', 'manual' => 'دستی', 'peer' => 'ارجاعِ هم‌سطح'];
+  $srcL = ['import' => 'اکسل', 'staff_report' => 'گزارش کارکنان', 'customer_list' => 'لیست مشتریان', 'bulk_referral' => 'ارجاع گروهی', 'refer_a' => 'ارجاعِ A', 'refer_b' => 'ارجاعِ B', 'manual' => 'دستی', 'peer' => 'ارجاعِ هم‌سطح', 'c_revive' => 'احیای مشتری توسطِ C'];
   $pageUrl = static fn(int $p): string => '?' . http_build_query(['view' => $view, 'page' => $p]);
 ?>
   <style>
@@ -129,12 +136,13 @@ require_once __DIR__ . '/includes/layout_top.php';
 
     <!-- دسکتاپ: جدول -->
     <div class="bx-table table-responsive"><?php if ($items): ?><table class="table table-sm small align-middle mb-0">
-      <thead class="table-light"><tr><th>#</th><th>مشتری</th><th>موبایل</th><th>منبع</th><th>تیمِ مبدأ / ارجاع‌دهنده</th><th>ورود</th><th></th></tr></thead><tbody>
+      <thead class="table-light"><tr><th>#</th><th>مشتری</th><th>موبایل</th><th>منبع</th><th>اختصاصی برای</th><th>تیمِ مبدأ / ارجاع‌دهنده</th><th>ورود</th><th></th></tr></thead><tbody>
       <?php foreach ($items as $it): ?><tr>
         <td><?= to_persian_digits((string) $it['id']) ?></td>
         <td><a href="customer_view.php?id=<?= (int) $it['customer_id'] ?>"><?= e($it['full_name']) ?></a></td>
         <td dir="ltr"><?= e((string) $it['mobile']) ?></td>
         <td><?= e($srcL[$it['source']] ?? $it['source']) ?></td>
+        <td><?= $it['reserved_user_id'] ? '<span class="badge text-bg-primary">' . e((string) ($it['reserved_name'] ?? '#' . $it['reserved_user_id'])) . '</span>' : '—' ?></td>
         <td><?= $it['origin_team_id'] ? 'تیم ' . to_persian_digits((string) $it['origin_team_id']) : '—' ?> / <?= $it['entered_team_id'] ? 'تیم ' . to_persian_digits((string) $it['entered_team_id']) : '—' ?></td>
         <td class="text-nowrap"><?= to_jalali(substr($it['entered_at'], 0, 10)) ?><div class="text-muted"><?= e((string) $it['entered_name']) ?></div></td>
         <td><form method="post" onsubmit="return confirm('از Box خارج شود؟ (پرونده به کارشناسِ قبلی برمی‌گردد)');"><?= csrf_field() ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?= (int) $it['id'] ?>"><input type="hidden" name="box" value="<?= $view ?>"><button class="btn btn-sm btn-outline-danger py-0">خروج</button></form></td>
@@ -151,7 +159,8 @@ require_once __DIR__ . '/includes/layout_top.php';
             <form method="post" onsubmit="return confirm('از Box خارج شود؟ (پرونده به کارشناسِ قبلی برمی‌گردد)');"><?= csrf_field() ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?= (int) $it['id'] ?>"><input type="hidden" name="box" value="<?= $view ?>"><button class="btn btn-sm btn-outline-danger py-0">خروج</button></form>
           </div>
           <div class="small text-muted mt-1"><?= to_jalali(substr($it['entered_at'], 0, 10)) ?> — <?= e((string) $it['entered_name']) ?> — <?= e($srcL[$it['source']] ?? $it['source']) ?>
-            <?= $it['origin_team_id'] ? ' — تیمِ مبدأ ' . to_persian_digits((string) $it['origin_team_id']) : '' ?></div>
+            <?= $it['origin_team_id'] ? ' — تیمِ مبدأ ' . to_persian_digits((string) $it['origin_team_id']) : '' ?>
+            <?= $it['reserved_user_id'] ? ' — <span class="badge text-bg-primary">اختصاصی: ' . e((string) ($it['reserved_name'] ?? '#' . $it['reserved_user_id'])) . '</span>' : '' ?></div>
         </div>
       <?php endforeach; ?>
     </div>

@@ -30,7 +30,7 @@ function perf_ready(PDO $pdo): bool
 {
     static $ready = null;
     if ($ready !== null) return $ready;
-    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); } return $ready; }
+    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); } return $ready; }
     $ddl = [
         "CREATE TABLE IF NOT EXISTS ps_base_versions (id INT UNSIGNED NOT NULL AUTO_INCREMENT, percent DECIMAL(6,3) NOT NULL, effective_from DATETIME NOT NULL,
           note VARCHAR(500) DEFAULT NULL, created_by INT UNSIGNED DEFAULT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id), KEY idx_psbv_from (effective_from)
@@ -83,7 +83,7 @@ function perf_ready(PDO $pdo): bool
     }
     if (!is_dir(dirname(PS_SCHEMA_FLAG))) @mkdir(dirname(PS_SCHEMA_FLAG), 0755, true);
     @file_put_contents(PS_SCHEMA_FLAG, (string) time());
-    return $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo);
+    return $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo);
 }
 
 /** یک‌بار: محاسبه‌ی مجددِ همه‌ی پرداخت‌ها با قانونِ جدیدِ B (بدونِ B2 به بعد ← کلِ سهمِ B برای B1) */
@@ -180,6 +180,27 @@ function ps_schema_v5(PDO $pdo): bool
         $pdo->exec('UPDATE ps_box_items SET origin_team_id = entered_team_id WHERE origin_team_id IS NULL');
     } catch (Throwable $e) {
         error_log('ps_schema_v5: ' . $e->getMessage());
+        return false;
+    }
+    @file_put_contents($flag, (string) time());
+    return true;
+}
+
+/**
+ * نسخه‌ی ۱۲: موردِ «اختصاصی» در Box.
+ *   reserved_user_id = فقط همین کارشناس می‌تواند این مورد را از Box دریافت کند (و اول از همه به او پیشنهاد می‌شود).
+ *   کاربرد: مشتری‌ای که C دارد و B دوباره به Box C ارجاعش می‌دهد ← انحصاراً به همان C برمی‌گردد.
+ */
+function ps_schema_v12(PDO $pdo): bool
+{
+    $flag = __DIR__ . '/../storage/.perf_share_schema_v12';
+    if (is_file($flag)) return true;
+    try {
+        try { $pdo->query('SELECT reserved_user_id FROM ps_box_items LIMIT 1'); }
+        catch (Throwable $e) { $pdo->exec('ALTER TABLE ps_box_items ADD COLUMN reserved_user_id INT UNSIGNED DEFAULT NULL'); }
+        try { $pdo->exec('ALTER TABLE ps_box_items ADD KEY idx_psb_reserved (box, status, reserved_user_id)'); } catch (Throwable $e) {}
+    } catch (Throwable $e) {
+        error_log('ps_schema_v12: ' . $e->getMessage());
         return false;
     }
     @file_put_contents($flag, (string) time());
@@ -539,6 +560,131 @@ function ps_box_open_item(PDO $pdo, int $pk, string $box): ?array
     return $st->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
+/** تعدادِ مواردِ بازِ Box که این کارشناس اجازه‌ی دریافتش را دارد (آزاد + اختصاصیِ خودش) */
+function ps_box_claimable_count(PDO $pdo, string $box, int $uid): int
+{
+    $st = $pdo->prepare("SELECT COUNT(*) FROM ps_box_items WHERE box = ? AND status = 'open' AND (reserved_user_id IS NULL OR reserved_user_id = ?)");
+    $st->execute([$box, $uid]);
+    return (int) $st->fetchColumn();
+}
+
+/** سابقه‌ی «احیای مشتری توسطِ C» برای این شخص (همه‌ی پرونده‌های ۳۶۰، هر وضعیتی) — یا null */
+function ps_c_revive_history(PDO $pdo, int $customerId): ?array
+{
+    if (!function_exists('cc_person_ids')) require_once __DIR__ . '/customer_credit.php';
+    $ids = array_map('intval', cc_person_ids($pdo, $customerId) ?: [$customerId]);
+    $in = implode(',', $ids);
+    $pk = ps_person_key($pdo, $customerId);
+    $st = $pdo->prepare("SELECT b.*, u.full_name AS by_name FROM ps_box_items b LEFT JOIN users u ON u.id = b.entered_by
+        WHERE b.box = 'A' AND b.source = 'c_revive' AND (b.person_key = ? OR b.customer_id IN ($in)) ORDER BY b.id ASC LIMIT 1");
+    $st->execute([$pk]);
+    return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+/**
+ * آیا کارشناسِ C می‌تواند این مشتری را به Box A منتقل کند؟ (احیای مشتری)
+ * شرط‌ها — هدف: هر مشتری فقط یک A، یک B و یک C داشته باشد و چند نفر هم‌زمان با او در ارتباط نباشند:
+ *   ۱) کاربر نقشِ C دارد و پرونده در لیستِ خودش است
+ *   ۲) هیچ‌وقت (از هیچ مسیری، با هیچ پرونده‌ی همان شماره/کدِ ملی) وارد Box A نشده — پس هر مشتری فقط یک بار احیا می‌شود
+ *   ۳) A و B ندارد؛ C یا ندارد یا خودِ همین کارشناس است
+ *   ۴) همین الان در هیچ Boxی نیست
+ *   ۵) هیچ کارشناسِ دیگری با این شماره ارتباط نداشته: پرونده‌ی دیگری با همین شماره/کدِ ملی نزدِ کسِ دیگری نیست،
+ *      رابطه‌ی ثبت‌شده با کارشناسِ دیگر ندارد، و کارشناسِ دیگری (A/B/C/سرپرست) برایش پیگیری ثبت نکرده
+ * @return string|null دلیلِ رد، یا null (مجاز)
+ */
+function ps_c_revive_check(PDO $pdo, int $customerId, array $user): ?string
+{
+    $uid = (int) $user['id'];
+    if (($user['role'] ?? '') !== 'C') return 'فقط کارشناسانِ واحدِ C می‌توانند مشتری را به Box A منتقل کنند.';
+    $st = $pdo->prepare('SELECT id, owner_user_id FROM customers WHERE id = ?');
+    $st->execute([$customerId]);
+    $c = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$c) return 'مشتری پیدا نشد.';
+    if ((int) $c['owner_user_id'] !== $uid) return 'این مشتری در لیستِ شما نیست.';
+    if (ps_c_revive_history($pdo, $customerId)) return 'قبلاً یک بار توسطِ C به Box A منتقل شده';
+    if (!function_exists('cc_person_ids')) require_once __DIR__ . '/customer_credit.php';
+    $ids = array_map('intval', cc_person_ids($pdo, $customerId) ?: [$customerId]);
+    $in = implode(',', $ids);
+    $pk = ps_person_key($pdo, $customerId);
+    $q = $pdo->prepare("SELECT COUNT(*) FROM ps_box_items WHERE box = 'A' AND (person_key = ? OR customer_id IN ($in))");
+    $q->execute([$pk]);
+    if ((int) $q->fetchColumn() > 0) return 'قبلاً وارد Box A شده';
+    $own = ps_owners($pdo, $customerId);
+    if ($own['A']) return 'برایش A تعریف شده (' . $own['A']['full_name'] . ')';
+    if ($own['B']) return 'برایش B تعریف شده (' . $own['B'][0]['full_name'] . ')';
+    if ($own['C'] && (int) $own['C']['user_id'] !== $uid) return 'C ِ دیگری دارد (' . $own['C']['full_name'] . ')';
+    $q = $pdo->prepare("SELECT COUNT(*) FROM ps_box_items WHERE status = 'open' AND (person_key = ? OR customer_id IN ($in))");
+    $q->execute([$pk]);
+    if ((int) $q->fetchColumn() > 0) return 'همین الان در یکی از Boxهاست';
+    // پرونده‌های دیگرِ همین شخص (همان شماره/کدِ ملی) نزدِ کارشناسِ دیگر
+    $q = $pdo->prepare("SELECT u.full_name FROM customers c JOIN users u ON u.id = c.owner_user_id WHERE c.id IN ($in) AND c.owner_user_id <> ? LIMIT 1");
+    $q->execute([$uid]);
+    if (($n = $q->fetchColumn()) !== false) return 'کارشناسِ دیگری با همین شماره پرونده دارد (' . $n . ')';
+    // رابطه‌های ثبت‌شده (مدلِ چندکارشناسه)
+    try {
+        $q = $pdo->prepare("SELECT u.full_name FROM customer_employee_relations r JOIN users u ON u.id = r.employee_id WHERE r.customer_id IN ($in) AND r.employee_id <> ? AND u.role IN ('A','B','C','leader') LIMIT 1");
+        $q->execute([$uid]);
+        if (($n = $q->fetchColumn()) !== false) return 'کارشناسِ دیگری قبلاً با این مشتری ارتباط داشته (' . $n . ')';
+    } catch (Throwable $e) {
+        // جدولِ رابطه‌ها هنوز ساخته نشده
+    }
+    // پیگیری‌های ثبت‌شده توسطِ کارشناسانِ دیگر (تغییرِ دسته‌جمعیِ مدیر حساب نمی‌شود)
+    $q = $pdo->prepare("SELECT u.full_name FROM followups f JOIN users u ON u.id = f.created_by WHERE f.customer_id IN ($in) AND f.created_by <> ? AND u.role IN ('A','B','C','leader') LIMIT 1");
+    $q->execute([$uid]);
+    if (($n = $q->fetchColumn()) !== false) return 'کارشناسِ دیگری قبلاً با این مشتری ارتباط داشته (' . $n . ')';
+    return null;
+}
+
+/**
+ * احیای مشتری توسطِ C: مشتریِ خودِ C ← Box A.
+ *   C = همین ارجاع‌دهنده (ثبت می‌شود اگر خالی باشد)، A و B خالی؛ هر A که از Box A دریافت کند A می‌شود،
+ *   او به Box B می‌دهد، B دریافت‌کننده B می‌شود، و وقتی B به Box C ارجاع دهد، مورد «اختصاصیِ» همین C است و فقط به او برمی‌گردد.
+ */
+function ps_c_revive_to_box_a(PDO $pdo, int $customerId, array $user): array
+{
+    if (!perf_ready($pdo)) return ['ok' => false, 'message' => 'ماژولِ سهم عملکرد آماده نیست.'];
+    if ($why = ps_c_revive_check($pdo, $customerId, $user)) return ['ok' => false, 'message' => $why . '.'];
+    $uid = (int) $user['id'];
+    $pdo->beginTransaction();
+    try {
+        $own = ps_owners($pdo, $customerId);
+        if (!$own['C']) {
+            $r = ps_owner_add($pdo, $customerId, 'C', $uid, 'c_revive', $uid);
+            if (!$r['ok']) throw new RuntimeException($r['message']);
+        }
+        $r = ps_box_add($pdo, $customerId, 'A', $uid, 'c_revive', 'احیای مشتری توسطِ C: ' . ($user['full_name'] ?? ''));
+        if (!$r['ok']) throw new RuntimeException($r['message']);
+        ps_activity($pdo, $customerId, $uid, 'احیای مشتری توسطِ C (' . ($user['full_name'] ?? '') . '): ورود به Box A — C = ' . ($user['full_name'] ?? '')
+            . '، A و B خالی؛ وقتی B دوباره به Box C ارجاع دهد، مشتری فقط به همین C برمی‌گردد');
+        perf_audit($pdo, $uid, 'c_revive', 'ps_box_items', ps_person_key($pdo, $customerId), null, ['customer_id' => $customerId, 'c_user_id' => $uid]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        return ['ok' => false, 'message' => $e->getMessage()];
+    }
+    return ['ok' => true, 'message' => 'مشتری به Box A منتقل شد؛ C ِ این مشتری شما هستید و در پایانِ مسیر فقط به خودتان برمی‌گردد.'];
+}
+
+/** نسخه‌ی گروهیِ احیا (از صفحه‌ی پیگیری مشتریان) — هر شخص (۳۶۰) فقط یک بار */
+function ps_c_revive_many(PDO $pdo, array $customerIds, array $user): array
+{
+    $added = 0; $skipped = 0; $reasons = []; $seen = [];
+    if (!perf_ready($pdo)) return ['added' => 0, 'skipped' => count($customerIds), 'reasons' => ['ماژول آماده نیست' => count($customerIds)]];
+    @set_time_limit(600);
+    foreach (array_values(array_unique(array_map('intval', $customerIds))) as $cid) {
+        if ($cid <= 0) continue;
+        $pk = ps_person_key($pdo, $cid);
+        if (isset($seen[$pk])) { $skipped++; $k = 'پرونده‌ی دیگرِ همان شخص (۳۶۰) قبلاً در همین انتخاب بود'; $reasons[$k] = ($reasons[$k] ?? 0) + 1; continue; }
+        $seen[$pk] = true;
+        $r = ps_c_revive_to_box_a($pdo, $cid, $user);
+        if ($r['ok']) { $added++; continue; }
+        $skipped++;
+        $key = preg_replace('/\s*\(.*\)\s*\.?$/u', '', $r['message']);
+        $reasons[$key] = ($reasons[$key] ?? 0) + 1;
+    }
+    return ['added' => $added, 'skipped' => $skipped, 'reasons' => $reasons];
+}
+
 /** ثبت در «روند زمانیِ» مشتری (تاریخچه‌ی ارجاع/دریافت) */
 function ps_activity(PDO $pdo, int $customerId, int $userId, string $text): void
 {
@@ -555,9 +701,15 @@ function ps_box_add(PDO $pdo, int $customerId, string $box, int $byUser, string 
     if (!in_array($box, ['A', 'B', 'C'], true)) return ['ok' => false, 'message' => 'Box نامعتبر.'];
     $pk = ps_person_key($pdo, $customerId);
     $own = ps_owners($pdo, $customerId);
+    $cRevive = $source === 'c_revive';
+    // مشتری‌ای که یک بار توسطِ C به Box A منتقل شده، دیگر هرگز (از هیچ مسیری) دوباره وارد Box A نمی‌شود
+    if ($box === 'A' && ($prev = ps_c_revive_history($pdo, $customerId))) {
+        return ['ok' => false, 'message' => 'این مشتری قبلاً یک بار توسطِ C به Box A منتقل شده (' . ($prev['by_name'] ?: 'کارشناس C') . ' — '
+            . to_jalali(substr((string) $prev['entered_at'], 0, 10)) . ') و دوباره قابلِ انتقال نیست.'];
+    }
     // Box A فقط برای مشتریانی است که B/C ندارند؛ اگر A داشته باشد، با ورود به Box A جایگاهِ A خالی می‌شود
-    // (هر کس از Box برش دارد A می‌شود)
-    if ($box === 'A' && ($own['B'] || $own['C'])) {
+    // (هر کس از Box برش دارد A می‌شود). استثنا: «احیای مشتری توسطِ C» (ps_c_revive_to_box_a) که C همان ارجاع‌دهنده است.
+    if ($box === 'A' && ($own['B'] || ($own['C'] && !$cRevive))) {
         $who = [];
         foreach ($own['B'] as $b) $who[] = 'B: ' . $b['full_name'];
         if ($own['C']) $who[] = 'C: ' . $own['C']['full_name'];
@@ -568,7 +720,17 @@ function ps_box_add(PDO $pdo, int $customerId, string $box, int $byUser, string 
         perf_audit($pdo, $byUser, 'owner_remove', 'ps_owners', $pk, $own['A'], null, 'ورود به Box A ← جایگاهِ A خالی شد');
         ps_activity($pdo, $customerId, $byUser, 'ورود به Box A: جایگاهِ A (' . $own['A']['full_name'] . ') خالی شد؛ هر کس از Box دریافت کند A می‌شود');
     }
-    if ($box === 'C' && $own['C']) return ['ok' => false, 'message' => 'این مشتری C دارد (' . $own['C']['full_name'] . ').'];
+    // مشتری‌ای که C دارد ← موردِ Box C «اختصاصی» همان C می‌شود (فقط او دریافتش می‌کند و اول از همه به او می‌رسد)
+    $reservedFor = null;
+    if ($box === 'C' && $own['C']) {
+        $cu = $pdo->prepare('SELECT role, is_active, is_approved FROM users WHERE id = ?');
+        $cu->execute([(int) $own['C']['user_id']]);
+        $cu = $cu->fetch(PDO::FETCH_ASSOC);
+        if (!$cu || $cu['role'] !== 'C' || (int) $cu['is_active'] !== 1 || (int) $cu['is_approved'] !== 1) {
+            return ['ok' => false, 'message' => 'این مشتری C دارد (' . $own['C']['full_name'] . ') ولی آن کارشناس فعال نیست؛ مدیر باید جایگاهِ C را اصلاح کند.'];
+        }
+        $reservedFor = (int) $own['C']['user_id'];
+    }
     if ($box === 'B' && $own['B']) return ['ok' => false, 'message' => 'این مشتری B دارد (' . $own['B'][0]['full_name'] . ').'];
     if (ps_box_open_item($pdo, $pk, $box)) return ['ok' => false, 'message' => 'این مشتری همین الان در Box ' . $box . ' است.'];
     $cur = $pdo->prepare('SELECT owner_user_id FROM customers WHERE id = ?');
@@ -584,15 +746,16 @@ function ps_box_add(PDO $pdo, int $customerId, string $box, int $byUser, string 
         $first = $o->fetchColumn();
         if ($first) $originTeam = (int) $first;
     }
-    $pdo->prepare('INSERT INTO ps_box_items (box, customer_id, person_key, status, source, note, entered_by, entered_at, prev_owner_id, entered_team_id, origin_team_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-        ->execute([$box, $customerId, $pk, 'open', $source, mb_substr($note, 0, 300) ?: null, $byUser ?: null, date('Y-m-d H:i:s'), $prevOwner ?: null, $enteredTeam, $originTeam]);
+    $pdo->prepare('INSERT INTO ps_box_items (box, customer_id, person_key, status, source, note, entered_by, entered_at, prev_owner_id, entered_team_id, origin_team_id, reserved_user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$box, $customerId, $pk, 'open', $source, mb_substr($note, 0, 300) ?: null, $byUser ?: null, date('Y-m-d H:i:s'), $prevOwner ?: null, $enteredTeam, $originTeam, $reservedFor]);
     // پرونده از لیستِ کارشناسِ فعلی خارج می‌شود (مالکِ موقت = «Box مشتریان») تا کارشناسِ بعدی دریافتش کند
     $boxUser = ps_box_user_id($pdo);
     if ($boxUser) $pdo->prepare('UPDATE customers SET owner_user_id = ? WHERE id = ?')->execute([$boxUser, $customerId]);
     $u = $byUser ? ps_user_row($pdo, $byUser) : null;
-    perf_audit($pdo, $byUser, 'box_enter', 'ps_box_items', $pk, null, ['box' => $box, 'source' => $source, 'customer_id' => $customerId, 'role' => $u['role'] ?? null, 'team_id' => $u['team_id'] ?? null]);
-    ps_activity($pdo, $customerId, $byUser, 'ورود به Box ' . $box . ' (' . $source . ')' . ($note !== '' ? ' — ' . $note : ''));
-    return ['ok' => true, 'message' => 'مشتری وارد Box ' . $box . ' شد.'];
+    perf_audit($pdo, $byUser, 'box_enter', 'ps_box_items', $pk, null, ['box' => $box, 'source' => $source, 'customer_id' => $customerId, 'role' => $u['role'] ?? null, 'team_id' => $u['team_id'] ?? null, 'reserved_user_id' => $reservedFor]);
+    $resTxt = $reservedFor ? ' — اختصاصی برای C: ' . $own['C']['full_name'] : '';
+    ps_activity($pdo, $customerId, $byUser, 'ورود به Box ' . $box . ' (' . $source . ')' . $resTxt . ($note !== '' ? ' — ' . $note : ''));
+    return ['ok' => true, 'message' => 'مشتری وارد Box ' . $box . ' شد' . ($reservedFor ? ' و فقط به C خودش (' . $own['C']['full_name'] . ') برمی‌گردد' : '') . '.'];
 }
 
 /**
@@ -607,22 +770,26 @@ function ps_box_claim(PDO $pdo, string $box, array $user): array
         $token = bin2hex(random_bytes(16));
         // اولویت: ۱) تیمِ مبدأ = تیمِ من  ۲) تیمِ ارجاع‌دهنده = تیمِ من  ۳) بقیه (قدیمی‌ترین اول) — مشتری بینِ تیم‌ها جابه‌جا نشود
         $myTeam = (int) ($user['team_id'] ?? 0);
+        // مواردِ اختصاصی: فقط صاحبش دریافت می‌کند و قبل از همه به او می‌رسد
         $pdo->prepare("UPDATE ps_box_items SET status = 'claimed', claimed_by = ?, claimed_at = ?, claim_token = ?
-                WHERE box = ? AND status = 'open'
-                ORDER BY COALESCE(origin_team_id = ?, 0) DESC, COALESCE(entered_team_id = ?, 0) DESC, id ASC LIMIT 1")
-            ->execute([$uid, date('Y-m-d H:i:s'), $token, $box, $myTeam, $myTeam]);
+                WHERE box = ? AND status = 'open' AND (reserved_user_id IS NULL OR reserved_user_id = ?)
+                ORDER BY COALESCE(reserved_user_id = ?, 0) DESC, COALESCE(origin_team_id = ?, 0) DESC, COALESCE(entered_team_id = ?, 0) DESC, id ASC LIMIT 1")
+            ->execute([$uid, date('Y-m-d H:i:s'), $token, $box, $uid, $uid, $myTeam, $myTeam]);
         $st = $pdo->prepare('SELECT * FROM ps_box_items WHERE claim_token = ?');
         $st->execute([$token]);
         $item = $st->fetch(PDO::FETCH_ASSOC);
         if (!$item) {
             // در رقابتِ هم‌زمان ممکن است ردیفِ قفل‌شده را نفرِ قبلی گرفته باشد؛ اگر هنوز موردِ آزاد هست دوباره تلاش کن
-            $left = $pdo->prepare("SELECT COUNT(*) FROM ps_box_items WHERE box = ? AND status = 'open'");
-            $left->execute([$box]);
-            if ((int) $left->fetchColumn() > 0) { usleep(random_int(20000, 120000)); continue; }
-            return ['ok' => false, 'message' => 'Box ' . $box . ' الان خالی است.'];
+            if (ps_box_claimable_count($pdo, $box, $uid) > 0) { usleep(random_int(20000, 120000)); continue; }
+            return ['ok' => false, 'message' => 'Box ' . $box . ' الان موردِ آزادی برای شما ندارد.'];
         }
         $slot = $box;
-        $res = ps_owner_add($pdo, (int) $item['customer_id'], $slot, $uid, 'box', $uid);
+        $curSlot = ps_owners($pdo, (int) $item['customer_id']);
+        $curOwner = $slot === 'B' ? ($curSlot['B'][0] ?? null) : $curSlot[$slot];
+        // مشتریِ خودِ همین کارشناس (مثلاً C ِ ثبت‌شده که مشتری‌اش از Box C برگشته) ← جایگاه از قبل مالِ اوست
+        $res = $curOwner && (int) $curOwner['user_id'] === $uid
+            ? ['ok' => true, 'message' => $slot . ' از قبل همین کارشناس است.']
+            : ps_owner_add($pdo, (int) $item['customer_id'], $slot, $uid, 'box', $uid);
         if (!$res['ok']) {
             // جایگاه در این فاصله پر شده (مثلاً دستی) ← این مورد کنار می‌رود و موردِ بعدی امتحان می‌شود
             $pdo->prepare("UPDATE ps_box_items SET status = 'cancelled', note = ? WHERE id = ?")->execute([mb_substr('جایگاه قبلاً پر شده: ' . $res['message'], 0, 300), (int) $item['id']]);
@@ -632,6 +799,9 @@ function ps_box_claim(PDO $pdo, string $box, array $user): array
         ps_transfer_record($pdo, $cid, $uid, $uid, 'تحویلِ پرونده از Box ' . $box . ' به ' . ($user['full_name'] ?? '') . ' (همراه با همه‌ی پیگیری‌ها و روندِ زمانیِ قبلی)');
         perf_audit($pdo, $uid, 'box_claim', 'ps_box_items', (int) $item['id'], null, ['box' => $box, 'customer_id' => $cid, 'person_key' => $item['person_key'], 'team_id' => $user['team_id'] ?? null]);
         ps_activity($pdo, $cid, $uid, 'دریافت از Box ' . $box . ' ← ' . $box . ' = ' . ($user['full_name'] ?? ''));
+        if ((int) ($item['reserved_user_id'] ?? 0) === $uid) {
+            return ['ok' => true, 'customer_id' => $cid, 'message' => 'مشتریِ خودتان به شما برگشت (موردِ اختصاصیِ Box ' . $box . ')؛ پرونده در لیستِ پیگیریِ شماست.'];
+        }
         $sameTeam = $myTeam && ((int) ($item['origin_team_id'] ?? 0) === $myTeam || (int) ($item['entered_team_id'] ?? 0) === $myTeam);
         return ['ok' => true, 'customer_id' => $cid, 'message' => 'مشتری دریافت شد؛ شما ' . $box . 'ِ این مشتری هستید.'
             . ($myTeam ? ($sameTeam ? ' (از ارجاعِ هم‌تیمی‌های خودتان)' : ' (هم‌تیمی‌هایتان موردی در Box نداشتند؛ از تیم‌های دیگر)') : '')];

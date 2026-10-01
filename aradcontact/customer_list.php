@@ -187,6 +187,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_box_a_submit']))
     flash_set($r['added'] ? 'success' : 'warning', ps_box_bulk_message($r));
     redirect($backTo);
 }
+// احیای مشتری توسطِ کارشناسِ C ← Box A (فقط مشتریانِ خودش؛ هر مشتری فقط یک بار)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_c_revive_submit'])) {
+    require_once __DIR__ . '/includes/customer_credit.php';
+    require_once __DIR__ . '/includes/performance_functions.php';
+    $backTo = 'customer_list.php' . ((($qs = $_SERVER['QUERY_STRING'] ?? '') !== '') ? '?' . $qs : '');
+    if (!csrf_verify()) { flash_set('danger', 'نشست شما منقضی شده است، دوباره تلاش کنید.'); redirect($backTo); }
+    if ($user['role'] !== 'C') { flash_set('danger', 'فقط کارشناسانِ واحدِ C می‌توانند مشتری را به Box A منتقل کنند.'); redirect($backTo); }
+    $ids = array_values(array_filter(array_map('intval', (array) ($_POST['bulk_delete_ids'] ?? []))));
+    if (!$ids) { flash_set('warning', 'مشتری‌ای انتخاب نشده.'); redirect($backTo); }
+    $r = ps_c_revive_many($pdo, $ids, $user);
+    $msg = to_persian_digits((string) $r['added']) . ' مشتری به Box A منتقل شد (C ِ این مشتریان شما هستید و در پایانِ مسیر فقط به خودتان برمی‌گردند).';
+    if ($r['skipped']) {
+        $parts = [];
+        foreach ($r['reasons'] as $why => $n) $parts[] = to_persian_digits((string) $n) . ' مورد: ' . $why;
+        $msg .= ' ' . to_persian_digits((string) $r['skipped']) . ' مورد منتقل نشد — ' . implode('؛ ', $parts);
+    }
+    foreach (array_keys($_SESSION) as $__k) if (str_starts_with((string) $__k, 'cl_cache_v2_')) unset($_SESSION[$__k]);
+    flash_set($r['added'] ? 'success' : 'warning', $msg);
+    redirect($backTo);
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_refer_submit'])) {
     $backTo = 'customer_list.php' . ((($qs = $_SERVER['QUERY_STRING'] ?? '') !== '') ? '?' . $qs : '');
     if (!csrf_verify()) {
@@ -796,6 +816,13 @@ require_once __DIR__ . '/includes/layout_top.php';
           <i class="fa-solid fa-box"></i> ارسال به Box A
         </button>
         <?php endif; ?>
+        <?php if ($user['role'] === 'C'): ?>
+        <button type="submit" name="bulk_c_revive_submit" class="btn btn-sm btn-outline-warning" id="bulkCReviveBtn" disabled
+                title="فقط مشتریانی که هیچ‌وقت در Box A نبوده‌اند، A و B ندارند و کارشناسِ دیگری با شماره‌شان ارتباط نداشته منتقل می‌شوند"
+                onclick="return confirm('مشتری(های) انتخاب‌شده به Box A منتقل شوند؟\n\n• C ِ این مشتریان شما می‌مانید و A و B خالی می‌شوند.\n• وقتی B دوباره به Box C ارجاع دهد، فقط به خودتان برمی‌گردد.\n• هر مشتری فقط یک بار قابلِ انتقال است؛ مشتریانی که شرایط را ندارند رد می‌شوند.');">
+          <i class="fa-solid fa-rotate"></i> انتقال به Box A
+        </button>
+        <?php endif; ?>
         <?php if ($canBulkRefer): ?>
         <span class="text-muted small">|</span>
         <select name="bulk_status" class="form-select form-select-sm" style="width:auto" id="bulkStatusSelect">
@@ -957,6 +984,8 @@ require_once __DIR__ . '/includes/layout_top.php';
     if (deleteBtn) deleteBtn.disabled = checkedCount === 0;
     var boxABtn = document.getElementById('bulkBoxABtn');
     if (boxABtn) boxABtn.disabled = checkedCount === 0;
+    var cReviveBtn = document.getElementById('bulkCReviveBtn');
+    if (cReviveBtn) cReviveBtn.disabled = checkedCount === 0;
     if (referBtn) referBtn.disabled = checkedCount === 0 || !referSelect || referSelect.value === '';
     if (statusBtn) statusBtn.disabled = checkedCount === 0 || !statusSelect || statusSelect.value === '';
     if (dueDateBtn) dueDateBtn.disabled = checkedCount === 0 || !dueDateInput || dueDateInput.value === '';

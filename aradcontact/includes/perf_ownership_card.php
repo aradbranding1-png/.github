@@ -14,7 +14,7 @@ $__open = [];
 $__q = $pdo->prepare("SELECT box FROM ps_box_items WHERE person_key = ? AND status = 'open'");
 $__q->execute([$__o['person_key']]);
 foreach ($__q->fetchAll(PDO::FETCH_COLUMN) ?: [] as $__bx) $__open[$__bx] = true;
-$__srcL = ['box' => 'Box', 'payment' => 'دریافتِ پول', 'manual' => 'دستی', 'calizer' => 'کالیزر', 'novatel' => 'نواتل', 'migration' => 'مهاجرت', 'peer' => 'ارجاعِ هم‌سطح'];
+$__srcL = ['box' => 'Box', 'payment' => 'دریافتِ پول', 'manual' => 'دستی', 'calizer' => 'کالیزر', 'novatel' => 'نواتل', 'migration' => 'مهاجرت', 'peer' => 'ارجاعِ هم‌سطح', 'c_revive' => 'احیای مشتری توسطِ C'];
 $__row = static function (string $label, ?array $o) use ($__srcL) {
     if (!$o) return '<tr><td style="width:60px"><b>' . $label . '</b></td><td class="text-muted" colspan="3">خالی — سهمِ این جایگاه به ' . e(PS_ORG_LABEL) . '</td></tr>';
     return '<tr><td style="width:60px"><b>' . $label . '</b></td><td>' . e($o['full_name']) . ($o['team_id'] ? ' <span class="text-muted">(تیم ' . (int) $o['team_id'] . ')</span>' : '') . '</td>'
@@ -41,9 +41,13 @@ if ($__o['C'] && ($__isC || $__mng || $__boxMng)) $__peerSlots['C'] = $__o['C'];
       <form method="post" action="customer_ownership.php"><?= csrf_field() ?><input type="hidden" name="action" value="refer_b"><input type="hidden" name="customer_id" value="<?= (int) $id ?>">
         <button class="btn btn-sm btn-outline-warning" onclick="return confirm('مشتری به Box B ارجاع شود؟')"><i class="fa-solid fa-share"></i> ارجاع به Box B</button></form>
     <?php endif; ?>
-    <?php if (($__isB || $__boxMng) && !$__o['C'] && empty($__open['C'])): ?>
+    <?php if (($__isB || $__boxMng) && empty($__open['C'])): // اگر C دارد، موردِ Box C اختصاصیِ همان C می‌شود ?>
       <form method="post" action="customer_ownership.php"><?= csrf_field() ?><input type="hidden" name="action" value="refer_c"><input type="hidden" name="customer_id" value="<?= (int) $id ?>">
-        <button class="btn btn-sm btn-outline-warning" onclick="return confirm('مشتری به Box C ارجاع شود؟')"><i class="fa-solid fa-share"></i> ارجاع به Box C</button></form>
+        <button class="btn btn-sm btn-outline-warning" onclick="return confirm('<?= $__o['C'] ? 'مشتری به Box C ارجاع شود؟ این مشتری C دارد و فقط به همان C (' . e($__o['C']['full_name']) . ') برمی‌گردد.' : 'مشتری به Box C ارجاع شود؟' ?>')"><i class="fa-solid fa-share"></i> ارجاع به Box C<?= $__o['C'] ? ' (برگشت به ' . e($__o['C']['full_name']) . ')' : '' ?></button></form>
+    <?php endif; ?>
+    <?php if ($__isC && !$__o['A'] && !$__B && !$__open && ($__ow = $pdo->prepare('SELECT owner_user_id FROM customers WHERE id = ?')) && $__ow->execute([(int) $id]) && (int) $__ow->fetchColumn() === $__uid && !ps_c_revive_history($pdo, (int) $id)): ?>
+      <form method="post" action="customer_ownership.php"><?= csrf_field() ?><input type="hidden" name="action" value="c_revive"><input type="hidden" name="customer_id" value="<?= (int) $id ?>">
+        <button class="btn btn-sm btn-outline-primary" onclick="return confirm('مشتری به Box A منتقل شود؟ C ِ مشتری شما می‌مانید، A و B خالی می‌شوند و در پایانِ مسیر فقط به خودتان برمی‌گردد. این کار برای هر مشتری فقط یک بار ممکن است.')"><i class="fa-solid fa-rotate"></i> انتقال به Box A (احیا)</button></form>
     <?php endif; ?>
     <?php if ($__boxMng && !$__o['A'] && empty($__open['A'])): ?>
       <form method="post" action="customer_ownership.php"><?= csrf_field() ?><input type="hidden" name="action" value="to_box_a"><input type="hidden" name="customer_id" value="<?= (int) $id ?>">
