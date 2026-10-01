@@ -293,6 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         && !isset($movedIds[(int) $customer['id']])) {
                         $movedIds[(int) $customer['id']] = true;
                         $pdo->prepare('UPDATE customers SET owner_user_id = ?, new_customer_notified = 0 WHERE id = ?')->execute([$ownerId, (int) $customer['id']]);
+                        try { referral_log($pdo, (int) $customer['id'], (int) $customer['owner_user_id'], $ownerId, (int) $user['id'], 'import', 'انتقال با آپلودِ اکسل (توسطِ ادمین کل)'); } catch (Throwable $e) {}
                         try { get_or_create_relation($pdo, (int) $customer['id'], $ownerId, 'manual_import', true); } catch (Throwable $e) {}
                         try {
                             $pdo->prepare('INSERT INTO customer_activity_logs (customer_id, user_id, activity_type, description) VALUES (?,?,?,?)')

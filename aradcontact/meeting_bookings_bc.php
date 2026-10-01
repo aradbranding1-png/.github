@@ -62,6 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['set_result'])) {
                             $oldOwnerId = (int) $customer['owner_user_id'];
                             $pdo->prepare('UPDATE customers SET owner_user_id = ? WHERE id = ?')->execute([$booking['staff_id'], $booking['customer_id']]);
                             $pdo->prepare('UPDATE meeting_bookings SET responsibility_transferred = 1 WHERE id = ?')->execute([$bookingId]);
+                            // در «تاریخچه ارجاع» هم ثبت شود تا ارجاع‌دهنده/گیرنده آن را ببینند
+                            try { referral_log($pdo, (int) $booking['customer_id'], $oldOwnerId, (int) $booking['staff_id'], (int) $user['id'], 'meeting', 'مسئولیتِ مشتری بعد از برگزاریِ جلسه منتقل شد', 'mb' . (int) $bookingId); } catch (Throwable $e) {}
 
                             $ownerNames = $pdo->prepare('SELECT id, full_name FROM users WHERE id IN (?,?)');
                             $ownerNames->execute([$oldOwnerId, $booking['staff_id']]);

@@ -1125,7 +1125,11 @@ function referral_target_staff(PDO $pdo, int $excludeUserId = 0): array
 
 function admin_reassign_customer_silently(PDO $pdo, int $customerId, int $newOwnerId, int $adminId): void
 {
+    $prevOwnerStmt = $pdo->prepare('SELECT owner_user_id FROM customers WHERE id = ?');
+    $prevOwnerStmt->execute([$customerId]);
+    $prevOwnerId = (int) $prevOwnerStmt->fetchColumn();
     $pdo->prepare('UPDATE customers SET owner_user_id = ? WHERE id = ?')->execute([$newOwnerId, $customerId]);
+    try { referral_log($pdo, $customerId, $prevOwnerId, $newOwnerId, $adminId, 'admin_return', 'بازگرداندن به ارجاع‌دهنده‌ی اصلی توسطِ مدیر'); } catch (Throwable $e) {}
     try {
         $nameStmt = $pdo->prepare('SELECT full_name FROM users WHERE id = ? LIMIT 1');
         $nameStmt->execute([$newOwnerId]);
@@ -1149,8 +1153,7 @@ function refer_customer(PDO $pdo, int $customerId, int $fromUserId, int $toUserI
     if ($fromUserId === $toUserId) return;
     $pdo->prepare("UPDATE customers SET owner_user_id = ?, new_customer_notified = 0, status = 'جدید', next_followup_date = CURDATE() WHERE id = ?")
         ->execute([$toUserId, $customerId]);
-    $pdo->prepare('INSERT INTO customer_referrals (customer_id, from_user_id, to_user_id, referred_by) VALUES (?,?,?,?)')
-        ->execute([$customerId, $fromUserId, $toUserId, $referredBy]);
+    referral_log($pdo, $customerId, $fromUserId, $toUserId, $referredBy, $source); // مثلِ قبل در customer_referrals (+ نوع)
     try {
         $fromNameStmt = $pdo->prepare('SELECT full_name FROM users WHERE id = ? LIMIT 1');
         $fromNameStmt->execute([$fromUserId]);
@@ -1162,6 +1165,125 @@ function refer_customer(PDO $pdo, int $customerId, int $fromUserId, int $toUserI
         $log = $pdo->prepare('INSERT INTO customer_activity_logs (customer_id, user_id, activity_type, description) VALUES (?,?,?,?)');
         $log->execute([$customerId, $referredBy, 'referral', $desc]);
     } catch (Throwable $e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  «تاریخچه ارجاع»ِ کامل: هر تغییرِ مالکیتِ پرونده با «نوع» ثبت می‌شود
+// ═══════════════════════════════════════════════════════════════════════
+//  قبلاً فقط ارجاعِ دستی/گروهی/هم‌سطح (customer_referrals) ثبت می‌شد؛ مشتری‌ای که بعد از «جلسه‌ی برگزارشده»
+//  یا با «دریافت از Box» دستِ کارشناسِ دیگری می‌رفت، در «ارجاع‌های من»ِ ارجاع‌دهنده و «دریافتی»ِ گیرنده نبود.
+//  این انتقال‌ها در جدولِ جدای customer_handoffs ثبت می‌شوند (تا آمارِ «ارجاع» در گزارش‌ها و اعلانِ ارجاعِ جدید
+//  مثلِ قبل بماند) و صفحه‌ی «تاریخچه ارجاع» هر دو را با هم نشان می‌دهد.
+
+function referral_source_labels(): array
+{
+    return [
+        'manual' => 'ارجاعِ دستی', 'bulk' => 'ارجاعِ گروهی', 'phone_conflict' => 'حلِ تداخلِ شماره', 'peer' => 'ارجاعِ هم‌سطح',
+        'meeting' => 'بعد از جلسه‌ی برگزارشده', 'box' => 'دریافت از Box', 'admin_return' => 'بازگرداندن توسطِ مدیر', 'import' => 'انتقال با ایمپورت',
+    ];
+}
+
+/** انواعی که «ارجاع» حساب می‌شوند (customer_referrals)؛ بقیه «انتقالِ پرونده» (customer_handoffs) */
+function referral_is_referral_source(string $source): bool
+{
+    return in_array($source, ['manual', 'bulk', 'phone_conflict', 'peer'], true);
+}
+
+/** ستون‌های «نوع / توضیح» روی customer_referrals + جدولِ customer_handoffs + پُر کردنِ یک‌باره‌ی سابقه (جلسه‌ها و Boxها) */
+function referral_log_ready(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    $flag = __DIR__ . '/../storage/.referral_log_v1';
+    try {
+        if (is_file($flag)) return $ok = true;
+        $cols = $pdo->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'customer_referrals'")->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        if (!$cols) return $ok = false;
+        if (!in_array('source', $cols, true)) $pdo->exec('ALTER TABLE customer_referrals ADD COLUMN source VARCHAR(30) NULL DEFAULT NULL');
+        if (!in_array('note', $cols, true)) $pdo->exec('ALTER TABLE customer_referrals ADD COLUMN note VARCHAR(255) NULL DEFAULT NULL');
+        $pdo->exec("CREATE TABLE IF NOT EXISTS customer_handoffs (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            customer_id INT UNSIGNED NOT NULL,
+            from_user_id INT UNSIGNED NOT NULL,
+            to_user_id INT UNSIGNED NOT NULL,
+            referred_by INT UNSIGNED NOT NULL,
+            source VARCHAR(30) NOT NULL,
+            note VARCHAR(255) NULL,
+            ref_key VARCHAR(40) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_customer_handoffs_ref (ref_key),
+            KEY idx_customer_handoffs_customer (customer_id),
+            KEY idx_customer_handoffs_from (from_user_id, created_at),
+            KEY idx_customer_handoffs_to (to_user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $ok = true;
+        referral_log_backfill($pdo);
+        @file_put_contents($flag, date('c'));
+        return true;
+    } catch (Throwable $e) {
+        error_log('referral_log_ready: ' . $e->getMessage());
+        return $ok = false;
+    }
+}
+
+/** سابقه‌ی قبلی: انتقال‌های بعد از جلسه و دریافت‌های Box */
+function referral_log_backfill(PDO $pdo): void
+{
+    try {
+        // جلسه: از «رزروکننده» به «برگزارکننده»، در زمانِ ثبتِ انتقال
+        $pdo->exec("INSERT IGNORE INTO customer_handoffs (customer_id, from_user_id, to_user_id, referred_by, created_at, source, note, ref_key)
+            SELECT mb.customer_id, mb.booked_by, mb.staff_id, COALESCE(h.actor_user_id, mb.booked_by),
+                   COALESCE(h.created_at, mb.updated_at, mb.created_at), 'meeting', 'مسئولیتِ مشتری بعد از برگزاریِ جلسه منتقل شد', CONCAT('mb', mb.id)
+            FROM meeting_bookings mb
+            LEFT JOIN meeting_booking_history h ON h.id = (SELECT MAX(h2.id) FROM meeting_booking_history h2 WHERE h2.booking_id = mb.id AND h2.event_type = 'responsibility_transferred')
+            WHERE mb.responsibility_transferred = 1 AND mb.booked_by IS NOT NULL AND mb.booked_by <> mb.staff_id");
+    } catch (Throwable $e) {
+        error_log('referral_log_backfill meeting: ' . $e->getMessage());
+    }
+    try {
+        // Box: از صاحبِ قبلی (یا واردکننده) به دریافت‌کننده — ارجاعِ هم‌سطح خودش در customer_referrals هست
+        $pdo->exec("INSERT IGNORE INTO customer_handoffs (customer_id, from_user_id, to_user_id, referred_by, created_at, source, note, ref_key)
+            SELECT b.customer_id, COALESCE(b.prev_owner_id, b.entered_by), b.claimed_by, COALESCE(b.entered_by, b.claimed_by), b.claimed_at,
+                   'box', CONCAT('Box ', b.box), CONCAT('bx', b.id)
+            FROM ps_box_items b
+            WHERE b.claimed_by IS NOT NULL AND b.claimed_at IS NOT NULL AND b.source <> 'peer'
+              AND COALESCE(b.prev_owner_id, b.entered_by) IS NOT NULL AND COALESCE(b.prev_owner_id, b.entered_by) <> b.claimed_by
+              AND COALESCE(b.prev_owner_id, b.entered_by) NOT IN (SELECT id FROM users WHERE mobile = 'BOX-SYSTEM')");
+    } catch (Throwable $e) {
+        error_log('referral_log_backfill box: ' . $e->getMessage());
+    }
+}
+
+/**
+ * ثبتِ یک تغییرِ مالکیت. ارجاع‌ها (دستی/گروهی/هم‌سطح/حلِ تداخل) مثلِ قبل در customer_referrals (با اعلان برای گیرنده)؛
+ * انتقال‌های دیگر (جلسه/Box/بازگرداندن/ایمپورت) در customer_handoffs. تکراری‌ها با $refKey یک‌بار ثبت می‌شوند.
+ */
+function referral_log(PDO $pdo, int $customerId, int $fromUserId, int $toUserId, int $referredBy, string $source, string $note = '', ?string $refKey = null): void
+{
+    if ($customerId <= 0 || $toUserId <= 0 || $fromUserId <= 0 || $fromUserId === $toUserId) return;
+    $ready = referral_log_ready($pdo);
+    if (referral_is_referral_source($source)) {
+        if ($ready) {
+            $pdo->prepare('INSERT INTO customer_referrals (customer_id, from_user_id, to_user_id, referred_by, source, note) VALUES (?,?,?,?,?,?)')
+                ->execute([$customerId, $fromUserId, $toUserId, $referredBy ?: $fromUserId, $source, $note !== '' ? mb_substr($note, 0, 255) : null]);
+        } else {
+            $pdo->prepare('INSERT INTO customer_referrals (customer_id, from_user_id, to_user_id, referred_by) VALUES (?,?,?,?)')
+                ->execute([$customerId, $fromUserId, $toUserId, $referredBy ?: $fromUserId]);
+        }
+        return;
+    }
+    if (!$ready) return;
+    if (function_exists('ps_box_user_id') && $fromUserId === ps_box_user_id($pdo)) return; // «Box سیستم» کسی نیست
+    $pdo->prepare('INSERT IGNORE INTO customer_handoffs (customer_id, from_user_id, to_user_id, referred_by, source, note, ref_key) VALUES (?,?,?,?,?,?,?)')
+        ->execute([$customerId, $fromUserId, $toUserId, $referredBy ?: $fromUserId, $source, $note !== '' ? mb_substr($note, 0, 255) : null, $refKey]);
+}
+
+/** همه‌ی ارجاع‌ها + انتقال‌ها به‌صورتِ یک «جدول» (برای FROM ... r) */
+function referral_union_sql(): string
+{
+    return "(SELECT id, customer_id, from_user_id, to_user_id, referred_by, created_at, source, note, 'referral' AS kind FROM customer_referrals
+             UNION ALL
+             SELECT id, customer_id, from_user_id, to_user_id, referred_by, created_at, source, note, 'handoff' AS kind FROM customer_handoffs)";
 }
 
 function apply_call_import_followup_outcome(PDO $pdo, int $customerId, bool $connected, string $baseDateG, string $currentStatus, bool $statusLocked): string

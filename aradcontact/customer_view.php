@@ -295,8 +295,9 @@ if (!$canSeeOthersFollowups) {
 // مشتریِ ارجاع‌گرفته: گیرنده باید ببیند قبل از ارجاع چه مراحلی با مشتری طی شده ← همه‌ی پیگیری‌ها و رویدادهای تا لحظه‌ی ارجاع
 $receivedReferral = null;
 try {
+    $rrFrom = function_exists('referral_log_ready') && referral_log_ready($pdo) ? referral_union_sql() : 'customer_referrals'; // + انتقال بعد از جلسه / Box
     $rrSt = $pdo->prepare('SELECT r.created_at, fu.full_name AS from_name, bu.full_name AS by_name
-        FROM customer_referrals r LEFT JOIN users fu ON fu.id = r.from_user_id LEFT JOIN users bu ON bu.id = r.referred_by
+        FROM ' . $rrFrom . ' r LEFT JOIN users fu ON fu.id = r.from_user_id LEFT JOIN users bu ON bu.id = r.referred_by
         WHERE r.customer_id = ? AND r.to_user_id = ? ORDER BY r.created_at DESC, r.id DESC LIMIT 1');
     $rrSt->execute([$id, (int) $user['id']]);
     $receivedReferral = $rrSt->fetch(PDO::FETCH_ASSOC) ?: null;

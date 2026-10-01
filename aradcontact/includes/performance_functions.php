@@ -797,6 +797,10 @@ function ps_box_claim(PDO $pdo, string $box, array $user): array
         }
         $cid = (int) $item['customer_id'];
         ps_transfer_record($pdo, $cid, $uid, $uid, 'تحویلِ پرونده از Box ' . $box . ' به ' . ($user['full_name'] ?? '') . ' (همراه با همه‌ی پیگیری‌ها و روندِ زمانیِ قبلی)');
+        // «تاریخچه ارجاع»: از کسی که مشتری را به Box داد ← دریافت‌کننده
+        if (function_exists('referral_log')) {
+            try { referral_log($pdo, $cid, (int) ($item['prev_owner_id'] ?: $item['entered_by']), $uid, (int) ($item['entered_by'] ?: $uid), 'box', 'Box ' . $box, 'bx' . (int) $item['id']); } catch (Throwable $e) {}
+        }
         perf_audit($pdo, $uid, 'box_claim', 'ps_box_items', (int) $item['id'], null, ['box' => $box, 'customer_id' => $cid, 'person_key' => $item['person_key'], 'team_id' => $user['team_id'] ?? null]);
         ps_activity($pdo, $cid, $uid, 'دریافت از Box ' . $box . ' ← ' . $box . ' = ' . ($user['full_name'] ?? ''));
         if ((int) ($item['reserved_user_id'] ?? 0) === $uid) {
@@ -987,12 +991,15 @@ function ps_assign_c_on_first_money(PDO $pdo, int $orderId, int $byUser): bool
     // قانونِ C: مشتری از همه‌ی Boxها خارج و پرونده‌ی داخلِ Box به همین C تحویل می‌شود
     if ($slot === 'C') {
         $pk = ps_person_key($pdo, $cid);
-        $open = $pdo->prepare("SELECT id, customer_id FROM ps_box_items WHERE person_key = ? AND status = 'open'");
+        $open = $pdo->prepare("SELECT id, customer_id, prev_owner_id, entered_by FROM ps_box_items WHERE person_key = ? AND status = 'open'");
         $open->execute([$pk]);
         foreach ($open->fetchAll(PDO::FETCH_ASSOC) ?: [] as $it) {
             $pdo->prepare("UPDATE ps_box_items SET status = 'claimed', claimed_by = ?, claimed_at = ?, note = ? WHERE id = ? AND status = 'open'")
                 ->execute([$regId, date('Y-m-d H:i:s'), 'خروج از Box: C مشتری (' . $reg['full_name'] . ') از او پول دریافت کرد', (int) $it['id']]);
             ps_transfer_record($pdo, (int) $it['customer_id'], $regId, $byUser ?: $regId, 'خروج از Box و تحویلِ پرونده به C مشتری (' . $reg['full_name'] . ') پس از دریافتِ پول');
+            if (function_exists('referral_log')) {
+                try { referral_log($pdo, (int) $it['customer_id'], (int) ($it['prev_owner_id'] ?: $it['entered_by']), $regId, $byUser ?: $regId, 'box', 'خروج از Box: C مشتری پول دریافت کرد', 'bx' . (int) $it['id']); } catch (Throwable $e) {}
+            }
         }
     }
     $pdo->prepare('UPDATE ps_order_snapshots SET owners_json = ? WHERE order_id = ?')->execute([json_encode($ow, JSON_UNESCAPED_UNICODE), $orderId]);
@@ -1668,12 +1675,18 @@ function ps_peer_refer(PDO $pdo, int $customerId, int $toUserId, array $by, stri
         $originTeam = $orig->fetchColumn();
         $now = date('Y-m-d H:i:s');
         foreach (array_unique($moved) as $rid) {
+            // ارجاع‌دهنده = کسی که پرونده واقعاً دستش بود (نه فقط صاحبِ جایگاه)
+            $prevSt = $pdo->prepare('SELECT owner_user_id FROM customers WHERE id = ?');
+            $prevSt->execute([$rid]);
+            $recFrom = (int) $prevSt->fetchColumn();
             $pdo->prepare('UPDATE customers SET owner_user_id = ?, new_customer_notified = 0 WHERE id = ?')->execute([$toUserId, $rid]);
             if (function_exists('get_or_create_relation')) { try { get_or_create_relation($pdo, $rid, $toUserId, 'peer_referral', true); } catch (Throwable $e) {} }
             // ثبت در گزارشِ ارجاع
             try {
-                $pdo->prepare('INSERT INTO customer_referrals (customer_id, from_user_id, to_user_id, referred_by) VALUES (?,?,?,?)')
-                    ->execute([$rid, $fromId ?: $byId, $toUserId, $byId]);
+                $__from = $recFrom && $recFrom !== $toUserId && $recFrom !== ps_box_user_id($pdo) ? $recFrom : ($fromId ?: $byId);
+                if (function_exists('referral_log')) referral_log($pdo, $rid, $__from, $toUserId, $byId, 'peer', $note);
+                else $pdo->prepare('INSERT INTO customer_referrals (customer_id, from_user_id, to_user_id, referred_by) VALUES (?,?,?,?)')
+                    ->execute([$rid, $__from, $toUserId, $byId]);
             } catch (Throwable $e) {}
             // «تحویلِ پرونده» ← گیرنده همه‌ی پیگیری‌ها و روندِ زمانیِ قبل از این لحظه را می‌بیند (ps_inherit_cutoff)
             $pdo->prepare('INSERT INTO ps_box_items (box, customer_id, person_key, status, source, note, entered_by, entered_at, claimed_by, claimed_at, prev_owner_id, entered_team_id, origin_team_id)

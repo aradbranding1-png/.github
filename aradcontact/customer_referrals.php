@@ -11,6 +11,13 @@ try {
     $referralTableAvailable = false;
 }
 
+// همه‌ی تغییرِ مالکیت‌ها (جلسه، Box، …) هم با «نوع» در همین تاریخچه ثبت می‌شوند
+$refTypes = ($referralTableAvailable && referral_log_ready($pdo)) ? referral_source_labels() : [];
+// ارجاع‌ها + انتقال‌های پرونده (بعد از جلسه، از Box، …)
+$refFrom = $refTypes ? referral_union_sql() : 'customer_referrals';
+$refType = (string) ($_GET['type'] ?? '');
+if (!isset($refTypes[$refType])) $refType = '';
+
 $isAdmin = $user['role'] === 'admin';
 $search = trim((string) ($_GET['q'] ?? ''));
 $direction = trim((string) ($_GET['direction'] ?? ($isAdmin ? 'all' : 'outbound')));
@@ -47,6 +54,15 @@ if ($search !== '') {
     array_push($params, $like, $like, $like, $like, $like);
 }
 
+if ($refType !== '') {
+    if (in_array($refType, ['manual'], true)) {
+        $where[] = "(r.source IS NULL OR r.source = 'manual')"; // ردیف‌های قدیمی (بدونِ نوع) ارجاعِ دستی بوده‌اند
+    } else {
+        $where[] = 'r.source = ?';
+        $params[] = $refType;
+    }
+}
+
 $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 $PER_PAGE = 25;
@@ -54,7 +70,7 @@ $page = max(1, (int) ($_GET['page'] ?? 1));
 
 $totalCount = 0;
 if ($referralTableAvailable) {
-    $countSql = "SELECT COUNT(*) FROM customer_referrals r
+    $countSql = "SELECT COUNT(*) FROM $refFrom r
                  JOIN customers c ON c.id = r.customer_id
                  JOIN users from_u ON from_u.id = r.from_user_id
                  JOIN users to_u ON to_u.id = r.to_user_id
@@ -71,7 +87,7 @@ $sql = "SELECT r.*, c.full_name AS customer_name, c.mobile, c.mobile_2, c.status
                from_u.full_name AS from_user_name,
                to_u.full_name AS to_user_name,
                by_u.full_name AS referred_by_name
-        FROM customer_referrals r
+        FROM $refFrom r
         JOIN customers c ON c.id = r.customer_id
         JOIN users from_u ON from_u.id = r.from_user_id
         JOIN users to_u ON to_u.id = r.to_user_id
@@ -209,7 +225,16 @@ require_once __DIR__ . '/includes/layout_top.php';
         <option value="inbound" <?= $direction === 'inbound' ? 'selected' : '' ?>>ارجاع‌های دریافتی من</option>
       </select>
     </div>
-    <div class="col-md-6 d-flex gap-2">
+    <?php if ($refTypes): ?>
+    <div class="col-md-2">
+      <label class="form-label small">نوع</label>
+      <select name="type" class="form-select" onchange="this.form.submit()">
+        <option value="">همه</option>
+        <?php foreach ($refTypes as $__k => $__l): ?><option value="<?= e($__k) ?>" <?= $refType === $__k ? 'selected' : '' ?>><?= e($__l) ?></option><?php endforeach; ?>
+      </select>
+    </div>
+    <?php endif; ?>
+    <div class="<?= $refTypes ? 'col-md-4' : 'col-md-6' ?> d-flex gap-2">
         <input type="text" name="q" class="form-control" value="<?= e($search) ?>" placeholder="جستجو بر اساس نام مشتری، شماره یا نام کارشناس">
         <button class="btn btn-primary px-4"><i class="fa-solid fa-magnifying-glass"></i> جستجو</button>
     </div>
@@ -254,7 +279,12 @@ require_once __DIR__ . '/includes/layout_top.php';
           <td class="text-start">
             <a href="customer_view.php?id=<?= (int) $r['customer_id'] ?>&amp;from=customer_referrals.php" class="fw-bold text-decoration-none"><?= e($r['customer_name']) ?></a>
           </td>
-          <td class="<?= $showFromOnMobile ? '' : 'd-none d-md-table-cell' ?> text-start"><?= e($r['from_user_name']) ?></td>
+          <td class="<?= $showFromOnMobile ? '' : 'd-none d-md-table-cell' ?> text-start"><?= e($r['from_user_name']) ?>
+            <?php if ($refTypes): $__src = (string) ($r['source'] ?? '') ?: 'manual'; ?>
+              <div><span class="badge <?= in_array($__src, ['meeting', 'box'], true) ? 'bg-info-subtle text-info-emphasis' : 'bg-light text-dark border' ?>" style="font-size:10px"><?= e($refTypes[$__src] ?? $__src) ?></span>
+              <?php if (!empty($r['note']) && $__src !== 'meeting'): ?><span class="text-muted" style="font-size:10px"><?= e((string) $r['note']) ?></span><?php endif; ?>
+              <?php if ((int) $r['referred_by'] !== (int) $r['from_user_id'] && !empty($r['referred_by_name'])): ?><span class="text-muted" style="font-size:10px">— ثبت: <?= e((string) $r['referred_by_name']) ?></span><?php endif; ?></div>
+            <?php endif; ?></td>
           <td class="<?= $showFromOnMobile ? 'd-none d-md-table-cell' : '' ?> text-start"><?= e($r['to_user_name']) ?></td>
           <td class="d-none d-md-table-cell text-start">
             <?= to_jalali(substr((string) $r['created_at'], 0, 10)) ?>
