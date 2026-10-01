@@ -6,14 +6,17 @@ if (!perm_page_allowed($admin)) {
     die('دسترسی به این بخش ندارید.');
 }
 $pdo = db();
+if (is_file(__DIR__ . '/../includes/reception_functions.php')) require_once __DIR__ . '/../includes/reception_functions.php';
+$rxCalls = function_exists('rx_cc_ready') && rx_cc_ready($pdo);
 
 $typeLabels = ['customer' => 'مشتری', 'colleague' => 'همکار', 'family' => 'خانواده'];
+if ($rxCalls) $typeLabels['applicant'] = 'متقاضیِ همکاری (پذیرش)';
 $type = $_GET['type'] ?? 'customer';
 if (!isset($typeLabels[$type])) {
     $type = 'customer';
 }
 
-$metricLabels = ['new' => 'جدید', 'followup' => 'پیگیری', 'connected' => 'برقرارشده', 'missed' => 'بی‌پاسخ'];
+$metricLabels = ['new' => 'جدید', 'followup' => 'پیگیری', 'connected' => 'برقرارشده', 'missed' => 'بی‌پاسخ', 'all' => 'همه'];
 $metric = $_GET['metric'] ?? '';
 if (!isset($metricLabels[$metric])) {
     $metric = '';
@@ -55,13 +58,32 @@ $sql = "SELECT f.id, f.followup_date, f.event_time, f.call_duration_seconds, f.d
         WHERE f.source IN ('call_import', 'novatel_import') AND f.followup_date BETWEEN ? AND ?
               AND c.contact_type = ?";
 $params = [$rangeFrom, $rangeTo, $type];
+if ($rxCalls) $sql .= ' AND ' . rx_cc_not_applicant_sql('f'); // تماس با متقاضی جداست
+if ($type === 'applicant') {
+    // تماس‌های کالیزرِ نیروهای پذیرش با متقاضیان (جدولِ جدا)
+    if ($metric === 'new' || $metric === 'followup') $metric = 'all';
+    $sql = "SELECT r.id, r.call_date AS followup_date, r.event_time, COALESCE(r.duration_seconds, 0) AS call_duration_seconds,
+                   IF(r.connected = 1, 'برقراری تماس', 'بی پاسخ') AS description, 0 AS followup_number,
+                   COALESCE(NULLIF(TRIM(CONCAT(COALESCE(ra.first_name, ''), ' ', COALESCE(ra.last_name, ''))), ''), '—') AS contact_name, r.phone AS mobile,
+                   u.full_name AS owner_name, NULL AS call_class, ra.id AS applicant_id
+            FROM reception_callizer_calls r
+            LEFT JOIN reception_applicants ra ON ra.id = r.applicant_id
+            JOIN users u ON u.id = r.agent_user_id
+            WHERE r.call_date BETWEEN ? AND ?";
+    $params = [$rangeFrom, $rangeTo];
+}
 
 if ($userId !== null) {
-    $sql .= " AND f.created_by = ?";
+    $sql .= $type === 'applicant' ? " AND r.agent_user_id = ?" : " AND f.created_by = ?";
     $params[] = $userId;
 }
 
-switch ($metric) {
+if ($type === 'applicant') {
+    $sql .= $metric === 'missed' ? ' AND r.connected = 0' : ($metric === 'all' ? '' : ' AND r.connected = 1');
+    $sql .= ' ORDER BY r.call_date DESC, r.event_time DESC LIMIT 1000';
+} else switch ($metric) {
+    case 'all':
+        break;
     case 'new':
     case 'followup':
         // تفکیکِ جدید/پیگیری در PHP با همان قاعده‌ی مشترکِ همه‌ی گزارش‌ها انجام می‌شود (پایین‌تر)
@@ -77,14 +99,14 @@ switch ($metric) {
         $sql .= " AND f.call_duration_seconds > 0";
         break;
 }
-$sql .= " ORDER BY f.followup_date DESC, f.event_time DESC, f.call_duration_seconds DESC LIMIT " . (in_array($metric, ['new', 'followup'], true) ? 5000 : 1000);
+if ($type !== 'applicant') $sql .= " ORDER BY f.followup_date DESC, f.event_time DESC, f.call_duration_seconds DESC LIMIT " . (in_array($metric, ['new', 'followup'], true) ? 5000 : 1000);
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
 
 // «جدید» = شماره با همین آپلود وارد سامانه شده؛ «پیگیری» = از قبل در سامانه بوده
-$__cls = calls_new_followup_counts($pdo, $rangeFrom, $rangeTo, 0)['class'];
+$__cls = $type === 'applicant' ? [] : calls_new_followup_counts($pdo, $rangeFrom, $rangeTo, 0)['class'];
 foreach ($rows as &$__r) {
     $__r['call_class'] = (int) $__r['call_duration_seconds'] > 0 ? ($__cls[(int) $__r['id']] ?? null) : null;
 }
@@ -189,16 +211,18 @@ require_once __DIR__ . '/../includes/layout_top.php';
   <?php else: ?>
     <div class="table-responsive">
       <table class="table table-sm align-middle mb-0">
-        <thead class="table-light"><tr><th>کارشناس</th><th>نام مشتری</th><th>شماره</th><th>وضعیت</th><th>مدت مکالمه</th><th>ساعت</th><th>تاریخ</th></tr></thead>
+        <thead class="table-light"><tr><th>کارشناس</th><th><?= $type === 'applicant' ? 'متقاضی' : 'نام مشتری' ?></th><th>شماره</th><th>وضعیت</th><th>مدت مکالمه</th><th>ساعت</th><th>تاریخ</th></tr></thead>
         <tbody>
           <?php foreach ($rows as $r): ?>
             <tr>
               <td><?= e($r['owner_name']) ?></td>
-              <td><?= e($r['contact_name']) ?></td>
+              <td><?php if (!empty($r['applicant_id'])): ?><a href="../reception_applicant.php?id=<?= (int) $r['applicant_id'] ?>" class="text-decoration-none"><?= e($r['contact_name']) ?></a><?php else: ?><?= e($r['contact_name']) ?><?php endif; ?></td>
               <td dir="ltr" style="text-align:right"><?= e($r['mobile']) ?></td>
               <td>
                 <?php if ($r['description'] === 'برقراری تماس' || (int) $r['call_duration_seconds'] > 0): ?>
-                  <?php if (($r['call_class'] ?? '') === 'new'): ?>
+                  <?php if ($type === 'applicant'): ?>
+                    <span class="badge bg-primary-subtle text-primary-emphasis">برقرار</span>
+                  <?php elseif (($r['call_class'] ?? '') === 'new'): ?>
                     <span class="badge bg-primary-subtle text-primary-emphasis">برقرار (جدید)</span>
                   <?php else: ?>
                     <span class="badge bg-warning-subtle text-warning-emphasis">برقرار (پیگیری)</span>

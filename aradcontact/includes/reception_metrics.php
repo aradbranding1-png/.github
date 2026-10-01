@@ -8,7 +8,7 @@
  *
  *  ورود شماره      : reception_applicants.created_at در بازه
  *  اختصاص          : reception_applicants.assigned_at در بازه (به کارشناسِ همان ردیف)
- *  تماس (کالیزر)   : followups با source = call_import که کارشناس در بازه وارد کرده (تماسِ واقعیِ تلفن)
+ *  تماس (کالیزر)   : تماس‌های کالیزرِ کارشناس با «متقاضی» (reception_callizer_calls) — تماس با مشتری جداست و این‌جا نمی‌آید
  *  تماسِ ثبت‌شده   : reception_calls (تماس‌هایی که کارشناس در پرونده‌ی متقاضی ثبت کرده) — «موفق» = result = success
  *  دعوت            : رزروِ میتینگِ آنلاین / ثبتِ مصاحبه‌ی حضوری که «در بازه ثبت شده» (لغوشده‌ها حساب نمی‌شوند)
  *  جلسه            : همان رزرو/مصاحبه بر اساسِ «تاریخِ جلسه» در بازه
@@ -60,7 +60,7 @@ function rm_steps(): array
     return [
         'imported'     => ['label' => 'شماره‌ی واردشده',          'icon' => 'fa-file-import'],
         'assigned'     => ['label' => 'اختصاص به کارشناس',         'icon' => 'fa-user-check'],
-        'calls'        => ['label' => 'تماس (کالیزر)',             'icon' => 'fa-phone'],
+        'calls'        => ['label' => 'تماس با متقاضی (کالیزر)',        'icon' => 'fa-phone'],
         'logged'       => ['label' => 'تماسِ ثبت‌شده در پرونده',    'icon' => 'fa-phone-volume'],
         'success'      => ['label' => 'تماسِ موفق',                'icon' => 'fa-phone-flip'],
         'invited'      => ['label' => 'دعوت به جلسه',              'icon' => 'fa-envelope-open-text'],
@@ -120,7 +120,9 @@ function rm_overview(PDO $pdo, string $from, string $to, int $agentId = 0): arra
 
     $add($q('SELECT assigned_agent_id a, COUNT(*) n FROM reception_applicants WHERE created_at BETWEEN ? AND ?' . $agentSql('assigned_agent_id') . ' GROUP BY assigned_agent_id', [$fromDt, $toDt]), 'imported');
     $add($q('SELECT assigned_agent_id a, COUNT(*) n FROM reception_applicants WHERE assigned_agent_id IS NOT NULL AND assigned_at BETWEEN ? AND ?' . $agentSql('assigned_agent_id') . ' GROUP BY assigned_agent_id', [$fromDt, $toDt]), 'assigned');
-    $add($q("SELECT created_by a, COUNT(*) n FROM followups WHERE source = 'call_import' AND followup_date BETWEEN ? AND ?" . ($agentId > 0 ? ' AND created_by = ' . (int) $agentId : ' AND created_by IN (SELECT DISTINCT assigned_agent_id FROM reception_applicants WHERE assigned_agent_id IS NOT NULL)') . ' GROUP BY created_by', [$from, $to]), 'calls');
+    if (function_exists('rx_cc_ready') && rx_cc_ready($pdo)) {
+        $add($q('SELECT agent_user_id a, COUNT(*) n FROM reception_callizer_calls WHERE call_date BETWEEN ? AND ?' . $agentSql('agent_user_id') . ' GROUP BY agent_user_id', [$from, $to]), 'calls');
+    }
     $add($q('SELECT agent_user_id a, COUNT(*) n FROM reception_calls WHERE started_at BETWEEN ? AND ?' . $agentSql('agent_user_id') . ' GROUP BY agent_user_id', [$fromDt, $toDt]), 'logged');
     $add($q("SELECT agent_user_id a, COUNT(*) n FROM reception_calls WHERE result = 'success' AND started_at BETWEEN ? AND ?" . $agentSql('agent_user_id') . ' GROUP BY agent_user_id', [$fromDt, $toDt]), 'success');
 
@@ -338,12 +340,14 @@ function rm_people(PDO $pdo, string $metric, string $from, string $to, int $agen
             $params = [$fromDt, $toDt];
             break;
         case 'calls':
-            $sql = "SELECT 0 id, c.full_name name, c.mobile, ag.full_name agent_name, CONCAT(f.followup_date, ' ', COALESCE(f.event_time, '')) at,
-                    CONCAT('مدت: ', COALESCE(f.call_duration_seconds, 0), ' ثانیه') detail
-                FROM followups f JOIN customers c ON c.id = f.customer_id LEFT JOIN users ag ON ag.id = f.created_by
-                WHERE f.source = 'call_import' AND f.followup_date BETWEEN ? AND ?" . ($agentId > 0 ? ' AND f.created_by = ' . (int) $agentId
-                    : ' AND f.created_by IN (SELECT DISTINCT assigned_agent_id FROM reception_applicants WHERE assigned_agent_id IS NOT NULL)');
+            // تماس‌های کالیزر با متقاضی (تماس با مشتری جداست)
+            $sql = "SELECT COALESCE(ra.id, 0) id, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(ra.first_name, ''), ' ', COALESCE(ra.last_name, ''))), ''), '—') name, r.phone mobile,
+                    ag.full_name agent_name, CONCAT(r.call_date, ' ', COALESCE(r.event_time, '')) at,
+                    IF(r.connected = 1, CONCAT('برقرار — ', COALESCE(r.duration_seconds, 0), ' ثانیه'), 'بی‌پاسخ') detail
+                FROM reception_callizer_calls r LEFT JOIN reception_applicants ra ON ra.id = r.applicant_id LEFT JOIN users ag ON ag.id = r.agent_user_id
+                WHERE r.call_date BETWEEN ? AND ?" . $ag('r.agent_user_id');
             $params = [$from, $to];
+            if (!function_exists('rx_cc_ready') || !rx_cc_ready($pdo)) return ['rows' => [], 'title' => (string) ($titles['calls']['label'] ?? '')];
             break;
         case 'logged':
         case 'success':

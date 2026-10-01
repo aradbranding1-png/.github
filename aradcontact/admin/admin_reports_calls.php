@@ -6,6 +6,9 @@ if (!perm_page_allowed($admin)) {
     die('دسترسی به این بخش ندارید.');
 }
 $pdo = db();
+// نیروهای پذیرش: تفکیکِ «تماس با متقاضی» از «تماس با مشتری»
+if (is_file(__DIR__ . '/../includes/reception_functions.php')) require_once __DIR__ . '/../includes/reception_functions.php';
+$rxCalls = function_exists('rx_cc_ready') && rx_cc_ready($pdo);
 
 $referralTableAvailable = false;
 try {
@@ -27,12 +30,12 @@ switch ($preset) {
         $rangeLabel = 'دیروز';
         break;
     case 'week':
-        $rangeFrom = date('Y-m-d', strtotime('monday this week'));
+        $rangeFrom = date('Y-m-d', strtotime('-' . (((int) date('N') + 1) % 7) . ' days')); // شنبه
         $rangeTo = $todayG;
         $rangeLabel = 'این هفته';
         break;
     case 'month':
-        $rangeFrom = date('Y-m-01');
+        $rangeFrom = function_exists('rx_jalali_month') ? rx_jalali_month(0)[0] : date('Y-m-01'); // اولِ ماهِ شمسی
         $rangeTo = $todayG;
         $rangeLabel = 'این ماه';
         break;
@@ -104,6 +107,18 @@ foreach ($stmt->fetchAll() as $row) {
         $systemCallByContactType[$key] = ['count' => (int) $row['call_count'], 'duration' => (int) $row['total_duration']];
     }
 }
+// تماس با متقاضی (نیروهای پذیرش): از «مشتری» جداست
+$applicantCallsByUser = $rxCalls ? rx_cc_stats($pdo, $rangeFrom, $rangeTo, $staffId) : [];
+$legacyApplicantByUser = $rxCalls ? rx_cc_legacy_in_followups($pdo, $rangeFrom, $rangeTo, $staffId) : [];
+foreach ($legacyApplicantByUser as $__l) {
+    $systemCallByContactType['customer']['count'] = max(0, $systemCallByContactType['customer']['count'] - (int) $__l['calls']);
+    $systemCallByContactType['customer']['duration'] = max(0, $systemCallByContactType['customer']['duration'] - (int) $__l['seconds']);
+}
+$systemApplicantCalls = ['count' => 0, 'duration' => 0];
+foreach ($applicantCallsByUser as $__a) {
+    $systemApplicantCalls['count'] += $__a['n'];
+    $systemApplicantCalls['duration'] += $__a['seconds'];
+}
 
 // =====================================================================
 // گزارش تماس‌ها به تفکیک واحد — نسخه‌ی بهینه‌شده
@@ -129,6 +144,19 @@ $statsStmt = $pdo->prepare("
 $statsStmt->execute([$rangeFrom, $rangeTo]);
 foreach ($statsStmt->fetchAll() as $row) {
     $callStatsByUser[(int) $row['uid']] = $row;
+}
+// سابقه‌ی قدیمیِ «تماس با متقاضی» که داخلِ followups مانده، از آمارِ مشتریِ همان نیرو کم می‌شود
+foreach (($rxCalls ? rx_cc_legacy_in_followups($pdo, $rangeFrom, $rangeTo) : []) as $__uid => $__l) {
+    if (!isset($callStatsByUser[$__uid])) continue;
+    $__s = &$callStatsByUser[$__uid];
+    $__s['new_calls'] = max(0, (int) $__s['new_calls'] - $__l['new_calls']);
+    $__s['followup_calls'] = max(0, (int) $__s['followup_calls'] - $__l['followup_calls']);
+    $__s['calls_range'] = max(0, (int) $__s['calls_range'] - $__l['calls']);
+    $__s['duration_range'] = max(0, (int) $__s['duration_range'] - $__l['seconds']);
+    $__s['callizer_duration_range'] = max(0, (int) $__s['callizer_duration_range'] - $__l['seconds']);
+    $__s['connected_range'] = max(0, (int) $__s['connected_range'] - $__l['connected']);
+    $__s['missed_range'] = max(0, (int) $__s['missed_range'] - $__l['missed']);
+    unset($__s);
 }
 
 // --- ۲) آمار آپلود در بازه ---
@@ -162,12 +190,12 @@ if ($referralTableAvailable) {
 
 // --- ۴) کاربران فعال هر واحد + سرپرست ---
 $usersStmt = $pdo->prepare("
-    SELECT u.id, u.full_name, u.role, COALESCE(su.full_name, '') AS supervisor_name
+    SELECT u.id, u.full_name, u.role, COALESCE(su.full_name, '') AS supervisor_name, COALESCE(u.service_access_role, '') AS service_access_role
     FROM users u
     $supervisorJoinSql
     WHERE u.role IN ('A','B','C')
       AND u.is_active = 1 AND u.is_approved = 1
-      AND (u.service_access_role IS NULL OR u.service_access_role = '')
+      AND (u.service_access_role IS NULL OR u.service_access_role = '' OR u.service_access_role = 'reception_agent')
     ORDER BY u.full_name
 ");
 $usersStmt->execute();
@@ -205,6 +233,7 @@ foreach ($allUsers as $u) {
         'id'                     => $uid,
         'full_name'              => $u['full_name'],
         'supervisor_name'        => $u['supervisor_name'],
+        'is_reception'           => $u['service_access_role'] === 'reception_agent',
         'new_calls'              => (int) $s['new_calls'],
         'followup_calls'         => (int) $s['followup_calls'],
         'calls_range'            => (int) $s['calls_range'],
@@ -229,6 +258,21 @@ foreach ($allUsers as $u) {
 
     $callUnitReports[$role][] = $row;
 }
+
+// --- ۶) نیروهای پذیرش: تماس با متقاضی | تماس با مشتری ---
+$receptionCallRows = [];
+foreach ($allUsers as $u) {
+    if ($u['service_access_role'] !== 'reception_agent') continue;
+    $uid = (int) $u['id'];
+    if ($staffId > 0 && $uid !== $staffId) continue;
+    $ap = $applicantCallsByUser[$uid] ?? ['n' => 0, 'connected' => 0, 'missed' => 0, 'seconds' => 0, 'applicants' => 0];
+    $cs = $callStatsByUser[$uid] ?? null;
+    $cust = ['n' => (int) ($cs['calls_range'] ?? 0), 'connected' => (int) ($cs['connected_range'] ?? 0), 'missed' => (int) ($cs['missed_range'] ?? 0), 'seconds' => (int) ($cs['duration_range'] ?? 0)];
+    if ($ap['n'] === 0 && $cust['n'] === 0) continue;
+    $receptionCallRows[] = ['id' => $uid, 'full_name' => $u['full_name'], 'supervisor_name' => $u['supervisor_name'], 'applicant' => $ap, 'customer' => $cust,
+        'uploaded' => ($uploadByUser[$uid] ?? 0) > 0 || $ap['n'] > 0];
+}
+usort($receptionCallRows, static fn($a, $b) => ($b['applicant']['seconds'] + $b['customer']['seconds']) <=> ($a['applicant']['seconds'] + $a['customer']['seconds']));
 
 // مرتب‌سازی هر واحد بر اساس مدت مکالمه
 foreach (['A', 'B', 'C'] as $unitRole) {
@@ -262,6 +306,13 @@ if (isset($_GET['export']) && $_GET['export'] === 'xls') {
                 (($r['duration_source'] ?? '') === 'callizer' ? 'کالیزر' :
                 (($r['duration_source'] ?? '') === 'mixed' ? 'نواتل + کالیزر' : '')),
             ];
+        }
+    }
+    foreach ($receptionCallRows as $r) {
+        foreach (['applicant' => 'پذیرش — تماس با متقاضی', 'customer' => 'پذیرش — تماس با مشتری'] as $__k => $__lbl) {
+            if ($r[$__k]['n'] === 0) continue;
+            $xlsRows[] = [$__lbl, $r['full_name'], $r['supervisor_name'] ?? '', '', '', $r[$__k]['n'], format_duration_minutes_only($r[$__k]['seconds']),
+                $r[$__k]['connected'], $r[$__k]['missed'], 'کالیزر'];
         }
     }
     export_table_as_xls('گزارش-تماس-' . $rangeFrom . '-تا-' . $rangeTo,
@@ -450,7 +501,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <h6 class="mb-0 fw-bold">مدت مکالمه به تفکیک نوع مخاطب — <?= $staffId > 0 ? e($selectedStaffName) : 'کل سیستم' ?> — <?= e($rangeLabel) ?></h6>
   </div>
   <div class="row g-2 text-center">
-    <div class="col-4">
+    <div class="<?= $rxCalls ? 'col-6 col-md-3' : 'col-4' ?>">
       <a href="<?= e(__calls_detail_link('customer', $preset, to_jalali($rangeFrom), to_jalali($rangeTo), $staffId > 0 ? $staffId : null)) ?>" class="text-decoration-none">
         <div class="glance-box p-3">
           <div class="glance-num">
@@ -461,7 +512,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
         </div>
       </a>
     </div>
-    <div class="col-4">
+    <div class="<?= $rxCalls ? 'col-6 col-md-3' : 'col-4' ?>">
       <a href="<?= e(__calls_detail_link('colleague', $preset, to_jalali($rangeFrom), to_jalali($rangeTo), $staffId > 0 ? $staffId : null)) ?>" class="text-decoration-none">
         <div class="glance-box p-3">
           <div class="glance-num">
@@ -472,7 +523,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
         </div>
       </a>
     </div>
-    <div class="col-4">
+    <div class="<?= $rxCalls ? 'col-6 col-md-3' : 'col-4' ?>">
       <a href="<?= e(__calls_detail_link('family', $preset, to_jalali($rangeFrom), to_jalali($rangeTo), $staffId > 0 ? $staffId : null)) ?>" class="text-decoration-none">
         <div class="glance-box p-3">
           <div class="glance-num">
@@ -483,6 +534,19 @@ require_once __DIR__ . '/../includes/layout_top.php';
         </div>
       </a>
     </div>
+    <?php if ($rxCalls): ?>
+    <div class="col-6 col-md-3">
+      <a href="#reception-calls" class="text-decoration-none">
+        <div class="glance-box p-3">
+          <div class="glance-num">
+            <span class="d-none d-md-inline"><?= format_duration_seconds($systemApplicantCalls['duration']) ?></span>
+            <span class="d-md-none"><?= format_duration_minutes_only($systemApplicantCalls['duration']) ?></span>
+          </div>
+          <div class="glance-label">با متقاضیِ همکاری — پذیرش (<?= to_persian_digits((string) $systemApplicantCalls['count']) ?> تماس)</div>
+        </div>
+      </a>
+    </div>
+    <?php endif; ?>
   </div>
 </div>
 
@@ -518,7 +582,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
                   <?php foreach ($callUnitReports[$unitRole] as $r): ?>
                     <?php $rfJ = to_jalali($rangeFrom); $rtJ = to_jalali($rangeTo); ?>
                     <tr>
-                      <td><?= e($r['full_name']) ?></td>
+                      <td><?= e($r['full_name']) ?><?php if (!empty($r['is_reception'])): ?> <span class="badge bg-info-subtle text-info-emphasis" title="نیروی پذیرش؛ این ردیف فقط تماس با مشتری است — تماس با متقاضی در جدولِ «نیروهای پذیرش»">پذیرش</span><?php endif; ?></td>
                       <td><?= e($r['supervisor_name'] ?? '') ?: '-' ?></td>
                       <td><a href="<?= e(__calls_detail_link('customer', $preset, $rfJ, $rtJ, (int) $r['id'])) ?>" class="text-decoration-none"><?= to_persian_digits((string) $r['calls_range']) ?></a></td>
                       <td><?= to_persian_digits((string) (int) $r['referrals_received_range']) ?></td>
@@ -565,7 +629,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
                   <?php foreach ($callUnitReports[$unitRole] as $r): ?>
                     <?php $rfJ = to_jalali($rangeFrom); $rtJ = to_jalali($rangeTo); ?>
                     <tr>
-                      <td><?= e($r['full_name']) ?></td>
+                      <td><?= e($r['full_name']) ?><?php if (!empty($r['is_reception'])): ?> <span class="badge bg-info-subtle text-info-emphasis" title="نیروی پذیرش؛ این ردیف فقط تماس با مشتری است — تماس با متقاضی در جدولِ «نیروهای پذیرش»">پذیرش</span><?php endif; ?></td>
                       <td><?= e($r['supervisor_name'] ?? '') ?: '-' ?></td>
                       <td><a href="<?= e(__calls_detail_link('customer', $preset, $rfJ, $rtJ, (int) $r['id'], 'new')) ?>" class="text-decoration-none"><?= to_persian_digits((string) (int) $r['new_calls']) ?></a></td>
                       <td><a href="<?= e(__calls_detail_link('customer', $preset, $rfJ, $rtJ, (int) $r['id'], 'followup')) ?>" class="text-decoration-none"><?= to_persian_digits((string) (int) $r['followup_calls']) ?></a></td>
@@ -614,6 +678,52 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <?php endforeach; ?>
   </div>
 </div>
+
+<?php if ($rxCalls): ?>
+<div class="card p-3 mb-4" id="reception-calls">
+  <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+    <i class="fa-solid fa-user-tie"></i>
+    <h6 class="mb-0 fw-bold">نیروهای پذیرش — تماس با متقاضی و تماس با مشتری (کالیزر) — <?= e($rangeLabel) ?></h6>
+  </div>
+  <p class="text-muted small mb-3">در آپلودِ کالیزرِ نیروی پذیرش، شماره‌ای که در بانکِ متقاضیان هست «تماس با متقاضی» و بقیه «تماس با مشتری» حساب می‌شود؛ هر کدام جدا. روی هر عدد بزنید تا تماس‌ها را ببینید.</p>
+  <?php if (!$receptionCallRows): ?>
+    <p class="text-muted small mb-0">در این بازه تماسی از نیروهای پذیرش ثبت نشده.</p>
+  <?php else: $rfJ = to_jalali($rangeFrom); $rtJ = to_jalali($rangeTo); $__tot = ['a' => 0, 'as' => 0, 'c' => 0, 'cs' => 0]; ?>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0 text-center">
+      <thead class="table-light">
+        <tr><th rowspan="2" class="text-start">نیرو</th><th rowspan="2">سرپرست</th><th colspan="4" style="background:#e6f3f8">تماس با متقاضی (همکاری)</th><th colspan="4" style="background:#fbf4e1">تماس با مشتری</th><th rowspan="2">جمعِ مدت</th><th rowspan="2">آپلود</th></tr>
+        <tr><th style="background:#e6f3f8">تماس</th><th style="background:#e6f3f8">برقرار</th><th style="background:#e6f3f8">بی‌پاسخ</th><th style="background:#e6f3f8">مدت</th>
+            <th style="background:#fbf4e1">تماس</th><th style="background:#fbf4e1">برقرار</th><th style="background:#fbf4e1">بی‌پاسخ</th><th style="background:#fbf4e1">مدت</th></tr>
+      </thead>
+      <tbody>
+      <?php foreach ($receptionCallRows as $r): $a = $r['applicant']; $c = $r['customer'];
+            $__tot['a'] += $a['n']; $__tot['as'] += $a['seconds']; $__tot['c'] += $c['n']; $__tot['cs'] += $c['seconds']; ?>
+        <tr>
+          <td class="text-start"><?= e($r['full_name']) ?></td>
+          <td><?= e($r['supervisor_name'] ?? '') ?: '-' ?></td>
+          <td><a class="text-decoration-none" href="<?= e(__calls_detail_link('applicant', $preset, $rfJ, $rtJ, (int) $r['id'], 'all')) ?>"><?= to_persian_digits((string) $a['n']) ?></a></td>
+          <td><a class="text-decoration-none text-success" href="<?= e(__calls_detail_link('applicant', $preset, $rfJ, $rtJ, (int) $r['id'], 'connected')) ?>"><?= to_persian_digits((string) $a['connected']) ?></a></td>
+          <td><a class="text-decoration-none text-danger" href="<?= e(__calls_detail_link('applicant', $preset, $rfJ, $rtJ, (int) $r['id'], 'missed')) ?>"><?= to_persian_digits((string) $a['missed']) ?></a></td>
+          <td><?= format_duration_minutes_only($a['seconds']) ?></td>
+          <td><a class="text-decoration-none" href="<?= e(__calls_detail_link('customer', $preset, $rfJ, $rtJ, (int) $r['id'], 'all')) ?>"><?= to_persian_digits((string) $c['n']) ?></a></td>
+          <td><a class="text-decoration-none text-success" href="<?= e(__calls_detail_link('customer', $preset, $rfJ, $rtJ, (int) $r['id'], 'connected')) ?>"><?= to_persian_digits((string) $c['connected']) ?></a></td>
+          <td><a class="text-decoration-none text-danger" href="<?= e(__calls_detail_link('customer', $preset, $rfJ, $rtJ, (int) $r['id'], 'missed')) ?>"><?= to_persian_digits((string) $c['missed']) ?></a></td>
+          <td><?= format_duration_minutes_only($c['seconds']) ?></td>
+          <td class="fw-bold"><?= format_duration_minutes_only($a['seconds'] + $c['seconds']) ?></td>
+          <td><?php if ($r['uploaded']): ?><span class="badge bg-success-subtle text-success-emphasis"><i class="fa-solid fa-check"></i></span><?php else: ?><span class="badge bg-danger-subtle text-danger-emphasis"><i class="fa-solid fa-xmark"></i></span><?php endif; ?></td>
+        </tr>
+      <?php endforeach; ?>
+        <tr class="table-light fw-bold"><td class="text-start" colspan="2">جمع</td>
+          <td><?= to_persian_digits((string) $__tot['a']) ?></td><td colspan="2"></td><td><?= format_duration_minutes_only($__tot['as']) ?></td>
+          <td><?= to_persian_digits((string) $__tot['c']) ?></td><td colspan="2"></td><td><?= format_duration_minutes_only($__tot['cs']) ?></td>
+          <td><?= format_duration_minutes_only($__tot['as'] + $__tot['cs']) ?></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
 </div>
 
 <?php require_once __DIR__ . '/../includes/layout_bottom.php'; ?>

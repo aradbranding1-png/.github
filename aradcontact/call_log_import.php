@@ -39,6 +39,9 @@ if (!function_exists('__call_import_phone_normalize')) {
 
 $user = require_login();
 $pdo  = db();
+// کالیزرِ نیروهای پذیرش: جدا کردنِ «تماس با متقاضی» از «تماس با مشتری»
+if (is_file(__DIR__ . '/includes/reception_functions.php')) require_once __DIR__ . '/includes/reception_functions.php';
+$SESS_APPLICANT = 'call_import_applicant_stats';
 try { contact_type_backfill_v1($pdo); } catch (Throwable $e) {} // یک‌بار: اصلاحِ همکار/خانواده‌هایی که «مشتری» مانده‌اند
 __dbg('after requires+login, user_id=' . ($user['id'] ?? '?') . ' role=' . ($user['role'] ?? '?'));
 
@@ -238,7 +241,7 @@ function __call_import_scan(array $rows, array $phoneMap, ?int $phoneCol, ?int $
 }
 
 if (isset($_GET['cancel'])) {
-    unset($_SESSION[$SESS_UPLOAD], $_SESSION[$SESS_NEWSTEP], $_SESSION[$SESS_MATCHED], $_SESSION[$SESS_PROGRESS]);
+    unset($_SESSION[$SESS_UPLOAD], $_SESSION[$SESS_NEWSTEP], $_SESSION[$SESS_MATCHED], $_SESSION[$SESS_PROGRESS], $_SESSION[$SESS_APPLICANT]);
     redirect('call_log_import.php');
 }
 
@@ -347,6 +350,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         if ($phoneCol === null) {
             $errors[] = 'انتخاب ستون «شماره موبایل» الزامی است.';
+        }
+
+        unset($_SESSION[$SESS_APPLICANT]);
+        if (!$errors && function_exists('rx_cc_split_rows') && rx_is_reception_agent($pdo, (int) ($actAsUserId ?? $user['id']))) {
+            // نیروی پذیرش: شماره‌هایی که در بانکِ متقاضیان هستند «تماس با متقاضی» ثبت می‌شوند و وارد مشتری‌ها نمی‌شوند
+            $__appStats = rx_cc_split_rows($pdo, (int) ($actAsUserId ?? $user['id']), $rows, $phoneCol, $durationCol, $dateCol, $statusCol, $timeCol,
+                '__call_import_phone_normalize', '__call_import_row_time');
+            if ($__appStats['rows'] > 0) $_SESSION[$SESS_APPLICANT] = $__appStats;
         }
 
         if (!$errors) {
@@ -827,6 +838,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
 
             $entry = $payloadByPhone[$phoneKey] ?? null;
+            if ($doAction === 'applicant' && $entry !== null && !empty($entry['create']) && function_exists('rx_cc_record') && rx_cc_ready($pdo)) {
+                // نیروی پذیرش: این شماره متقاضی است نه مشتری ← فقط «تماس با متقاضی» ثبت می‌شود
+                $__as = $_SESSION[$SESS_APPLICANT] ?? ['rows' => 0, 'inserted' => 0, 'duplicate' => 0, 'connected' => 0, 'seconds' => 0, 'applicants' => 0];
+                $__as['applicants']++;
+                foreach ($cand['occurrences'] as $occ) {
+                    $__as['rows']++;
+                    if (rx_cc_record($pdo, (int) $effectiveUserId, null, (string) $phoneKey, (string) $occ['date'], $occ['time'] ?? null, $occ['duration'] !== null ? (int) $occ['duration'] : null, !empty($occ['connected']))) {
+                        $__as['inserted']++;
+                        if (!empty($occ['connected'])) { $__as['connected']++; $__as['seconds'] += (int) $occ['duration']; }
+                    } else {
+                        $__as['duplicate']++;
+                    }
+                }
+                $__applicantSession = $__as;
+                $_SESSION[$SESS_APPLICANT] = $__as;
+                continue;
+            }
             $checked = ($doAction === 'create') && $entry !== null && !empty($entry['create']);
             if (!$checked) {
                 $skippedCount++;
@@ -903,6 +931,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         session_start();
         unset($_SESSION[$SESS_NEWSTEP]);
+        if (isset($__applicantSession)) $_SESSION[$SESS_APPLICANT] = $__applicantSession;
 
         $stats['created'] = $createdCount;
         $stats['created_skipped'] = $skippedCount;
@@ -1186,6 +1215,10 @@ $__progPct = min(100, (int) round(((int) $__progCtx['offset']) / $__progTotal * 
 
 <?php elseif ($step === 'matched_customers'): ?>
 
+<?php if (!empty($_SESSION[$SESS_APPLICANT]['rows'])): ?>
+<div class="alert alert-info small"><i class="fa-solid fa-user-graduate"></i> <?= to_persian_digits((string) $_SESSION[$SESS_APPLICANT]['rows']) ?> ردیفِ فایل مربوط به <b>متقاضیانِ همکاری</b> بود و جدا به‌عنوان «تماس با متقاضی» ثبت شد؛ این‌جا فقط تماس‌های مشتری می‌آید.</div>
+<?php endif; ?>
+
 <?php
 $stepData = $_SESSION[$SESS_MATCHED];
 $matchedPreview = $stepData['matched_preview'] ?? [];
@@ -1274,6 +1307,10 @@ function __buildMatchedPayload() {
 
 <?php elseif ($step === 'new_customers'): ?>
 
+<?php if (!empty($_SESSION[$SESS_APPLICANT]['rows'])): ?>
+<div class="alert alert-info small"><i class="fa-solid fa-user-graduate"></i> <?= to_persian_digits((string) $_SESSION[$SESS_APPLICANT]['rows']) ?> ردیفِ فایل مربوط به <b>متقاضیانِ همکاری</b> بود و جدا به‌عنوان «تماس با متقاضی» ثبت شد؛ این‌جا فقط تماس‌های مشتری می‌آید.</div>
+<?php endif; ?>
+
 <?php
 $stepData = $_SESSION[$SESS_NEWSTEP];
 $candidates = $stepData['candidates'];
@@ -1338,6 +1375,13 @@ $existingGlobal = __call_import_existing_globally($pdo, array_keys($candidates))
       <button type="submit" class="btn btn-primary" onclick="document.getElementById('newCustDo').value='create'"><i class="fa-solid fa-user-plus"></i> افزودن موارد انتخاب‌شده به‌عنوان مشتری جدید</button>
       <button type="submit" class="btn btn-outline-secondary" onclick="document.getElementById('newCustDo').value='skip'">هیچ‌کدام؛ رد شو و نتیجه را نشان بده</button>
     </div>
+    <?php if (function_exists('rx_is_reception_agent') && rx_is_reception_agent($pdo, (int) ($stepData['stats']['act_as_user_id'] ?? $user['id']))): ?>
+      <div class="mt-3 p-2 rounded-3 small" style="background:#eef6fa;border:1px solid #cfe3ee">
+        <i class="fa-solid fa-user-tie text-info"></i> <b>نیروی پذیرش:</b> اگر شماره‌های تیک‌خورده <b>متقاضیِ همکاری</b> هستند (نه مشتری)، این دکمه را بزنید؛
+        فقط «تماس با متقاضی» ثبت می‌شود و مشتری ساخته نمی‌شود. (شماره‌هایی که در بانکِ متقاضیان بودند خودکار جدا شده‌اند.)
+        <div class="mt-2"><button type="submit" class="btn btn-sm btn-info" onclick="document.getElementById('newCustDo').value='applicant'"><i class="fa-solid fa-user-graduate"></i> ثبتِ موارد انتخاب‌شده به‌عنوان «تماس با متقاضی»</button></div>
+      </div>
+    <?php endif; ?>
   </form>
 </div>
 <script>
@@ -1357,6 +1401,20 @@ function __buildNewCustPayload(formId) {
 </script>
 
 <?php elseif ($step === 'result'): ?>
+
+<?php $__as = $_SESSION[$SESS_APPLICANT] ?? null; unset($_SESSION[$SESS_APPLICANT]); if ($__as): ?>
+<div class="card p-3 mb-3" style="border-color:#cfe3ee;background:#f4f9fc">
+  <h6 class="mb-2"><i class="fa-solid fa-user-graduate text-info"></i> تماس با متقاضیانِ همکاری (جدا از تماس با مشتری)</h6>
+  <div class="row g-2 text-center">
+    <div class="col-6 col-md-3"><div class="fw-bold fs-5"><?= to_persian_digits((string) $__as['inserted']) ?></div><div class="small text-muted">تماسِ ثبت‌شده</div></div>
+    <div class="col-6 col-md-3"><div class="fw-bold fs-5"><?= to_persian_digits((string) $__as['applicants']) ?></div><div class="small text-muted">متقاضی</div></div>
+    <div class="col-6 col-md-3"><div class="fw-bold fs-5 text-primary"><?= to_persian_digits((string) $__as['connected']) ?></div><div class="small text-muted">برقرارشده</div></div>
+    <div class="col-6 col-md-3"><div class="fw-bold fs-5"><?= to_persian_digits((string) round($__as['seconds'] / 60)) ?> <span class="fs-6 fw-normal text-muted">دقیقه</span></div><div class="small text-muted">مدتِ مکالمه</div></div>
+  </div>
+  <?php if ($__as['duplicate'] > 0): ?><div class="small text-muted mt-2"><?= to_persian_digits((string) $__as['duplicate']) ?> ردیفِ تکراری (قبلاً آپلود شده) نادیده گرفته شد.</div><?php endif; ?>
+  <div class="small text-muted mt-1">آمارِ پایین فقط «تماس با مشتری» است.</div>
+</div>
+<?php endif; ?>
 
 <div class="row g-3 mb-4">
   <div class="col-md-3 col-6">

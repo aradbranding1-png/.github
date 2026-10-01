@@ -35,6 +35,7 @@ $myApplicants = [];
 $dailyPerf = [];
 $todayCallSeconds = 0;
 $todayCallCount = 0;
+$todaySplit = null;
 
 if ($moduleReady) {
     try {
@@ -51,10 +52,13 @@ if ($moduleReady) {
         $stmt->execute([$myId, $todayStart, $tomorrowStart]);
         $kpi['received'] = (int) $stmt->fetchColumn();
 
-        // ۲) کل تماس‌ها: فقط ورودی واقعی کالیزر، نه reception_calls.
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM followups WHERE created_by = ? AND source = 'call_import' AND followup_date >= ? AND followup_date < ?");
+        // ۲) کل تماس‌ها: فقط ورودی واقعی کالیزر، نه reception_calls — «تماس با متقاضی» و «تماس با مشتری» جدا
+        $rxCc = function_exists('rx_cc_ready') && rx_cc_ready($pdo);
+        $todayApplicant = $rxCc ? (rx_cc_stats($pdo, $todayDate, $todayDate, $myId)[$myId] ?? null) : null;
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM followups f WHERE f.created_by = ? AND f.source = 'call_import' AND f.followup_date >= ? AND f.followup_date < ?" . ($rxCc ? ' AND ' . rx_cc_not_applicant_sql('f') : ''));
         $stmt->execute([$myId, $todayDate, $tomorrowDate]);
-        $kpi['called'] = (int) $stmt->fetchColumn();
+        $todayCustomerCalls = (int) $stmt->fetchColumn();
+        $kpi['called'] = $rxCc ? (int) ($todayApplicant['n'] ?? 0) : $todayCustomerCalls;
 
         // ۳) نتایج تماس‌های ثبت‌شده در پرونده‌ها؛ این منبع با گزارش ادمین یکسان است.
         foreach (['success' => 'success_calls', 'cancelled' => 'cancelled', 'no_answer' => 'no_answer', 'followup' => 'followup'] as $code => $key) {
@@ -115,12 +119,15 @@ if ($moduleReady) {
 
         // مجموع زمان مکالمات امروز: دقیقاً از ورودی کالیزر.
         $stmt = $pdo->prepare("SELECT COUNT(*) AS call_count, COALESCE(SUM(COALESCE(call_duration_seconds, 0)), 0) AS total_seconds
-            FROM followups
-            WHERE created_by = ? AND source = 'call_import' AND followup_date >= ? AND followup_date < ?");
+            FROM followups f
+            WHERE f.created_by = ? AND f.source = 'call_import' AND f.followup_date >= ? AND f.followup_date < ?" . ($rxCc ? ' AND ' . rx_cc_not_applicant_sql('f') : ''));
         $stmt->execute([$myId, $todayDate, $tomorrowDate]);
         $todayCallSummary = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-        $todayCallCount = (int) ($todayCallSummary['call_count'] ?? 0);
-        $todayCallSeconds = (int) ($todayCallSummary['total_seconds'] ?? 0);
+        // جمعِ امروز = تماس با متقاضی + تماس با مشتری (هر کدام جدا هم نمایش داده می‌شود)
+        $todaySplit = ['applicant' => ['n' => (int) ($todayApplicant['n'] ?? 0), 'seconds' => (int) ($todayApplicant['seconds'] ?? 0)],
+            'customer' => ['n' => (int) ($todayCallSummary['call_count'] ?? 0), 'seconds' => (int) ($todayCallSummary['total_seconds'] ?? 0)]];
+        $todayCallCount = $todaySplit['applicant']['n'] + $todaySplit['customer']['n'];
+        $todayCallSeconds = $todaySplit['applicant']['seconds'] + $todaySplit['customer']['seconds'];
 
         // نمودار روزهای اخیر نیز از همان منبع کالیزر استفاده می‌کند تا با آمار تماس هماهنگ باشد.
         $dailyPerf = [];
@@ -128,6 +135,13 @@ if ($moduleReady) {
         $stmt = $pdo->prepare("SELECT followup_date d, COUNT(*) c FROM followups WHERE created_by = ? AND source = 'call_import' AND followup_date >= ? AND followup_date < ? GROUP BY followup_date ORDER BY followup_date ASC");
         $stmt->execute([$myId, $chartFromDate, $tomorrowDate]);
         $dailyPerf = $stmt->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
+        if ($rxCc) {
+            // نمودار: همه‌ی تماس‌های کالیزر (متقاضی + مشتری)
+            $stmt = $pdo->prepare('SELECT call_date d, COUNT(*) c FROM reception_callizer_calls WHERE agent_user_id = ? AND origin = \'upload\' AND call_date >= ? AND call_date < ? GROUP BY call_date');
+            $stmt->execute([$myId, $chartFromDate, $tomorrowDate]);
+            foreach ($stmt->fetchAll(PDO::FETCH_KEY_PAIR) ?: [] as $__d => $__c) $dailyPerf[$__d] = (int) ($dailyPerf[$__d] ?? 0) + (int) $__c;
+            ksort($dailyPerf);
+        }
     } catch (Throwable $e) {
         // مقادیر پیش‌فرض باقی می‌مانند.
     }
@@ -280,12 +294,14 @@ $avgSeconds = $avgCallSeconds % 60;
       <div class="today-stat-box p-3"><div class="today-stat-icon"><i class="fa-solid fa-user-plus"></i></div><div class="today-stat-num"><?= to_persian_digits((string) $kpi['received']) ?></div><div class="text-muted small">متقاضیِ دریافت‌شده</div></div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="today-stat-box p-3"><div class="today-stat-icon"><i class="fa-solid fa-phone"></i></div><div class="today-stat-num"><?= to_persian_digits((string) $todayCallCount) ?></div><div class="text-muted small">تعداد تماس</div></div>
+      <div class="today-stat-box p-3"><div class="today-stat-icon"><i class="fa-solid fa-phone"></i></div><div class="today-stat-num"><?= to_persian_digits((string) $todayCallCount) ?></div><div class="text-muted small">تعداد تماس</div>
+        <?php if ($todaySplit): ?><div class="small" style="font-size:11px"><span class="text-info">متقاضی <?= to_persian_digits((string) $todaySplit['applicant']['n']) ?></span> · <span class="text-warning-emphasis">مشتری <?= to_persian_digits((string) $todaySplit['customer']['n']) ?></span></div><?php endif; ?></div>
     </div>
     <div class="col-6 col-md-3">
       <div class="today-stat-box p-3"><div class="today-stat-icon"><i class="fa-solid fa-clock"></i></div><div class="today-stat-num">
         <?php if ($hoursToday > 0): ?><?= to_persian_digits((string) $hoursToday) ?> ساعت و <?php endif; ?><?= to_persian_digits((string) $minutesToday) ?> دقیقه
-      </div><div class="text-muted small">مجموع زمان مکالمات</div></div>
+      </div><div class="text-muted small">مجموع زمان مکالمات</div>
+        <?php if ($todaySplit): ?><div class="small" style="font-size:11px"><span class="text-info">متقاضی <?= to_persian_digits((string) intdiv($todaySplit['applicant']['seconds'], 60)) ?> د</span> · <span class="text-warning-emphasis">مشتری <?= to_persian_digits((string) intdiv($todaySplit['customer']['seconds'], 60)) ?> د</span></div><?php endif; ?></div>
     </div>
     <div class="col-6 col-md-3">
       <div class="today-stat-box p-3"><div class="today-stat-icon"><i class="fa-solid fa-stopwatch"></i></div><div class="today-stat-num"><?= to_persian_digits((string) $avgMinutes) ?>:<?= to_persian_digits(str_pad((string) $avgSeconds, 2, '0', STR_PAD_LEFT)) ?></div><div class="text-muted small">میانگین زمان هر تماس</div></div>

@@ -292,6 +292,21 @@ $inheritCutoff = null;
 if (!$canSeeOthersFollowups) {
     try { require_once __DIR__ . '/includes/performance_functions.php'; if (perf_ready($pdo)) $inheritCutoff = ps_inherit_cutoff($pdo, $id, (int) $user['id']); } catch (Throwable $e) {}
 }
+// مشتریِ ارجاع‌گرفته: گیرنده باید ببیند قبل از ارجاع چه مراحلی با مشتری طی شده ← همه‌ی پیگیری‌ها و رویدادهای تا لحظه‌ی ارجاع
+$receivedReferral = null;
+try {
+    $rrSt = $pdo->prepare('SELECT r.created_at, fu.full_name AS from_name, bu.full_name AS by_name
+        FROM customer_referrals r LEFT JOIN users fu ON fu.id = r.from_user_id LEFT JOIN users bu ON bu.id = r.referred_by
+        WHERE r.customer_id = ? AND r.to_user_id = ? ORDER BY r.created_at DESC, r.id DESC LIMIT 1');
+    $rrSt->execute([$id, (int) $user['id']]);
+    $receivedReferral = $rrSt->fetch(PDO::FETCH_ASSOC) ?: null;
+} catch (Throwable $e) {
+    $receivedReferral = null;
+}
+if ($receivedReferral && !$canSeeOthersFollowups) {
+    $__refCut = date('Y-m-d H:i:s', (strtotime((string) $receivedReferral['created_at']) ?: time()) + 2);
+    if ($inheritCutoff === null || $__refCut > $inheritCutoff) $inheritCutoff = $__refCut;
+}
 $stmt = $pdo->prepare('SELECT f.*, u.full_name AS created_by_name
                         FROM followups f JOIN users u ON u.id = f.created_by
                         WHERE f.customer_id = ?' . ($canSeeOthersFollowups ? '' : ' AND (f.created_by = ' . (int) $user['id'] . ($inheritCutoff ? ' OR f.created_at < ?' : '') . ')') . '
@@ -314,7 +329,7 @@ $tlClock = static function ($raw): ?string {
     }
     return null;
 };
-if ($canManage || $canViewReferralHistory) {
+if ($canManage || $canViewReferralHistory || $receivedReferral) {
     try {
         $tl = $pdo->prepare('SELECT l.id, l.customer_id, l.user_id, l.activity_type, l.description, l.created_at,
                                     u.full_name AS user_name
@@ -1001,6 +1016,14 @@ if ($__cvInitial === '') { $__cvInitial = '؟'; }
               <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle px-3 py-2"><?= to_persian_digits((string) count($followups)) ?> پیگیری</span>
             </div>
 
+            <?php if ($receivedReferral): ?>
+              <div class="alert alert-info small py-2 mb-2">
+                <i class="fa-solid fa-share-from-square"></i>
+                این مشتری در <?= to_persian_digits(to_jalali(substr((string) $receivedReferral['created_at'], 0, 10))) ?> از «<b><?= e((string) ($receivedReferral['from_name'] ?? '')) ?></b>» به شما ارجاع شده
+                <?php if (!empty($receivedReferral['by_name']) && $receivedReferral['by_name'] !== $receivedReferral['from_name']): ?>(توسطِ <?= e((string) $receivedReferral['by_name']) ?>)<?php endif; ?>؛
+                پیگیری‌ها و توضیحاتِ قبل از ارجاع هم این‌جا آمده (نامِ ثبت‌کننده زیرِ هر ردیف) تا بدانید چه مراحلی با مشتری طی شده.
+              </div>
+            <?php endif; ?>
             <?php if (!$followups): ?>
               <div class="customer-tab-empty">
                 <i class="fa-regular fa-clock"></i>
@@ -1035,7 +1058,7 @@ if ($__cvInitial === '') { $__cvInitial = '؟'; }
                         <?php elseif (($f['source'] ?? 'manual') === 'novatel_import'): ?>
                           <span class="badge border" style="background:#dbeafe;color:#1d4ed8;border-color:#93c5fd !important">ثبت نواتل</span>
                         <?php endif; ?>
-                        <?php if ($canSeeOthersFollowups && !empty($f['created_by_name'])): ?>
+                        <?php if (($canSeeOthersFollowups || (int) $f['created_by'] !== (int) $user['id']) && !empty($f['created_by_name'])): ?>
                           <div class="small text-muted mt-1" style="font-size:11px"><i class="fa-regular fa-user"></i> <?= e((string) $f['created_by_name']) ?></div>
                         <?php endif; ?>
                       </td>

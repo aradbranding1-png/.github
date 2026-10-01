@@ -169,7 +169,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
           <div class="alert alert-danger py-2 mt-2 mb-0 small"><i class="fa-solid fa-arrow-trend-down"></i>
             بیشترین ریزش بینِ «<?= e($worst['from']) ?>» و «<?= e($worst['to']) ?>» است: <b><?= to_persian_digits((string) $worst['lost']) ?> نفر (<?= to_persian_digits((string) round($worst['drop'] * 100)) ?>٪)</b>.</div>
         <?php endif; ?>
-        <div class="small text-muted mt-2">«تماس» از ورودیِ کالیزرِ نیروهای پذیرش است (یا ثبتِ تماسِ پرونده‌ها اگر کالیزر آپلود نشده). مراحلِ بعد از روی ثبت‌های «مسیرِ پیگیری» شمرده می‌شوند.</div>
+        <div class="small text-muted mt-2">«تماس» = تماس‌های کالیزرِ نیروهای پذیرش با <b>متقاضی</b> (تماس با مشتری جداست و در «گزارش تماس» می‌آید). مراحلِ بعد از روی ثبت‌های «مسیرِ پیگیری» شمرده می‌شوند.</div>
       </div>
     </div>
     <div class="col-lg-4">

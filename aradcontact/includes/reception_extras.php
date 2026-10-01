@@ -379,3 +379,208 @@ function rx_host_checkin(PDO $pdo, string $kind, int $hostId, string $date, stri
     }
     return ['ok' => true, 'message' => 'حضورِ شما برای جلسه‌ی ساعتِ ' . to_persian_digits($hm) . ' ثبت شد. بعد از جلسه «حاضر / غایب» افراد را هم بزنید.'];
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  کالیزرِ نیروهای پذیرش: «تماس با متقاضی» جدا از «تماس با مشتری»
+// ═══════════════════════════════════════════════════════════════════════
+//  نیروی پذیرش بخشی از روز با متقاضیانِ همکاری تماس می‌گیرد و بخشی با مشتری‌ها (تماس A).
+//  در آپلودِ کالیزر، شماره‌ای که در بانکِ متقاضیان هست به‌عنوان «تماس با متقاضی» در جدولِ
+//  reception_callizer_calls ثبت می‌شود (و مشتریِ جعلی ساخته نمی‌شود)؛ بقیه مثلِ قبل «تماس با مشتری» در followups.
+//  تماس‌های قدیمی (قبل از این تغییر) که برای شماره‌ی متقاضی در followups ثبت شده بودند یک‌بار با
+//  origin = legacy و followup_id به این جدول وصل می‌شوند و در آمارِ «مشتری» کم می‌شوند (هیچ ردیفی حذف نمی‌شود).
+
+/** ساختِ جدول + انتقالِ یک‌باره‌ی سابقه‌ی قبلی */
+function rx_cc_ready(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    $flag = __DIR__ . '/../storage/.reception_callizer_v1';
+    if (is_file($flag)) return $ok = true;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS reception_callizer_calls (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            agent_user_id INT UNSIGNED NOT NULL,
+            applicant_id INT UNSIGNED NULL,
+            phone VARCHAR(20) NOT NULL,
+            call_date DATE NOT NULL,
+            event_time TIME NULL,
+            duration_seconds INT UNSIGNED NULL,
+            connected TINYINT(1) NOT NULL DEFAULT 0,
+            origin VARCHAR(10) NOT NULL DEFAULT 'upload',
+            followup_id INT UNSIGNED NULL,
+            dedupe_key VARCHAR(120) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_rcc_dedupe (dedupe_key),
+            KEY idx_rcc_agent_date (agent_user_id, call_date),
+            KEY idx_rcc_date (call_date),
+            KEY idx_rcc_applicant (applicant_id),
+            KEY idx_rcc_followup (followup_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        rx_cc_migrate_legacy($pdo);
+        @file_put_contents($flag, date('c'));
+        return $ok = true;
+    } catch (Throwable $e) {
+        error_log('rx_cc_ready: ' . $e->getMessage());
+        return $ok = false;
+    }
+}
+
+/** تماس‌های قبلیِ نیروهای پذیرش با شماره‌ی متقاضی (که به‌اشتباه «مشتری» ساخته شده بودند) ← تماس با متقاضی */
+function rx_cc_migrate_legacy(PDO $pdo): int
+{
+    $hasNorm = function_exists('reception_column_exists') && reception_column_exists($pdo, 'customers', 'mobile_normalized');
+    $match = $hasNorm ? '(ra.mobile_normalized = c.mobile_normalized' . (reception_column_exists($pdo, 'customers', 'mobile2_normalized') ? ' OR ra.mobile_normalized = c.mobile2_normalized' : '') . ')'
+        : 'ra.mobile_normalized = c.mobile';
+    try {
+        return (int) $pdo->exec("INSERT IGNORE INTO reception_callizer_calls
+                (agent_user_id, applicant_id, phone, call_date, event_time, duration_seconds, connected, origin, followup_id, dedupe_key)
+            SELECT f.created_by, MIN(ra.id), MIN(ra.mobile_normalized), f.followup_date, f.event_time, f.call_duration_seconds,
+                   COALESCE(f.call_duration_seconds, 0) > 0, 'legacy', f.id, CONCAT('f', f.id)
+            FROM followups f
+            JOIN users u ON u.id = f.created_by AND u.service_access_role = 'reception_agent'
+            JOIN customers c ON c.id = f.customer_id
+            JOIN reception_applicants ra ON $match
+            WHERE f.source = 'call_import'
+            GROUP BY f.id");
+    } catch (Throwable $e) {
+        error_log('rx_cc_migrate_legacy: ' . $e->getMessage());
+        return 0;
+    }
+}
+
+function rx_is_reception_agent(PDO $pdo, int $userId): bool
+{
+    static $cache = [];
+    if (!isset($cache[$userId])) {
+        try {
+            $st = $pdo->prepare('SELECT service_access_role FROM users WHERE id = ? LIMIT 1');
+            $st->execute([$userId]);
+            $cache[$userId] = (string) $st->fetchColumn() === 'reception_agent';
+        } catch (Throwable $e) {
+            $cache[$userId] = false;
+        }
+    }
+    return $cache[$userId];
+}
+
+/** شماره‌های نرمال‌شده ← شناسه‌ی متقاضی (فقط آن‌هایی که در بانکِ متقاضیان هستند) */
+function rx_applicant_phone_map(PDO $pdo, array $phones): array
+{
+    $phones = array_values(array_unique(array_filter(array_map('strval', $phones), static fn($p) => $p !== '')));
+    $map = [];
+    foreach (array_chunk($phones, 500) as $chunk) {
+        try {
+            $st = $pdo->prepare('SELECT mobile_normalized, MIN(id) id FROM reception_applicants WHERE mobile_normalized IN (' . implode(',', array_fill(0, count($chunk), '?')) . ') GROUP BY mobile_normalized');
+            $st->execute($chunk);
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) $map[(string) $r['mobile_normalized']] = (int) $r['id'];
+        } catch (Throwable $e) {
+        }
+    }
+    return $map;
+}
+
+/** ثبتِ یک تماسِ کالیزر با متقاضی؛ تکراری (همان نیرو/شماره/روز/ساعت/مدت) نادیده گرفته می‌شود. true = ثبت شد */
+function rx_cc_record(PDO $pdo, int $agentId, ?int $applicantId, string $phone, string $date, ?string $time, ?int $duration, bool $connected): bool
+{
+    $key = implode('|', [$agentId, $phone, $date, (string) $time, (string) $duration]);
+    $st = $pdo->prepare('INSERT IGNORE INTO reception_callizer_calls (agent_user_id, applicant_id, phone, call_date, event_time, duration_seconds, connected, origin, dedupe_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, \'upload\', ?)');
+    $st->execute([$agentId, $applicantId, $phone, $date, $time ?: null, $duration, $connected ? 1 : 0, $key]);
+    return $st->rowCount() > 0;
+}
+
+/**
+ * ردیف‌های فایلِ کالیزرِ یک نیروی پذیرش را جدا می‌کند: شماره‌هایی که در بانکِ متقاضیان هستند ثبت و از $rows حذف می‌شوند.
+ * خروجی: آمارِ تماس‌های متقاضی (برای صفحه‌ی نتیجه).
+ */
+function rx_cc_split_rows(PDO $pdo, int $agentId, array &$rows, ?int $phoneCol, ?int $durationCol, ?int $dateCol, ?int $statusCol, ?int $timeCol, callable $normalize, callable $rowTime): array
+{
+    $stats = ['rows' => 0, 'inserted' => 0, 'duplicate' => 0, 'connected' => 0, 'seconds' => 0, 'applicants' => 0];
+    if ($phoneCol === null || !rx_cc_ready($pdo)) return $stats;
+    $norms = [];
+    foreach ($rows as $i => $row) {
+        $raw = trim((string) ($row[$phoneCol] ?? ''));
+        $n = $raw !== '' ? $normalize($raw) : null;
+        if ($n) $norms[$i] = $n;
+    }
+    $map = rx_applicant_phone_map($pdo, array_values($norms));
+    if (!$map) return $stats;
+    $seenApplicants = [];
+    foreach ($norms as $i => $n) {
+        if (!isset($map[$n])) continue;
+        $row = $rows[$i];
+        $durationSec = parse_call_duration_to_seconds($durationCol !== null ? (string) ($row[$durationCol] ?? '') : '');
+        $connected = infer_call_connected($statusCol !== null ? (string) ($row[$statusCol] ?? '') : null, $durationSec);
+        $rawDate = $dateCol !== null ? (string) ($row[$dateCol] ?? '') : '';
+        $date = ($rawDate !== '' ? parse_row_date_to_gregorian($rawDate) : null) ?: date('Y-m-d');
+        $time = $rowTime($row, $dateCol, $timeCol);
+        $stats['rows']++;
+        if (rx_cc_record($pdo, $agentId, $map[$n], $n, $date, $time, $connected ? (int) $durationSec : null, $connected)) {
+            $stats['inserted']++;
+            if ($connected) {
+                $stats['connected']++;
+                $stats['seconds'] += (int) $durationSec;
+            }
+        } else {
+            $stats['duplicate']++;
+        }
+        $seenApplicants[$map[$n]] = true;
+        unset($rows[$i]);
+    }
+    $rows = array_values($rows);
+    $stats['applicants'] = count($seenApplicants);
+    return $stats;
+}
+
+/** آمارِ تماس با متقاضی (کالیزر) به تفکیکِ نیرو: [id => n, connected, missed, seconds] */
+function rx_cc_stats(PDO $pdo, string $from, string $to, int $agentId = 0): array
+{
+    if (!rx_cc_ready($pdo)) return [];
+    $sql = 'SELECT agent_user_id a, COUNT(*) n, SUM(connected) connected, SUM(1 - connected) missed, COALESCE(SUM(duration_seconds), 0) seconds,
+                COUNT(DISTINCT applicant_id) applicants
+            FROM reception_callizer_calls WHERE call_date BETWEEN ? AND ?';
+    $params = [$from, $to];
+    if ($agentId > 0) { $sql .= ' AND agent_user_id = ?'; $params[] = $agentId; }
+    $out = [];
+    try {
+        $st = $pdo->prepare($sql . ' GROUP BY agent_user_id');
+        $st->execute($params);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) {
+            $out[(int) $r['a']] = ['n' => (int) $r['n'], 'connected' => (int) $r['connected'], 'missed' => (int) $r['missed'], 'seconds' => (int) $r['seconds'], 'applicants' => (int) $r['applicants']];
+        }
+    } catch (Throwable $e) {
+    }
+    return $out;
+}
+
+/**
+ * سهمِ «سابقه‌ی قدیمی» داخلِ followups (ردیف‌هایی که در اصل تماس با متقاضی بوده‌اند) به تفکیکِ نیرو —
+ * برای کم کردن از آمارِ «تماس با مشتری». [id => calls, seconds, connected, missed, new_calls, followup_calls]
+ */
+function rx_cc_legacy_in_followups(PDO $pdo, string $from, string $to, int $agentId = 0): array
+{
+    if (!rx_cc_ready($pdo)) return [];
+    $sql = "SELECT f.created_by a, COUNT(*) calls, COALESCE(SUM(f.call_duration_seconds), 0) seconds,
+                SUM(f.description = 'برقراری تماس') connected, SUM(f.description = 'بی پاسخ') missed,
+                SUM(f.followup_number = 1) new_calls, SUM(f.followup_number > 1) followup_calls
+            FROM reception_callizer_calls r JOIN followups f ON f.id = r.followup_id
+            WHERE r.origin = 'legacy' AND f.followup_date BETWEEN ? AND ?";
+    $params = [$from, $to];
+    if ($agentId > 0) { $sql .= ' AND f.created_by = ?'; $params[] = $agentId; }
+    $out = [];
+    try {
+        $st = $pdo->prepare($sql . ' GROUP BY f.created_by');
+        $st->execute($params);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) {
+            $out[(int) $r['a']] = array_map('intval', $r);
+        }
+    } catch (Throwable $e) {
+    }
+    return $out;
+}
+
+/** شرطِ SQL برای کنار گذاشتنِ سابقه‌ی «تماس با متقاضی» از ردیف‌های followups (alias پیش‌فرض f) */
+function rx_cc_not_applicant_sql(string $f = 'f'): string
+{
+    return "NOT EXISTS (SELECT 1 FROM reception_callizer_calls rxl WHERE rxl.followup_id = $f.id)";
+}

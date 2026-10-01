@@ -1412,7 +1412,10 @@ function rp_funnel(PDO $pdo, string $from, string $to, int $agentId = 0): array
     if ($agentIds) {
         $ph = implode(',', array_fill(0, count($agentIds), '?'));
         try {
-            $st = $pdo->prepare("SELECT created_by AS a, COUNT(*) n FROM followups WHERE source = 'call_import' AND created_by IN ($ph) AND followup_date >= ? AND followup_date <= ? GROUP BY created_by");
+            // تماس‌های کالیزر با متقاضی (تماس با مشتری جداست)
+            $st = (function_exists('rx_cc_ready') && rx_cc_ready($pdo))
+                ? $pdo->prepare("SELECT agent_user_id AS a, COUNT(*) n FROM reception_callizer_calls WHERE agent_user_id IN ($ph) AND call_date >= ? AND call_date <= ? GROUP BY agent_user_id")
+                : $pdo->prepare("SELECT created_by AS a, COUNT(*) n FROM followups WHERE source = 'call_import' AND created_by IN ($ph) AND followup_date >= ? AND followup_date <= ? GROUP BY created_by");
             $st->execute(array_merge($agentIds, [$from, $to]));
             foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) {
                 $per[(int) $r['a']]['calls'] = (int) $r['n'];

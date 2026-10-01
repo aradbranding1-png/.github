@@ -56,7 +56,7 @@ if ($ready && isset($_GET['export'])) {
     foreach ($ov['per_agent'] as $r) {
         $aRows[] = [$r['name'], $r['assigned'], $r['calls'], $r['logged'], $r['success'], $r['invited'], $r['met_online'], $r['met_inperson'], $r['present'], $r['absent'], $r['pending'], $r['recall'], $r['closed'], $r['joined'], $r['referred']];
     }
-    $sheets[] = ['name' => 'کارشناسان', 'header' => ['کارشناس', 'اختصاص', 'تماس (کالیزر)', 'تماسِ ثبت‌شده', 'تماسِ موفق', 'دعوت', 'جلسه آنلاین', 'جلسه حضوری', 'حاضر', 'غایب', 'ثبت‌نشده', 'پیگیری مجدد', 'تعیین تکلیف', 'پیوست', 'ارجاع به سرپرست'],
+    $sheets[] = ['name' => 'کارشناسان', 'header' => ['کارشناس', 'اختصاص', 'تماس با متقاضی (کالیزر)', 'تماسِ ثبت‌شده', 'تماسِ موفق', 'دعوت', 'جلسه آنلاین', 'جلسه حضوری', 'حاضر', 'غایب', 'ثبت‌نشده', 'پیگیری مجدد', 'تعیین تکلیف', 'پیوست', 'ارجاع به سرپرست'],
         'rows' => $aRows, 'widths' => [24, 10, 12, 12, 10, 10, 11, 11, 9, 9, 10, 11, 11, 9, 13]];
     $sRows = [];
     foreach ($sessions as $s) {
@@ -219,7 +219,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
   <div class="card p-3 mb-3">
     <div class="fw-bold mb-2"><i class="fa-solid fa-users text-primary"></i> به تفکیکِ کارشناس <span class="small text-muted fw-normal">— روی هر عدد بزنید</span></div>
     <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-      <thead class="table-light"><tr><th>کارشناس</th><th>اختصاص</th><th>تماس (کالیزر)</th><th>تماسِ ثبت‌شده</th><th>موفق</th><th>دعوت</th><th>آنلاین</th><th>حضوری</th><th>حاضر</th><th>غایب</th><th>ثبت‌نشده</th><th>پیگیری مجدد</th><th>تعیین تکلیف</th><th>ارجاع</th></tr></thead><tbody>
+      <thead class="table-light"><tr><th>کارشناس</th><th>اختصاص</th><th>تماس با متقاضی (کالیزر)</th><th>تماسِ ثبت‌شده</th><th>موفق</th><th>دعوت</th><th>آنلاین</th><th>حضوری</th><th>حاضر</th><th>غایب</th><th>ثبت‌نشده</th><th>پیگیری مجدد</th><th>تعیین تکلیف</th><th>ارجاع</th></tr></thead><tbody>
       <?php foreach ($ov['per_agent'] as $r): $ag = ['ag' => $r['id']]; ?>
         <tr><td class="fw-semibold"><?= e($r['name']) ?></td>
           <?php foreach (['assigned', 'calls', 'logged', 'success', 'invited', 'met_online', 'met_inperson', 'present', 'absent', 'pending', 'recall', 'closed', 'referred'] as $k): ?>
@@ -280,7 +280,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <summary class="small fw-bold">تعریفِ هر عدد (منبعِ واحد)</summary>
     <ul class="small mt-2 mb-0" style="line-height:2">
       <li><b>شماره‌ی واردشده:</b> متقاضیانی که در بازه وارد بانک شده‌اند. <b>اختصاص:</b> زمانِ واگذاری به کارشناس در بازه.</li>
-      <li><b>تماس (کالیزر):</b> تماس‌های واقعیِ تلفنِ کارشناس از فایلِ کالیزر. <b>تماسِ ثبت‌شده:</b> تماس‌هایی که کارشناس در پرونده‌ی متقاضی ثبت کرده؛ <b>موفق</b> = نتیجه‌ی «موفق».</li>
+      <li><b>تماس با متقاضی (کالیزر):</b> تماس‌های واقعیِ تلفنِ کارشناس با متقاضیان از فایلِ کالیزر (تماس با مشتری‌ها جداست و در «گزارش تماس» می‌آید). <b>تماسِ ثبت‌شده:</b> تماس‌هایی که کارشناس در پرونده‌ی متقاضی ثبت کرده؛ <b>موفق</b> = نتیجه‌ی «موفق».</li>
       <li><b>دعوت:</b> رزروِ میتینگِ آنلاین یا ثبتِ مصاحبه‌ی حضوری که در بازه ثبت شده (افرادِ یکتا). <b>جلسه / حاضر / غایب:</b> بر اساسِ تاریخِ خودِ جلسه.</li>
       <li><b>پیگیری مجدد:</b> افرادی که برایشان پیگیریِ بعدی تعیین شد. <b>تعیین تکلیف:</b> پرونده‌هایی که بسته شدند (به‌جز بایگانیِ خودکار). <b>ارجاع:</b> ارجاع به سرپرست در بازه.</li>
     </ul>
