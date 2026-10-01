@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'membe
     $changed = [];
     $loc = (string) ($_POST['work_location'] ?? '');
     if (in_array($loc, ['onsite', 'remote'], true)) {
-        try { $pdo->prepare('UPDATE users SET work_location = ? WHERE id = ?')->execute([$loc, $mid]); $changed[] = 'محلِ فعالیت: ' . sup_work_location_label($loc); }
+        try { users_set_work_location($pdo, $mid, $loc); $changed[] = 'محلِ فعالیت: ' . sup_work_location_label($loc); }
         catch (Throwable $e) { error_log('spr work_location: ' . $e->getMessage()); }
     }
     $grp = normalize_job_group((string) ($_POST['job_group'] ?? ''));

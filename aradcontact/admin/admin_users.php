@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $__actionPerms = [
             'approve' => 'admin_users_approve', 'reject' => 'admin_users_approve',
             'deactivate' => 'admin_users_activate', 'activate' => 'admin_users_activate',
-            'change_job_group' => 'admin_users_edit', 'change_work_mode' => 'admin_users_edit', 'change_department' => 'admin_users_edit',
+            'change_job_group' => 'admin_users_edit', 'change_work_mode' => 'admin_users_edit', 'change_department' => 'admin_users_edit', 'change_team' => 'admin_users_edit',
         ];
         if (isset($__actionPerms[$action]) && !user_can($__actionPerms[$action], $user)) {
             flash_set('danger', 'برای این عملیات مجوزِ «' . perm_label($__actionPerms[$action]) . '» لازم است.');
@@ -71,11 +71,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 break;
             case 'change_work_mode':
+                // همان «محل فعالیت»ِ صفحه‌ی ویرایشِ کاربر و گزارشِ سرپرست (هر دو ستون با هم)
                 $newWorkMode = $_POST['new_work_mode'] ?? '';
-                if (users_col_exists($pdo, 'work_mode') && in_array($newWorkMode, ['', 'onsite', 'remote'], true)) {
-                    $pdo->prepare('UPDATE users SET work_mode = ? WHERE id = ?')->execute([$newWorkMode !== '' ? $newWorkMode : null, $targetId]);
+                if (in_array($newWorkMode, ['', 'onsite', 'remote'], true)) {
+                    users_set_work_location($pdo, $targetId, $newWorkMode !== '' ? $newWorkMode : null);
                     flash_set('success', 'وضعیت حضور بروزرسانی شد.');
                 }
+                break;
+            case 'change_team':
+                // همان «سرپرست»ِ صفحه‌ی ویرایشِ کاربر: تیمِ کاربر = تیمِ سرپرستِ انتخابی
+                $newTeam = (int) ($_POST['new_team_id'] ?? 0);
+                if ($newTeam > 0) {
+                    $tc = $pdo->prepare('SELECT COUNT(*) FROM teams WHERE id = ?');
+                    $tc->execute([$newTeam]);
+                    if (!(int) $tc->fetchColumn()) { flash_set('danger', 'تیم پیدا نشد.'); break; }
+                }
+                $pdo->prepare('UPDATE users SET team_id = ? WHERE id = ?')->execute([$newTeam > 0 ? $newTeam : null, $targetId]);
+                flash_set('success', 'تیم/سرپرست بروزرسانی شد.');
                 break;
             case 'change_department':
                 $newDept = trim((string) ($_POST['new_department'] ?? ''));
@@ -99,7 +111,17 @@ function users_col_exists(PDO $pdo, string $col): bool {
 $hasLastSeen = users_col_exists($pdo, 'last_seen');
 $hasAradCode = users_arad_code_ready($pdo);
 $hasJobGroup = users_col_exists($pdo, 'job_group');
-$hasWorkMode = users_col_exists($pdo, 'work_mode');
+users_work_sync_v1($pdo);
+$hasWorkMode = users_col_exists($pdo, 'work_mode') || users_col_exists($pdo, 'work_location');
+$__wc = users_work_cols($pdo);
+$workExpr = !empty($__wc['work_location']) && !empty($__wc['work_mode']) ? 'COALESCE(work_location, work_mode)' : (!empty($__wc['work_location']) ? 'work_location' : 'work_mode');
+// تیم‌ها (به نامِ سرپرست) — همان انتخابِ «سرپرست» در صفحه‌ی ویرایشِ کاربر
+$teamOptions = [];
+try {
+    foreach ($pdo->query('SELECT t.id, t.name, u.full_name AS leader FROM teams t LEFT JOIN users u ON u.id = t.leader_user_id ORDER BY u.full_name, t.id')->fetchAll(PDO::FETCH_ASSOC) ?: [] as $__t) {
+        $teamOptions[(int) $__t['id']] = trim((string) ($__t['leader'] ?? '')) !== '' ? (string) $__t['leader'] . (trim((string) $__t['name']) !== '' ? ' — ' . $__t['name'] : '') : ('تیم ' . ($__t['name'] ?: $__t['id']));
+    }
+} catch (Throwable $e) {}
 $hasDepartment = users_col_exists($pdo, 'department');
 $departmentOptions = $hasDepartment
     ? array_column($pdo->query("SELECT DISTINCT department FROM users WHERE department IS NOT NULL AND department <> '' ORDER BY department")->fetchAll(), 'department')
@@ -233,8 +255,10 @@ if (REQUIRE_ADMIN_APPROVAL) {
     $where[] = 'is_approved = 1';
 }
 if ($search !== '') {
-    $where[] = 'full_name LIKE ?';
-    $params[] = '%' . $search . '%';
+    // نام یا شماره موبایل (ارقامِ فارسی/انگلیسی، با یا بدونِ ۰ اول)
+    [$__sq, $__sp] = users_search_sql($search);
+    $where[] = $__sq;
+    array_push($params, ...$__sp);
 }
 if ($roleFilter !== '') {
     $where[] = 'role = ?';
@@ -259,12 +283,19 @@ if ($jobGroupFilter !== '' && $hasJobGroup) {
     $params[] = $jobGroupFilter;
 }
 if ($workModeFilter !== '' && $hasWorkMode) {
-    $where[] = 'work_mode = ?';
+    $where[] = $workExpr . ' = ?';
     $params[] = $workModeFilter;
 }
-if ($departmentFilter !== '' && $hasDepartment) {
-    $where[] = 'department = ?';
-    $params[] = $departmentFilter;
+if ($departmentFilter !== '') {
+    if (str_starts_with($departmentFilter, 't:')) {
+        $where[] = 'team_id = ?';
+        $params[] = (int) substr($departmentFilter, 2);
+    } elseif ($departmentFilter === 'none') {
+        $where[] = 'team_id IS NULL';
+    } elseif ($hasDepartment) {
+        $where[] = 'department = ?';
+        $params[] = $departmentFilter;
+    }
 }
 
 
@@ -404,7 +435,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
         <label for="userSearch" class="form-label small fw-bold mb-1">جستجو بر اساس نام</label>
         <div class="input-group input-group-sm">
           <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
-          <input id="userSearch" type="search" name="q" value="<?= e($search) ?>" class="form-control" placeholder="نام کاربر را وارد کنید...">
+          <input id="userSearch" type="search" name="q" value="<?= e($search) ?>" class="form-control" placeholder="نام یا شماره موبایل (مثلاً ۰۹۱۲ یا 912)...">
         </div>
       </div>
       <div class="col-12 col-md-3">
@@ -457,14 +488,20 @@ require_once __DIR__ . '/../includes/layout_top.php';
         </select>
       </div>
       <?php endif; ?>
-      <?php if ($hasDepartment && $departmentOptions): ?>
+      <?php if ($teamOptions || ($hasDepartment && $departmentOptions)): ?>
       <div class="col-12 col-md-2">
         <label for="userDepartment" class="form-label small fw-bold mb-1">تیم/دپارتمان</label>
         <select id="userDepartment" name="department" class="form-select form-select-sm">
           <option value="">همه</option>
+          <?php if ($teamOptions): ?><optgroup label="تیم (سرپرست)">
+            <?php foreach ($teamOptions as $__tid => $__tl): ?><option value="t:<?= (int) $__tid ?>" <?= $departmentFilter === 't:' . $__tid ? 'selected' : '' ?>><?= e($__tl) ?></option><?php endforeach; ?>
+            <option value="none" <?= $departmentFilter === 'none' ? 'selected' : '' ?>>بدونِ تیم</option>
+          </optgroup><?php endif; ?>
+          <?php if ($hasDepartment && $departmentOptions): ?><optgroup label="دپارتمان">
           <?php foreach ($departmentOptions as $dep): ?>
             <option value="<?= e($dep) ?>" <?= $departmentFilter === $dep ? 'selected' : '' ?>><?= e($dep) ?></option>
           <?php endforeach; ?>
+          </optgroup><?php endif; ?>
         </select>
       </div>
       <?php endif; ?>
@@ -479,7 +516,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
 
   <div class="table-responsive">
     <table class="table admin-users-table align-middle mb-0">
-      <thead><tr><th></th><th>نام</th><?php if ($hasAradCode): ?><th>آراد کد</th><?php endif; ?><th>موبایل</th><th>نقش</th><?php if ($hasJobGroup): ?><th>گروه شغلی</th><?php endif; ?><?php if ($hasWorkMode): ?><th>وضعیت حضور</th><?php endif; ?><?php if ($hasDepartment): ?><th>تیم/دپارتمان</th><?php endif; ?><th>وضعیت حساب</th><th>عملیات</th></tr></thead>
+      <thead><tr><th></th><th>نام</th><?php if ($hasAradCode): ?><th>آراد کد</th><?php endif; ?><th>موبایل</th><th>نقش</th><?php if ($hasJobGroup): ?><th>گروه شغلی</th><?php endif; ?><?php if ($hasWorkMode): ?><th>وضعیت حضور</th><?php endif; ?><?php if ($teamOptions || $hasDepartment): ?><th>تیم/دپارتمان</th><?php endif; ?><th>وضعیت حساب</th><th>عملیات</th></tr></thead>
       <tbody>
       <?php foreach ($active as $a): ?>
         <tr>
@@ -539,29 +576,28 @@ require_once __DIR__ . '/../includes/layout_top.php';
               <input type="hidden" name="user_id" value="<?= $a['id'] ?>">
               <input type="hidden" name="action" value="change_work_mode">
               <div class="admin-select-wrap"><select name="new_work_mode" class="form-select form-select-sm" onchange="this.form.submit()">
-                <option value="" <?= empty($a['work_mode']) ? 'selected' : '' ?>>—</option>
-                <option value="onsite" <?= $a['work_mode'] === 'onsite' ? 'selected' : '' ?>>حضوری</option>
-                <option value="remote" <?= $a['work_mode'] === 'remote' ? 'selected' : '' ?>>دورکار</option>
+                <?php $__wl = users_work_location_of($a); ?>
+                <option value="" <?= $__wl === null ? 'selected' : '' ?>>—</option>
+                <option value="onsite" <?= $__wl === 'onsite' ? 'selected' : '' ?>>حضوری</option>
+                <option value="remote" <?= $__wl === 'remote' ? 'selected' : '' ?>>دورکار</option>
               </select></div>
             </form>
           </td>
           <?php endif; ?>
-          <?php if ($hasDepartment): ?>
+          <?php if ($teamOptions || $hasDepartment): ?>
           <td>
             <form method="post" class="d-flex gap-1">
               <?= csrf_field() ?>
               <input type="hidden" name="user_id" value="<?= $a['id'] ?>">
-              <input type="hidden" name="action" value="change_department">
-              <div class="admin-select-wrap"><select name="new_department" class="form-select form-select-sm" onchange="this.form.submit()">
-                <option value="" <?= empty($a['department']) ? 'selected' : '' ?>>—</option>
-                <?php foreach ($departmentOptions as $dep): ?>
-                  <option value="<?= e($dep) ?>" <?= $a['department'] === $dep ? 'selected' : '' ?>><?= e($dep) ?></option>
+              <input type="hidden" name="action" value="change_team">
+              <div class="admin-select-wrap"><select name="new_team_id" class="form-select form-select-sm" onchange="this.form.submit()" title="همان «سرپرست» در صفحه‌ی ویرایشِ کاربر">
+                <option value="0" <?= empty($a['team_id']) ? 'selected' : '' ?>>—</option>
+                <?php foreach ($teamOptions as $__tid => $__tl): ?>
+                  <option value="<?= (int) $__tid ?>" <?= (int) ($a['team_id'] ?? 0) === $__tid ? 'selected' : '' ?>><?= e($__tl) ?></option>
                 <?php endforeach; ?>
-                <?php if (!empty($a['department']) && !in_array($a['department'], $departmentOptions, true)): ?>
-                  <option value="<?= e($a['department']) ?>" selected><?= e($a['department']) ?></option>
-                <?php endif; ?>
               </select></div>
             </form>
+            <?php if ($hasDepartment && !empty($a['department'])): ?><div class="text-muted" style="font-size:11px">دپارتمان: <?= e((string) $a['department']) ?></div><?php endif; ?>
           </td>
           <?php endif; ?>
           <td><?= $a['is_active'] ? '<span class="badge bg-success">فعال</span>' : '<span class="badge bg-warning text-dark">تعلیق شده</span>' ?></td>

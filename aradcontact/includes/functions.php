@@ -1315,6 +1315,79 @@ function followups_phone_call_backfill_v1(PDO $pdo): void
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  «محل فعالیت / وضعیت حضور»: دو ستونِ هم‌معنا (work_location در ویرایشِ کاربر و گزارشِ سرپرست، work_mode در لیستِ کاربران)
+//  از این به بعد هر دو با هم نوشته و خوانده می‌شوند تا هر صفحه‌ای ویرایش شود، همه‌جا یکی باشد.
+// ═══════════════════════════════════════════════════════════════════════
+function users_work_cols(PDO $pdo): array
+{
+    static $c = null;
+    if ($c !== null) return $c;
+    $c = [];
+    try {
+        foreach ($pdo->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('work_location','work_mode','department')")->fetchAll(PDO::FETCH_COLUMN) ?: [] as $n) $c[$n] = true;
+    } catch (Throwable $e) {}
+    return $c;
+}
+
+/** ثبتِ «حضوری/دورکار» در هر دو ستون (null = نامشخص) */
+function users_set_work_location(PDO $pdo, int $userId, ?string $val): void
+{
+    $val = in_array($val, ['onsite', 'remote'], true) ? $val : null;
+    $cols = users_work_cols($pdo);
+    foreach (['work_location', 'work_mode'] as $col) {
+        if (!empty($cols[$col])) $pdo->prepare("UPDATE users SET `$col` = ? WHERE id = ?")->execute([$val, $userId]);
+    }
+}
+
+/** مقدارِ واحدِ «محل فعالیت» برای یک ردیفِ کاربر */
+function users_work_location_of(array $u): ?string
+{
+    foreach (['work_location', 'work_mode'] as $col) {
+        if (in_array($u[$col] ?? null, ['onsite', 'remote'], true)) return $u[$col];
+    }
+    return null;
+}
+
+/** یک‌بار: یکسان‌سازیِ دو ستون (هر کدام که پر است، دیگری را پر می‌کند؛ اگر هر دو پر و متفاوت‌اند work_location معتبر است) */
+function users_work_sync_v1(PDO $pdo): void
+{
+    $flag = __DIR__ . '/../storage/.users_work_sync_v1';
+    if (is_file($flag)) return;
+    $cols = users_work_cols($pdo);
+    if (empty($cols['work_location']) || empty($cols['work_mode'])) return;
+    try {
+        $pdo->exec("UPDATE users SET work_location = work_mode WHERE (work_location IS NULL OR work_location = '') AND work_mode IN ('onsite','remote')");
+        $pdo->exec("UPDATE users SET work_mode = work_location WHERE work_location IN ('onsite','remote') AND (work_mode IS NULL OR work_mode <> work_location)");
+        @file_put_contents($flag, date('c'));
+    } catch (Throwable $e) {
+        error_log('users_work_sync_v1: ' . $e->getMessage());
+    }
+}
+
+/**
+ * شرطِ جست‌وجوی کاربر با نام یا موبایل: ارقامِ فارسی/عربی/انگلیسی، با یا بدونِ صفرِ اول (۰۹۱۲ / ۹۱۲ / +98912…).
+ * @return array{0:string,1:array} [SQL, params]
+ */
+function users_search_sql(string $q, string $alias = ''): array
+{
+    $a = $alias !== '' ? $alias . '.' : '';
+    $q = trim($q);
+    $sql = ["{$a}full_name LIKE ?"];
+    $params = ['%' . $q . '%'];
+    $digits = preg_replace('/\D+/', '', normalize_digits($q));
+    if ($digits !== '' && mb_strlen($digits) >= 3 && preg_match('/^[\d\s+\-()]+$/u', normalize_digits($q))) {
+        if (str_starts_with($digits, '0098')) $digits = substr($digits, 4);
+        elseif (str_starts_with($digits, '98') && strlen($digits) >= 12) $digits = substr($digits, 2);
+        $core = ltrim($digits, '0');
+        if ($core !== '') {
+            $sql[] = "{$a}mobile LIKE ?";
+            $params[] = '%' . $core . '%';
+        }
+    }
+    return ['(' . implode(' OR ', $sql) . ')', $params];
+}
+
 function apply_call_import_followup_outcome(PDO $pdo, int $customerId, bool $connected, string $baseDateG, string $currentStatus, bool $statusLocked): string
 {
     if ($connected) {

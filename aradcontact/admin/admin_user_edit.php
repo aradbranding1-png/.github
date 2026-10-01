@@ -174,6 +174,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
             $stmt->execute([$fullName, $mobile, $newRole, $newTeamId, $id]);
         }
 
+        // «وضعیت حضور» در لیستِ کاربران همین مقدار است (هر دو ستون با هم)
+        if ($workLocationReady) users_set_work_location($pdo, $id, $workLocationInput);
         if ($aradReady && $aradCode !== '') {
             $pdo->prepare('UPDATE users SET arad_code = ? WHERE id = ?')->execute([$aradCode, $id]);
         }
@@ -491,8 +493,8 @@ require_once __DIR__ . '/../includes/layout_top.php';
           <div class="col-md-6">
             <label class="form-label">محل فعالیت</label>
             <select name="work_location" class="form-select">
-              <option value="onsite" <?= ($target['work_location'] ?? 'onsite') === 'onsite' ? 'selected' : '' ?>>حضوری</option>
-              <option value="remote" <?= ($target['work_location'] ?? '') === 'remote' ? 'selected' : '' ?>>دورکار</option>
+              <option value="onsite" <?= (users_work_location_of($target) ?? 'onsite') === 'onsite' ? 'selected' : '' ?>>حضوری</option>
+              <option value="remote" <?= users_work_location_of($target) === 'remote' ? 'selected' : '' ?>>دورکار</option>
             </select>
           </div>
           <?php endif; ?>
