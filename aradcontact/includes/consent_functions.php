@@ -39,14 +39,14 @@ if (!function_exists('consent_ready')) {
 
 if (!function_exists('consent_text')) {
     /** متنِ کاملِ قابلِ کپی؛ هر مقدارِ خالی با جای‌خالیِ [..] می‌ماند تا کارشناس متوجه شود */
-    function consent_text(string $fullName, string $nationalId, int $amount): string
+    function consent_text(string $fullName, string $nationalId, int $amount, string $idLabel = 'کد ملی'): string
     {
         $name = trim($fullName) !== '' ? trim($fullName) : '[نام و نام خانوادگی]';
-        $nid = trim($nationalId) !== '' ? trim($nationalId) : '[کد ملی]';
+        $nid = trim($nationalId) !== '' ? trim($nationalId) : '[' . $idLabel . ']';
         $amt = $amount > 0 ? number_format($amount) : '[مبلغ]';
         return 'لطفاً پیام زیر را به شماره‌ی ' . CONSENT_CONTRACT_PHONE . ' (واحد قرارداد آراد برندینگ) ارسال کنید و پس از ارسال، یک اسکرین‌شات از آن برای من بفرستید.'
             . "\n\n"
-            . 'اینجانب ' . $name . ' با کد ملی ' . $nid . ' اعلام می‌نمایم مبلغ ' . $amt . ' تومان بابت خرید خدمات شرکت آراد برندینگ با رضایت کامل و آگاهی از موضوع پرداخت، به حساب شرکت مدیریت فضای توسعه گستر صادرات آراد واریز نموده‌ام و متعهد به تکمیل و امضای مدارک و قراردادهای مربوطه هستم.';
+            . 'اینجانب ' . $name . ' با ' . $idLabel . ' ' . $nid . ' اعلام می‌نمایم مبلغ ' . $amt . ' تومان بابت خرید خدمات شرکت آراد برندینگ با رضایت کامل و آگاهی از موضوع پرداخت، به حساب شرکت مدیریت فضای توسعه گستر صادرات آراد واریز نموده‌ام و متعهد به تکمیل و امضای مدارک و قراردادهای مربوطه هستم.';
     }
 }
 
@@ -141,6 +141,7 @@ if (!function_exists('consent_customer_identity')) {
     {
         $name = $fallbackName;
         $nid = '';
+        $label = 'کد ملی';
         try {
             $st = $pdo->prepare('SELECT full_name FROM customers WHERE id = ?');
             $st->execute([$customerId]);
@@ -148,9 +149,10 @@ if (!function_exists('consent_customer_identity')) {
             if (function_exists('kyc_get')) {
                 $k = kyc_get($pdo, $customerId);
                 $nid = !empty($k['has_national_id']) ? (string) $k['national_id'] : '';
+                $label = (string) ($k['id_label'] ?? 'کد ملی');
             }
         } catch (Throwable $e) {}
-        return ['name' => $name, 'national_id' => $nid];
+        return ['name' => $name, 'national_id' => $nid, 'id_label' => $label];
     }
 }
 
@@ -159,12 +161,12 @@ if (!function_exists('consent_copy_button')) {
      * دکمه‌ی «کپی متنِ پیامِ رضایت». اگر $amountInputId داده شود، مبلغ هنگامِ کپی از همان فیلد خوانده می‌شود
      * (مثلاً فیلدِ مبلغِ پرداختی در فرمِ ثبتِ فیش)؛ نام و کد ملی هم اگر فیلدشان در صفحه باشد از فیلد خوانده می‌شود.
      */
-    function consent_copy_button(string $name, string $nationalId, int $amount, string $amountInputId = '', string $nidInputId = '', string $btnClass = 'btn btn-sm btn-outline-success'): string
+    function consent_copy_button(string $name, string $nationalId, int $amount, string $amountInputId = '', string $nidInputId = '', string $btnClass = 'btn btn-sm btn-outline-success', string $idLabel = 'کد ملی'): string
     {
         static $js = false;
         $id = 'cc' . bin2hex(random_bytes(4));
         $h = '<button type="button" class="' . e($btnClass) . '" id="' . $id . '" data-consent-copy'
-            . ' data-name="' . e($name) . '" data-nid="' . e($nationalId) . '" data-amount="' . (int) $amount . '"'
+            . ' data-name="' . e($name) . '" data-nid="' . e($nationalId) . '" data-idlabel="' . e($idLabel) . '" data-amount="' . (int) $amount . '"'
             . ' data-amount-input="' . e($amountInputId) . '" data-nid-input="' . e($nidInputId) . '"'
             . ' data-phone="' . e(CONSENT_CONTRACT_PHONE) . '">'
             . '<i class="fa-regular fa-copy"></i> کپیِ متنِ پیامِ رضایتِ پرداخت برای مشتری</button>';
@@ -179,12 +181,15 @@ if (!function_exists('consent_copy_button')) {
     var name = (b.dataset.name || '').trim() || '[نام و نام خانوادگی]';
     var nid = (b.dataset.nid || '').trim();
     if (b.dataset.nidInput) { var ni = document.getElementById(b.dataset.nidInput) || document.querySelector('[name="' + b.dataset.nidInput + '"]'); if (ni && ni.value.trim()) nid = fa2en(ni.value.trim()); }
-    nid = nid || '[کد ملی]';
+    // نوعِ مدرک (اتباع: کد فراگیر / پاسپورت) — از برچسبِ پرونده، یا از انتخابِ همان فرم
+    var idl = b.dataset.idlabel || 'کد ملی';
+    if (b.dataset.nidInput) { var ts = document.querySelector('select[name="id_type"]'); if (ts) idl = ({national: 'کد ملی', fida: 'کد فراگیر اتباع', passport: 'شماره پاسپورت'})[ts.value] || idl; }
+    nid = nid || '[' + idl + ']';
     var amt = parseInt(b.dataset.amount || '0', 10) > 0 ? parseInt(b.dataset.amount, 10).toLocaleString('en-US') : '';
     if (b.dataset.amountInput) { var ai = document.getElementById(b.dataset.amountInput) || document.querySelector('[name="' + b.dataset.amountInput + '"]'); if (ai && money(ai.value)) amt = money(ai.value); }
     amt = amt || '[مبلغ]';
     return 'لطفاً پیام زیر را به شماره‌ی ' + b.dataset.phone + ' (واحد قرارداد آراد برندینگ) ارسال کنید و پس از ارسال، یک اسکرین‌شات از آن برای من بفرستید.\n\n'
-      + 'اینجانب ' + name + ' با کد ملی ' + nid + ' اعلام می‌نمایم مبلغ ' + amt + ' تومان بابت خرید خدمات شرکت آراد برندینگ با رضایت کامل و آگاهی از موضوع پرداخت، به حساب شرکت مدیریت فضای توسعه گستر صادرات آراد واریز نموده‌ام و متعهد به تکمیل و امضای مدارک و قراردادهای مربوطه هستم.';
+      + 'اینجانب ' + name + ' با ' + idl + ' ' + nid + ' اعلام می‌نمایم مبلغ ' + amt + ' تومان بابت خرید خدمات شرکت آراد برندینگ با رضایت کامل و آگاهی از موضوع پرداخت، به حساب شرکت مدیریت فضای توسعه گستر صادرات آراد واریز نموده‌ام و متعهد به تکمیل و امضای مدارک و قراردادهای مربوطه هستم.';
   }
   function copy(text) {
     if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
@@ -229,9 +234,9 @@ if (!function_exists('consent_render_card')) {
             <span class="badge text-bg-<?= $color ?>"><i class="fa-solid <?= $icon ?>"></i> <?= e($lbl) ?></span>
           </div>
           <div class="small text-muted mb-2">متن را کپی و برای مشتری بفرستید؛ مشتری آن را به <span dir="ltr"><?= e(CONSENT_CONTRACT_PHONE) ?></span> می‌فرستد و اسکرین‌شاتش را به شما می‌دهد. اسکرین‌شات را این‌جا بارگذاری کنید تا مالی تأیید کند و سهمِ عملکردِ شما پرداخت شود.</div>
-          <pre class="small p-2 rounded-3 mb-2" style="white-space:pre-wrap;background:#f8fafc;border:1px dashed #cbd5e1;font-family:inherit"><?= e(consent_text($idn['name'], $idn['national_id'], $amount)) ?></pre>
+          <pre class="small p-2 rounded-3 mb-2" style="white-space:pre-wrap;background:#f8fafc;border:1px dashed #cbd5e1;font-family:inherit"><?= e(consent_text($idn['name'], $idn['national_id'], $amount, $idn['id_label'] ?? 'کد ملی')) ?></pre>
           <div class="d-flex flex-wrap gap-2 align-items-center">
-            <?= consent_copy_button($idn['name'], $idn['national_id'], $amount) ?>
+            <?= consent_copy_button($idn['name'], $idn['national_id'], $amount, '', '', 'btn btn-sm btn-outline-success', $idn['id_label'] ?? 'کد ملی') ?>
             <?php if ($idn['national_id'] === ''): ?><span class="small text-warning"><i class="fa-solid fa-triangle-exclamation"></i> کد ملیِ مشتری در مدارکِ هویتی ثبت نشده.</span><?php endif; ?>
           </div>
           <?php if (!empty($c['file_path'])): ?>

@@ -123,6 +123,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_set('warning', 'سفارش تأیید شد، ولی ساخت/ارسالِ تیکتِ آراد برندینگ با خطا روبه‌رو شد.');
             }
         }
+    } elseif ($action === 'abt_acc_sms_done' && abt_can_manage($user)) {
+        // یادآوریِ «حسابِ جدید در آراد برندینگ»: مسئول اعلام می‌کند نام کاربری و رمز برای مشتری پیامک شد
+        flash_set(abt_account_sms_done($pdo, (int) $order['customer_id'], (int) $user['id']) ? 'success' : 'warning', 'ثبت شد: اطلاعاتِ ورود برای مشتری پیامک شد.');
+        redirect('order_view.php?id=' . $orderId . '#abt');
     } elseif (in_array($action, ['ticket_send', 'ticket_save', 'ticket_rebuild', 'ticket_manual', 'ticket_prepare', 'ticket_send_all', 'ticket_resend', 'ticket_reopen'], true) && abt_can_manage($user)) {
         if ($order['status'] !== 'approved') {
             flash_set('danger', 'تیکت فقط برای سفارشِ تأییدشده ساخته/ارسال می‌شود.');
@@ -631,7 +635,7 @@ require_once __DIR__ . '/includes/layout_top.php';
             </a>
           <?php endif; ?>
           <div class="small flex-grow-1">
-            <div>کد ملی: <b dir="ltr"><?= e((string) ($kyc['national_id'] ?? '—')) ?></b></div>
+            <div><?= e(function_exists('kyc_id_label') ? kyc_id_label($kyc) : 'کد ملی') ?>: <b dir="ltr"><?= e((string) ($kyc['national_id'] ?? '—')) ?></b><?= !empty($kyc['is_foreign']) ? ' <span class="badge text-bg-info">اتباع</span>' : '' ?></div>
             <div>کد پستی: <b dir="ltr"><?= e((string) ($kyc['postal_code'] ?? '—')) ?></b></div>
             <div class="text-muted"><?= e((string) ($kyc['address'] ?? '')) ?></div>
             <?php if (!empty($kyc['card_verified_at'])): ?><div class="text-success mt-1"><i class="fa-solid fa-shield-halved"></i> کارت ملی توسطِ مالی تأیید شده</div>
@@ -714,6 +718,25 @@ require_once __DIR__ . '/includes/layout_top.php';
           <h6 class="fw-bold mb-0"><i class="fa-solid fa-ticket text-primary"></i> تیکت‌های آراد برندینگ</h6>
           <?php if ($abtTickets): ?><span class="small text-muted"><?= to_persian_digits((string) (count($abtTickets) - count($abtUnsent))) ?> از <?= to_persian_digits((string) count($abtTickets)) ?> ارسال شده</span><?php endif; ?>
         </div>
+        <?php $abtAcc = abt_account_get($pdo, (int) $order['customer_id']);
+          if ($abtAcc && $abtAcc['status'] === 'created' && empty($abtAcc['sms_done_at'])): ?>
+          <div class="alert alert-warning py-2 small mb-2" id="abt-account">
+            <div class="fw-bold mb-1"><i class="fa-solid fa-user-plus"></i> این مشتری قبلاً در آراد برندینگ حساب نداشت و برایش حسابِ جدید ساخته شد.</div>
+            <?php if ($abtCan || !empty($isSeller)): ?>
+              <div>نام کاربری: <b dir="ltr"><?= e((string) $abtAcc['username']) ?></b> — رمز عبور: <b dir="ltr"><?= e((string) $abtAcc['password']) ?></b> — آدرس ورود: <span dir="ltr"><?= e((string) ($abtSettings['acc_login_url'] ?? '')) ?></span></div>
+            <?php endif; ?>
+            <div class="mt-1">لطفاً <b>نام کاربری و رمز عبور را برای مشتری (<span dir="ltr"><?= e((string) $abtAcc['mobile']) ?></span>) پیامک کنید</b> و بعد «پیامک شد» را بزنید.
+              <?= !empty($abtAcc['welcome_ticket_id']) ? 'تیکتِ «اطلاعاتِ حساب» با فهرستِ همه‌ی خدمات هم برای مشتری ثبت شد.' : '<span class="text-danger">تیکتِ «اطلاعاتِ حساب» ارسال نشد' . (!empty($abtAcc['welcome_error']) ? ': ' . e((string) $abtAcc['welcome_error']) : '') . '</span>' ?></div>
+            <?php if ($abtCan): ?>
+              <form method="post" class="mt-2"><?= csrf_field() ?><input type="hidden" name="action" value="abt_acc_sms_done">
+                <button class="btn btn-sm btn-warning"><i class="fa-solid fa-comment-sms"></i> پیامک شد</button></form>
+            <?php endif; ?>
+          </div>
+        <?php elseif ($abtAcc && $abtAcc['status'] === 'created'): ?>
+          <div class="small text-muted mb-2"><i class="fa-solid fa-user-check"></i> حسابِ آراد برندینگِ این مشتری توسطِ آراد کانتکت ساخته شد (<span dir="ltr"><?= e((string) $abtAcc['mobile']) ?></span>)؛ اطلاعاتِ ورود <?= to_jalali(substr((string) $abtAcc['sms_done_at'], 0, 10)) ?> پیامک شد.</div>
+        <?php elseif ($abtAcc && $abtAcc['status'] === 'found'): ?>
+          <div class="small text-muted mb-2"><i class="fa-solid fa-mobile-screen"></i> تیکت‌ها با شماره‌ی <b dir="ltr"><?= e((string) $abtAcc['mobile']) ?></b> (از پروفایلِ ۳۶۰) ثبت می‌شوند — شماره‌ای که در آراد برندینگ حساب دارد.</div>
+        <?php endif; ?>
         <?php if ($order['status'] !== 'approved' && !$abtTickets): ?>
           <div class="small text-muted">بعد از «تأیید و ثبت سفارش»، برای <b>هر خدمت</b> یک تیکتِ جدا (با موضوع، متن و واحدِ همان خدمت) برای مشتری در aradbranding.me ساخته<?= $abtConn && $abtSettings['auto_send'] === '1' ? ' و خودکار ارسال' : '' ?> می‌شود.</div>
         <?php elseif (!$abtTickets): ?>

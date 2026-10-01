@@ -80,6 +80,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         redirect('admin_aradbranding_ticket.php#abt-edu');
     }
+    // ─── ساختِ حساب در آراد برندینگ (هیچ موبایلی از پروفایل ۳۶۰ تاجرِ ثبت‌شده نیست) ───
+    if (($_POST['action'] ?? '') === 'save_account') {
+        $accUrl = trim((string) ($_POST['acc_api_url'] ?? ''));
+        $accExtra = trim((string) ($_POST['acc_extra_json'] ?? ''));
+        $accBody = str_replace(["\r\n", "\r"], "\n", trim((string) ($_POST['acc_body_tpl'] ?? '')));
+        $fld = static fn(string $k): string => mb_substr(preg_replace('/[^A-Za-z0-9_\-\[\]]/', '', (string) ($_POST[$k] ?? '')), 0, 60);
+        if ($accUrl !== '' && !preg_match('#^https?://#i', $accUrl)) {
+            flash_set('danger', 'آدرسِ API ساختِ حساب باید با http:// یا https:// شروع شود.');
+            redirect('admin_aradbranding_ticket.php#abt-account');
+        }
+        if ($accExtra !== '' && !is_array(json_decode($accExtra, true))) {
+            flash_set('danger', '«فیلدهای ثابتِ ساختِ حساب» باید JSON معتبر باشد.');
+            redirect('admin_aradbranding_ticket.php#abt-account');
+        }
+        abt_settings_save($pdo, [
+            'acc_enabled'        => !empty($_POST['acc_enabled']) ? '1' : '0',
+            'acc_api_url'        => mb_substr($accUrl, 0, 500),
+            'acc_field_mobile'   => $fld('acc_field_mobile'),
+            'acc_field_name'     => $fld('acc_field_name'),
+            'acc_field_password' => $fld('acc_field_password'),
+            'acc_field_national' => $fld('acc_field_national'),
+            'acc_extra_json'     => $accExtra,
+            'acc_login_url'      => mb_substr(trim((string) ($_POST['acc_login_url'] ?? '')), 0, 300) ?: 'https://my.aradbranding.me',
+            'acc_department'     => mb_substr(trim((string) ($_POST['acc_department'] ?? '')), 0, 100),
+            'acc_subject_tpl'    => mb_substr(trim((string) ($_POST['acc_subject_tpl'] ?? '')), 0, 250) ?: 'اطلاعات حساب کاربری شما در آراد برندینگ',
+            'acc_body_tpl'       => mb_strlen($accBody) < 20 ? '' : $accBody,
+        ], (int) $admin['id']);
+        flash_set('success', 'تنظیماتِ ساختِ حساب در آراد برندینگ ذخیره شد.');
+        redirect('admin_aradbranding_ticket.php#abt-account');
+    }
     // ─── تنظیماتِ تیکتِ «اسنادِ قرارداد» ───
     if (($_POST['action'] ?? '') === 'save_contract_ticket') {
         $days = (int) normalize_digits((string) ($_POST['ctr_link_days'] ?? '30'));
@@ -339,6 +369,34 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <button name="action" value="save_crm" class="btn btn-sm btn-primary"><i class="fa-solid fa-floppy-disk"></i> ذخیره</button>
       <button name="action" value="test_crm" class="btn btn-sm btn-outline-dark"><i class="fa-solid fa-plug"></i> تستِ اتصال</button>
     </div>
+  </form>
+
+  <?php $__acc = abt_settings($pdo); ?>
+  <form method="post" class="card p-3 mb-3" id="abt-account" style="border-top:3px solid #7c3aed">
+    <?= csrf_field() ?>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
+      <h6 class="fw-bold mb-0"><i class="fa-solid fa-user-plus" style="color:#7c3aed"></i> مشتری‌ای که در آراد برندینگ حساب ندارد</h6>
+      <span class="badge <?= $__acc['acc_enabled'] === '1' && $__acc['acc_api_url'] !== '' ? 'text-bg-success' : 'text-bg-secondary' ?>"><?= $__acc['acc_enabled'] === '1' && $__acc['acc_api_url'] !== '' ? 'ساختِ خودکار فعال' : 'ساختِ خودکار غیرفعال' ?></span>
+    </div>
+    <div class="small text-muted mb-3">
+      وقتی آراد برندینگ «تاجری با این شماره موبایل پیدا نشد» برگرداند: <b>۱)</b> همه‌ی موبایل‌های همین مشتری در پروفایلِ ۳۶۰ (همه‌ی پرونده‌ها، موبایلِ دوم و شماره‌های اضافه) به‌ترتیب امتحان می‌شوند و شماره‌ای که حساب داشت برای تیکت‌های بعدی هم استفاده می‌شود.
+      <b>۲)</b> اگر هیچ‌کدام حساب نداشت و ساختِ خودکار فعال باشد: حسابِ جدید (نام کاربری = موبایل، رمزِ ۸ نویسه‌ای) ساخته می‌شود، یک تیکتِ «اطلاعاتِ حساب» با نام کاربری، رمز و نامِ همه‌ی خدماتِ خریداری‌شده برای مشتری ثبت می‌شود، تیکت‌های خدمات به همان حساب می‌روند،
+      و به کسی که «ارسال» را زده (پیغام + اعلان + کادرِ ثابت در صفحه‌ی سفارش) یادآوری می‌شود که اطلاعاتِ ورود را برای مشتری پیامک کند. احرازِ هویت و قالبِ بدنه همانِ «اتصال به API» است.
+    </div>
+    <div class="row g-2">
+      <div class="col-md-2 d-flex align-items-end"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="acc_enabled" value="1" id="accOn" <?= $__acc['acc_enabled'] === '1' ? 'checked' : '' ?>><label class="form-check-label small" for="accOn">ساختِ خودکار</label></div></div>
+      <div class="col-md-5"><label class="form-label small mb-1">آدرسِ API ساختِ حسابِ تاجر (POST)</label><input name="acc_api_url" class="form-control form-control-sm" dir="ltr" value="<?= e($__acc['acc_api_url']) ?>" placeholder="https://aradbranding.me/api/…"></div>
+      <div class="col-md-5"><label class="form-label small mb-1">آدرسِ ورودِ مشتری (در تیکتِ اطلاعاتِ حساب)</label><input name="acc_login_url" class="form-control form-control-sm" dir="ltr" value="<?= e($__acc['acc_login_url']) ?>"></div>
+      <?php foreach (['acc_field_mobile' => 'فیلدِ موبایل', 'acc_field_name' => 'فیلدِ نام', 'acc_field_password' => 'فیلدِ رمز عبور', 'acc_field_national' => 'فیلدِ کد ملی (اختیاری)'] as $__k => $__l): ?>
+        <div class="col-6 col-md-3"><label class="form-label small mb-0"><?= $__l ?></label><input name="<?= $__k ?>" class="form-control form-control-sm" dir="ltr" value="<?= e($__acc[$__k]) ?>"></div>
+      <?php endforeach; ?>
+      <div class="col-md-6"><label class="form-label small mb-0">فیلدهای ثابتِ ساختِ حساب (JSON، اختیاری)</label><input name="acc_extra_json" class="form-control form-control-sm" dir="ltr" value="<?= e($__acc['acc_extra_json']) ?>" placeholder='{"role": "merchant"}'></div>
+      <div class="col-md-6"><label class="form-label small mb-0">واحدِ تیکتِ «اطلاعاتِ حساب» (خالی = واحدِ پیش‌فرض)</label><input name="acc_department" class="form-control form-control-sm" value="<?= e($__acc['acc_department']) ?>"></div>
+      <div class="col-12"><label class="form-label small mb-0">موضوعِ تیکتِ «اطلاعاتِ حساب»</label><input name="acc_subject_tpl" class="form-control form-control-sm" value="<?= e($__acc['acc_subject_tpl']) ?>"></div>
+      <div class="col-12"><label class="form-label small mb-0">متنِ تیکتِ «اطلاعاتِ حساب» <span class="text-muted">— متغیرها: «نام_کاربری» «رمز_عبور» «آدرس_ورود» «فهرست_همه_خدمات» (همه‌ی خدماتِ خریداری‌شده) و متغیرهای عمومی مثلِ «عنوان» «نام_مشتری» «شماره_سفارش»</span></label>
+        <textarea name="acc_body_tpl" class="form-control form-control-sm" rows="10"><?= e($__acc['acc_body_tpl']) ?></textarea></div>
+    </div>
+    <div class="mt-2"><button name="action" value="save_account" class="btn btn-sm btn-primary"><i class="fa-solid fa-floppy-disk"></i> ذخیره</button></div>
   </form>
 
   <div class="modal fade" id="abtPreviewModal" tabindex="-1" aria-hidden="true">

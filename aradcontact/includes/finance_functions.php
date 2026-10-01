@@ -134,6 +134,55 @@ if (!function_exists('kyc_valid_national_id')) {
     }
 }
 
+if (!function_exists('kyc_id_types')) {
+    /** نوعِ مدرکِ هویتی: ایرانی (کد ملی) یا اتباع (کد فراگیر / پاسپورت) */
+    function kyc_id_types(): array
+    {
+        return ['national' => 'کد ملی', 'fida' => 'کد فراگیر اتباع', 'passport' => 'شماره پاسپورت'];
+    }
+
+    /** برچسبِ شماره‌ی هویتیِ یک پرونده (برای نمایش و متن‌ها) */
+    function kyc_id_label(?array $kyc): string
+    {
+        $t = (string) ($kyc['id_type'] ?? 'national');
+        return kyc_id_types()[$t] ?? 'کد ملی';
+    }
+
+    /** برچسبِ تصویرِ مدرک */
+    function kyc_card_label(?array $kyc): string
+    {
+        $t = (string) ($kyc['id_type'] ?? 'national');
+        return $t === 'passport' ? 'تصویر پاسپورت' : ($t === 'fida' ? 'تصویر کارت اقامت / برگه‌ی کد فراگیر' : 'تصویر کارت ملی');
+    }
+
+    /**
+     * نرمال‌سازی و اعتبارسنجیِ شماره‌ی هویتی بر اساسِ نوع. $type خالی/auto ← تشخیصِ خودکار:
+     * حرفِ لاتین دارد ← پاسپورت؛ ۱۲ رقم ← کد فراگیر اتباع؛ بقیه ← کد ملی.
+     * @return array{type:string, value:string}|string  مقدار یا متنِ خطا
+     */
+    function kyc_normalize_id(string $raw, string $type = '')
+    {
+        $v = strtoupper((string) preg_replace('/[\s\-\/\.]+/u', '', normalize_digits(trim($raw))));
+        if ($v === '') return ['type' => $type !== '' && $type !== 'auto' ? $type : 'national', 'value' => ''];
+        if (!isset(kyc_id_types()[$type])) {
+            $type = preg_match('/[A-Z]/', $v) ? 'passport' : (preg_match('/^\d{12}$/', $v) ? 'fida' : 'national');
+        }
+        if ($type === 'national') {
+            $d = preg_replace('/\D/', '', $v);
+            if (!kyc_valid_national_id($d)) {
+                return 'کد ملیِ واردشده معتبر نیست (۱۰ رقم با رقمِ کنترلِ صحیح). اگر مشتری از اتباع است، نوعِ مدرک را «کد فراگیر اتباع» یا «شماره پاسپورت» انتخاب کنید.';
+            }
+            return ['type' => 'national', 'value' => $d];
+        }
+        if ($type === 'fida') {
+            if (!preg_match('/^\d{12}$/', $v)) return 'کد فراگیرِ اتباع باید ۱۲ رقم باشد (روی کارتِ اقامت / برگه‌ی سرشماری). اگر ندارد، «شماره پاسپورت» را انتخاب کنید.';
+            return ['type' => 'fida', 'value' => $v];
+        }
+        if (!preg_match('/^[A-Z0-9]{5,20}$/', $v)) return 'شماره‌ی پاسپورت باید ۵ تا ۲۰ حرف/رقمِ لاتین باشد (مثلاً P01234567).';
+        return ['type' => 'passport', 'value' => $v];
+    }
+}
+
 if (!function_exists('kyc_get')) {
     /** ستون‌های «نام پدر» و «عنوان» در مدارکِ مشتری (یک‌بار) */
     function kyc_ensure_identity_cols(PDO $pdo): void
@@ -141,6 +190,18 @@ if (!function_exists('kyc_get')) {
         static $done = false;
         if ($done) return;
         $done = true;
+        // نسخه‌ی ۲: نوعِ مدرکِ هویتی (اتباع) + طولِ بیشترِ شماره (کد فراگیر ۱۲ رقم / پاسپورت حرف و رقم)
+        $flag2 = __DIR__ . '/../storage/.kyc_id_type_v2';
+        if (!is_file($flag2)) {
+            try {
+                try { $pdo->query('SELECT id_type FROM customer_kyc LIMIT 1'); }
+                catch (Throwable $e) { $pdo->exec("ALTER TABLE customer_kyc ADD COLUMN id_type VARCHAR(12) NOT NULL DEFAULT 'national'"); }
+                $pdo->exec('ALTER TABLE customer_kyc MODIFY national_id VARCHAR(30) DEFAULT NULL');
+                @file_put_contents($flag2, (string) time());
+            } catch (Throwable $e) {
+                error_log('kyc id_type v2: ' . $e->getMessage());
+            }
+        }
         $flag = __DIR__ . '/../storage/.kyc_identity_cols_v1';
         if (is_file($flag)) return;
         $ok = true;
@@ -174,6 +235,9 @@ if (!function_exists('kyc_get')) {
         $row = $row ?: ['customer_id' => $customerId, 'national_id' => null, 'card_path' => null, 'address' => null, 'postal_code' => null];
         $row['father_name'] = $row['father_name'] ?? null;
         $row['title'] = $row['title'] ?? null;
+        $row['id_type'] = isset(kyc_id_types()[(string) ($row['id_type'] ?? '')]) ? (string) $row['id_type'] : 'national';
+        $row['id_label'] = kyc_id_label($row);
+        $row['is_foreign'] = $row['id_type'] !== 'national';
         $row['has_card'] = !empty($row['card_path']);
         $row['has_national_id'] = !empty($row['national_id']);
         $row['has_address'] = trim((string) ($row['address'] ?? '')) !== '';
@@ -190,13 +254,43 @@ if (!function_exists('kyc_missing_labels')) {
     function kyc_missing_labels(array $kyc): array
     {
         $m = [];
-        if (!$kyc['has_card']) $m[] = 'تصویر کارت ملی';
-        if (!$kyc['has_national_id']) $m[] = 'کد ملی';
+        if (!$kyc['has_card']) $m[] = kyc_card_label($kyc);
+        if (!$kyc['has_national_id']) $m[] = ($kyc['id_type'] ?? 'national') === 'national' ? 'کد ملی (یا کد فراگیر/پاسپورت برای اتباع)' : kyc_id_label($kyc);
         if (!$kyc['has_address']) $m[] = 'آدرس';
         if (!$kyc['has_postal']) $m[] = 'کد پستی';
         if (empty($kyc['has_title'])) $m[] = 'عنوان (آقای/خانم)';
         if (empty($kyc['has_father'])) $m[] = 'نام پدر';
         return $m;
+    }
+}
+
+if (!function_exists('kyc_id_fields_html')) {
+    /**
+     * فیلدهای «نوعِ مدرک + شماره» (کد ملی / کد فراگیر اتباع / پاسپورت) برای فرم‌های مدارک.
+     * name="id_type" و name="national_id" — برچسب و راهنما با تغییرِ نوع عوض می‌شود.
+     */
+    function kyc_id_fields_html(array $kyc, ?string $value = null, bool $required = false, string $labelClass = 'form-label'): string
+    {
+        static $js = false;
+        $type = (string) ($_POST['id_type'] ?? ($kyc['id_type'] ?? 'national'));
+        if (!isset(kyc_id_types()[$type])) $type = 'national';
+        $value = $value ?? (string) ($kyc['national_id'] ?? '');
+        $hints = ['national' => '۱۰ رقم', 'fida' => '۱۲ رقم — روی کارتِ اقامت', 'passport' => 'مثلاً P01234567'];
+        $h = '<div data-kyc-id><label class="' . e($labelClass) . '">نوع مدرک / شماره' . ($required ? ' *' : '') . '</label><div class="input-group input-group-sm">'
+            . '<select name="id_type" class="form-select form-select-sm" style="max-width:150px">';
+        foreach (kyc_id_types() as $k => $l) {
+            $h .= '<option value="' . $k . '" data-hint="' . e($hints[$k]) . '"' . ($k === $type ? ' selected' : '') . '>' . e($k === 'national' ? 'کد ملی (ایرانی)' : $l . ' (اتباع)') . '</option>';
+        }
+        $h .= '</select><input name="national_id" class="form-control" dir="ltr" maxlength="30" autocomplete="off" value="' . e($value) . '" placeholder="' . e($hints[$type]) . '"'
+            . ($type === 'passport' ? '' : ' inputmode="numeric"') . '></div>'
+            . '<div class="form-text small">مشتریِ اتباع که کد ملی ندارد: «کد فراگیر اتباع» یا «شماره پاسپورت».</div></div>';
+        if (!$js) {
+            $js = true;
+            $h .= '<script>document.addEventListener("change",function(e){var s=e.target;if(!s.matches||!s.matches("[data-kyc-id] select[name=id_type]"))return;'
+                . 'var i=s.closest("[data-kyc-id]").querySelector("input[name=national_id]");var o=s.options[s.selectedIndex];'
+                . 'i.placeholder=o.getAttribute("data-hint")||"";if(s.value==="passport")i.removeAttribute("inputmode");else i.setAttribute("inputmode","numeric");});</script>';
+        }
+        return $h;
     }
 }
 
@@ -231,11 +325,13 @@ if (!function_exists('kyc_save')) {
         $errors = [];
         $set = [];
         if (array_key_exists('national_id', $data)) {
-            $nid = preg_replace('/\D/', '', normalize_digits((string) $data['national_id']));
-            if ($nid !== '' && !kyc_valid_national_id($nid)) {
-                $errors[] = 'کد ملیِ واردشده معتبر نیست (۱۰ رقم با رقمِ کنترلِ صحیح).';
-            } elseif ($nid !== '') {
-                $set['national_id'] = $nid;
+            kyc_ensure_identity_cols($pdo);
+            $nid = kyc_normalize_id((string) $data['national_id'], (string) ($data['id_type'] ?? ''));
+            if (is_string($nid)) {
+                $errors[] = $nid;
+            } elseif ($nid['value'] !== '') {
+                $set['national_id'] = $nid['value'];
+                $set['id_type'] = $nid['type'];
             }
         }
         if (array_key_exists('postal_code', $data)) {
@@ -939,7 +1035,7 @@ if (!function_exists('render_customer_kyc_block')) {
             <div class="col-md-8">
               <table class="table table-sm mb-0">
                 <tr><th class="text-muted fw-normal" style="width:110px">عنوان</th><td><?= $k['has_title'] ? e((string) $k['title']) : '<span class="text-warning">ثبت نشده</span>' ?></td></tr>
-                <tr><th class="text-muted fw-normal">کد ملی</th><td dir="ltr" class="text-end"><?= $k['has_national_id'] ? e($k['national_id']) : '<span class="text-warning">ثبت نشده</span>' ?></td></tr>
+                <tr><th class="text-muted fw-normal"><?= e($k['id_label']) ?></th><td dir="ltr" class="text-end"><?= $k['has_national_id'] ? e($k['national_id']) : '<span class="text-warning">ثبت نشده</span>' ?><?= $k['is_foreign'] ? ' <span class="badge text-bg-info">اتباع</span>' : '' ?></td></tr>
                 <tr><th class="text-muted fw-normal">کد پستی</th><td dir="ltr" class="text-end"><?= $k['has_postal'] ? e($k['postal_code']) : '<span class="text-warning">ثبت نشده</span>' ?></td></tr>
                 <?php if ($__ctrOn): ?>
                 <tr><th class="text-muted fw-normal">نام پدر</th><td><?= $k['has_father'] ? e((string) $k['father_name']) : '<span class="text-warning">ثبت نشده (برای قرارداد لازم است)</span>' ?></td></tr>
@@ -964,7 +1060,7 @@ if (!function_exists('render_customer_kyc_block')) {
                   echo '<div class="d-flex flex-wrap gap-2 align-items-center mt-3 pt-2 border-top">'
                       . '<span class="small text-muted"><i class="fa-solid fa-file-signature"></i> پیامِ رضایتِ پرداخت — مبلغ (تومان):</span>'
                       . '<input id="' . $__aid . '" class="form-control form-control-sm" style="max-width:150px" dir="ltr" inputmode="numeric" placeholder="مبلغِ واریزی" value="' . ($__amt > 0 ? number_format($__amt) : '') . '">'
-                      . consent_copy_button($__idn['name'], (string) $k['national_id'], $__amt, $__aid)
+                      . consent_copy_button($__idn['name'], (string) $k['national_id'], $__amt, $__aid, '', 'btn btn-sm btn-outline-success', (string) $k['id_label'])
                       . '</div>';
               } catch (Throwable $e) {
                   error_log('kyc consent button: ' . $e->getMessage());
@@ -977,9 +1073,9 @@ if (!function_exists('render_customer_kyc_block')) {
               <?= csrf_field() ?>
               <input type="hidden" name="customer_id" value="<?= $customerId ?>">
               <div class="row g-2">
-                <div class="col-md-4"><label class="form-label">کد ملی</label><input name="national_id" class="form-control" dir="ltr" inputmode="numeric" maxlength="12" value="<?= e((string) ($k['national_id'] ?? '')) ?>" placeholder="۱۰ رقم"></div>
+                <div class="col-md-4"><?= kyc_id_fields_html($k) ?></div>
                 <div class="col-md-4"><label class="form-label">کد پستی</label><input name="postal_code" class="form-control" dir="ltr" inputmode="numeric" maxlength="12" value="<?= e((string) ($k['postal_code'] ?? '')) ?>" placeholder="۱۰ رقم"></div>
-                <div class="col-md-4"><label class="form-label">تصویر کارت ملی <?= $k['has_card'] ? '(برای جایگزینی)' : '' ?></label><input type="file" name="national_card" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf"></div>
+                <div class="col-md-4"><label class="form-label"><?= e(kyc_card_label($k)) ?> <?= $k['has_card'] ? '(برای جایگزینی)' : '' ?></label><input type="file" name="national_card" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf"></div>
                 <?php if ($__ctrOn): ?>
                 <div class="col-md-4"><label class="form-label">عنوان <span class="text-danger">*</span></label><select name="title" class="form-select" required><option value="">انتخاب کنید</option><?php foreach (['آقای', 'خانم'] as $__t): ?><option value="<?= $__t ?>" <?= ($k['title'] ?? '') === $__t ? 'selected' : '' ?>><?= $__t ?></option><?php endforeach; ?></select></div>
                 <div class="col-md-8"><label class="form-label">نام پدر <span class="text-danger">*</span></label><input name="father_name" class="form-control" maxlength="100" required value="<?= e((string) ($k['father_name'] ?? '')) ?>"></div>

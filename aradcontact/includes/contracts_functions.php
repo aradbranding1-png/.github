@@ -707,7 +707,9 @@ function ctr_build_fields(PDO $pdo, array $contract, array $quote, array $manual
         'عنوان' => $title,
         'نام_و_نام_خانوادگی' => (string) ($contract['customer_name'] ?? ''),
         'نام_پدر' => $fatherName,
-        'کد_ملی' => !empty($kyc['national_id']) ? to_persian_digits((string) $kyc['national_id']) : '',
+        // اتباع: شماره‌ی پاسپورت/کد فراگیر با نوعش (مثلاً «P01234567 (شماره پاسپورت)»)
+        'کد_ملی' => empty($kyc['national_id']) ? '' : (($kyc['id_type'] ?? 'national') === 'national' ? to_persian_digits((string) $kyc['national_id'])
+            : "\u{2066}" . (string) $kyc['national_id'] . "\u{2069} (" . kyc_id_label($kyc) . ')'),
         'شماره_همراه' => to_persian_digits((string) ($contract['customer_mobile'] ?? '')),
         'آدرس' => trim((string) ($kyc['address'] ?? '')),
         'کد_پستی' => !empty($kyc['postal_code']) ? to_persian_digits((string) $kyc['postal_code']) : '',

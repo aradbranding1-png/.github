@@ -30,6 +30,7 @@ function abt_ready(PDO $pdo): bool
         abt_schema_v2($pdo);
         abt_schema_v3($pdo);
         abt_schema_v4($pdo);
+        abt_schema_v5($pdo);
         return $ready = true;
     }
     $ddl = [
@@ -84,7 +85,52 @@ function abt_ready(PDO $pdo): bool
     abt_schema_v2($pdo);
     abt_schema_v3($pdo);
     abt_schema_v4($pdo);
+    abt_schema_v5($pdo);
     return $ready = true;
+}
+
+/**
+ * نسخه‌ی ۵: حسابِ مشتری در آراد برندینگ (به ازای هر شخص در پروفایل ۳۶۰).
+ *   status = found   ← یکی از موبایل‌های پروفایل ۳۶۰ در آراد برندینگ حساب داشت (تیکت‌های بعدی هم با همین شماره)
+ *   status = created ← هیچ شماره‌ای حساب نداشت؛ حسابِ جدید ساخته شد (نام کاربری/رمز باید برای مشتری پیامک شود)
+ * + ستونِ phone_used روی هر تیکت (شماره‌ای که تیکت با آن ثبت شد)
+ */
+function abt_schema_v5(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $flag = __DIR__ . '/../storage/.aradbranding_ticket_schema_v5';
+    if (is_file($flag)) return;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `aradbranding_accounts` (
+          `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          `person_key` INT UNSIGNED NOT NULL,
+          `customer_id` INT UNSIGNED NOT NULL,
+          `mobile` VARCHAR(20) NOT NULL,
+          `status` VARCHAR(12) NOT NULL,
+          `username` VARCHAR(120) DEFAULT NULL,
+          `password` VARCHAR(120) DEFAULT NULL,
+          `external_user_id` VARCHAR(100) DEFAULT NULL,
+          `welcome_ticket_id` VARCHAR(100) DEFAULT NULL,
+          `welcome_error` VARCHAR(500) DEFAULT NULL,
+          `order_id` INT UNSIGNED DEFAULT NULL,
+          `created_by` INT UNSIGNED DEFAULT NULL,
+          `created_at` DATETIME NOT NULL,
+          `sms_done_by` INT UNSIGNED DEFAULT NULL,
+          `sms_done_at` DATETIME DEFAULT NULL,
+          `response_body` TEXT,
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `uq_aba_person` (`person_key`),
+          KEY `idx_aba_customer` (`customer_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        try { $pdo->query('SELECT phone_used FROM aradbranding_tickets LIMIT 1'); }
+        catch (Throwable $e) { $pdo->exec('ALTER TABLE aradbranding_tickets ADD COLUMN phone_used VARCHAR(20) DEFAULT NULL'); }
+    } catch (Throwable $e) {
+        error_log('abt_schema_v5: ' . $e->getMessage());
+        return;
+    }
+    @file_put_contents($flag, (string) time());
 }
 
 /** نسخه‌ی ۲: یک تیکت به ازای هر خدمتِ سفارش (item_id) + واحد/دپارتمان */
@@ -255,7 +301,43 @@ function abt_settings_defaults(): array
         'verify_ssl'      => '1',
         'subject_tpl'     => abt_default_subject(),
         'body_tpl'        => abt_default_body(),
+        // ─── ساختِ حساب در آراد برندینگ وقتی هیچ موبایلِ مشتری (پروفایل ۳۶۰) تاجرِ ثبت‌شده نیست ───
+        'acc_enabled'        => '0',
+        'acc_api_url'        => '',     // POST — آدرسِ API ساختِ حسابِ تاجر (همان احرازِ هویتِ API تیکت)
+        'acc_field_mobile'   => 'mobile',
+        'acc_field_name'     => 'name',
+        'acc_field_password' => 'password',
+        'acc_field_national' => '',
+        'acc_extra_json'     => '',
+        'acc_login_url'      => 'https://my.aradbranding.me',
+        'acc_department'     => '',     // واحدِ تیکتِ «اطلاعاتِ حساب» — خالی = واحدِ پیش‌فرض
+        'acc_subject_tpl'    => 'اطلاعات حساب کاربری شما در آراد برندینگ',
+        'acc_body_tpl'       => abt_default_account_body(),
     ];
+}
+
+/** متنِ پیش‌فرضِ تیکتِ «حسابِ جدید» (اطلاعاتِ ورود + همه‌ی خدماتِ خریداری‌شده) */
+function abt_default_account_body(): string
+{
+    return <<<TPL
+«عنوان» «نام_مشتری» گرامی، سلام
+
+به آراد برندینگ خوش آمدید. برای شما حسابِ کاربری ساخته شد تا پیگیریِ خدمات و تیکت‌هایتان را از همین‌جا انجام دهید.
+
+اطلاعاتِ ورود به حساب:
+آدرس ورود: «آدرس_ورود»
+نام کاربری: «نام_کاربری»
+رمز عبور: «رمز_عبور»
+(لطفاً بعد از اولین ورود، رمز عبور را تغییر دهید.)
+
+خدماتی که از آراد برندینگ خریداری کرده‌اید:
+«فهرست_همه_خدمات»
+
+برای هر خدمت یک تیکتِ جداگانه در همین حساب برایتان ثبت می‌شود.
+
+با سپاس
+آراد برندینگ
+TPL;
 }
 
 function abt_settings(PDO $pdo): array
@@ -543,7 +625,8 @@ function abt_payload(PDO $pdo, array $s, array $order, array $ticket): array
     $map = [
         'field_phone'    => abt_mobile((string) ($order['customer_mobile'] ?? '')),
         'field_name'     => (string) ($order['customer_name'] ?? ''),
-        'field_national' => (string) ($kyc['national_id'] ?? ''),
+        // اتباع (پاسپورت/کد فراگیر) در فیلدِ «کد ملی» فرستاده نمی‌شود (سامانه‌ی مقصد کد ملیِ ایرانی را اعتبارسنجی می‌کند)
+        'field_national' => ($kyc['id_type'] ?? 'national') === 'national' ? (string) ($kyc['national_id'] ?? '') : '',
         'field_subject'  => (string) $ticket['subject'],
         'field_message'  => (string) $ticket['message'],
         'field_ref'      => (string) $order['order_number'],
@@ -802,6 +885,86 @@ function abt_send(PDO $pdo, array $order, array $ticket, int $userId): array
         return ['ok' => false, 'message' => 'تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» ارسال نشد — ' . $why];
     }
     $url = trim($s['api_url']);
+    $attField = trim((string) ($s['field_attachments'] ?? ''));
+    $phoneField = trim((string) ($s['field_phone'] ?? ''));
+    // ارسال؛ اگر آراد برندینگ پیوست‌ها را نپذیرفت (۴۲۲)، یک بار دیگر بدونِ پیوست (لینکِ اسناد در متن هست)
+    $post = static function (array $payload) use ($s, $url, $attField): array {
+        [$resp, $err, $code] = abt_http_post($s, $url, $payload);
+        $attNote = '';
+        if ($code === 422 && $attField !== '' && !empty($payload[$attField])) {
+            $attErr = is_string($resp) ? (abt_parse_response(mb_substr($resp, 0, 4000))['error'] ?? '') : '';
+            unset($payload[$attField]);
+            [$resp, $err, $code] = abt_http_post($s, $url, $payload);
+            $attNote = ' — پیوست‌ها پذیرفته نشد' . ($attErr ? ' («' . $attErr . '»)' : '') . '؛ تیکت بدونِ پیوست و با لینکِ اسناد در متن ارسال شد';
+        }
+        $respText = is_string($resp) ? mb_substr($resp, 0, 4000) : '';
+        $parsed = $respText !== '' ? abt_parse_response($respText) : ['ok' => null, 'id' => null, 'url' => null, 'error' => null];
+        $ok = $resp !== false && $err === '' && $code >= 200 && $code < 300 && $parsed['ok'] !== false;
+        return ['ok' => $ok, 'err' => $err, 'code' => $code, 'text' => $respText, 'parsed' => $parsed, 'att_note' => $attNote];
+    };
+
+    // «تاجری با این شماره موبایل پیدا نشد» ← همه‌ی موبایل‌های این شخص در پروفایل ۳۶۰ به‌ترتیب امتحان می‌شوند
+    $mobiles = $phoneField !== '' ? abt_person_mobiles($pdo, $order) : [];
+    if (!$mobiles) $mobiles = [$phoneField !== '' ? (string) ($payload[$phoneField] ?? '') : ''];
+    $tried = [];
+    $usedMobile = null;
+    $account = null;
+    $r = null;
+    foreach ($mobiles as $m) {
+        if ($phoneField !== '') $payload[$phoneField] = $m;
+        $r = $post($payload);
+        if (!abt_is_unknown_merchant($r)) { $usedMobile = $m; break; }
+        $tried[] = $m;
+    }
+    // هیچ شماره‌ای حساب نداشت ← ساختِ حسابِ جدید + تیکتِ «اطلاعاتِ حساب» + ارسالِ همین تیکت به حسابِ جدید
+    if ($usedMobile === null && $phoneField !== '') {
+        $acc = abt_create_account($pdo, $s, $order, $userId);
+        if ($acc['ok']) {
+            $account = $acc['account'];
+            $payload[$phoneField] = (string) $account['mobile'];
+            $r = $post($payload);
+            $usedMobile = (string) $account['mobile'];
+        } else {
+            $now = date('Y-m-d H:i:s');
+            $why = 'هیچ‌کدام از شماره‌های این مشتری در پروفایل ۳۶۰ (' . to_persian_digits(implode('، ', $tried)) . ') در آراد برندینگ حساب ندارد — ' . $acc['message'];
+            $pdo->prepare("UPDATE aradbranding_tickets SET status = 'failed', attempts = attempts + 1, http_code = ?, response_body = ?, last_error = ?, updated_at = ? WHERE id = ?")
+                ->execute([$r['code'] ?: null, $r['text'], mb_substr($why, 0, 500), $now, (int) $ticket['id']]);
+            return ['ok' => false, 'message' => 'ارسالِ تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» به آراد برندینگ ناموفق بود — ' . $why];
+        }
+    }
+
+    $now = date('Y-m-d H:i:s');
+    $parsed = $r['parsed'];
+    $respText = $r['text'];
+    $code = $r['code'];
+    if ($r['ok']) {
+        $altNote = '';
+        if (!$account && $usedMobile !== null && $usedMobile !== '' && $usedMobile !== abt_mobile((string) ($order['customer_mobile'] ?? ''))) {
+            // شماره‌ی دیگری از پروفایل ۳۶۰ حساب داشت ← برای تیکت‌های بعدی هم همین شماره
+            abt_account_remember($pdo, $order, $usedMobile, $userId);
+            $altNote = ' — با شماره‌ی ' . to_persian_digits($usedMobile) . ' از پروفایلِ ۳۶۰ (شماره‌ی سفارش در آراد برندینگ حساب نداشت)';
+        }
+        $pdo->prepare("UPDATE aradbranding_tickets SET status = 'sent', attempts = attempts + 1, external_id = ?, external_url = ?, http_code = ?,
+                response_body = ?, last_error = NULL, sent_by = ?, sent_at = ?, updated_at = ?, phone_used = ? WHERE id = ?")
+            ->execute([$parsed['id'], $parsed['url'], $code, $respText, $userId, $now, $now, ($usedMobile ?? '') !== '' ? $usedMobile : null, (int) $ticket['id']]);
+        if (function_exists('orders_add_history')) {
+            orders_add_history($pdo, (int) $order['id'], $userId, 'note', null, null,
+                'تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» در آراد برندینگ ثبت شد' . ($parsed['id'] ? ' (شماره‌ی تیکت: ' . $parsed['id'] . ')' : '') . $altNote . '.');
+        }
+        $accNote = $account ? ' — ' . abt_account_notice($account) : '';
+        return ['ok' => true, 'message' => 'تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» در آراد برندینگ ثبت شد' . ($parsed['id'] ? ' (شماره‌ی تیکت: ' . $parsed['id'] . ')' : '') . $altNote . $r['att_note'] . '.' . $accNote,
+            'new_account' => $account];
+    }
+    $why = $r['err'] !== '' ? 'خطای اتصال: ' . $r['err'] : ('پاسخِ سامانه (کد ' . $code . ')' . ($parsed['error'] ? ': ' . $parsed['error'] : ''));
+    if ($account) $why .= ' — حسابِ جدید ساخته شد ولی ارسالِ تیکت به آن ناموفق بود؛ دوباره «ارسال» بزنید. ' . abt_account_notice($account);
+    $pdo->prepare("UPDATE aradbranding_tickets SET status = 'failed', attempts = attempts + 1, http_code = ?, response_body = ?, last_error = ?, updated_at = ? WHERE id = ?")
+        ->execute([$code ?: null, $respText, mb_substr($why, 0, 500), $now, (int) $ticket['id']]);
+    return ['ok' => false, 'message' => 'ارسالِ تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» به آراد برندینگ ناموفق بود — ' . $why];
+}
+
+/** POST به API آراد برندینگ با همان احرازِ هویتِ تنظیمات. @return array{0:string|false,1:string,2:int} */
+function abt_http_post(array $s, string $url, array $payload): array
+{
     $headers = ['Accept: application/json'];
     $key = (string) $s['auth_key'];
     $authName = trim((string) $s['auth_name']);
@@ -819,62 +982,276 @@ function abt_send(PDO $pdo, array $order, array $ticket, int $userId): array
             $payload[$authName !== '' ? $authName : 'api_key'] = $key;
             break;
     }
-    $doPost = static function (array $payload) use ($s, $url, $headers): array {
-        $hdr = $headers;
-        if ($s['body_format'] === 'form') {
-            $body = http_build_query($payload);
-            $hdr[] = 'Content-Type: application/x-www-form-urlencoded; charset=utf-8';
-        } else {
-            $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $hdr[] = 'Content-Type: application/json; charset=utf-8';
+    if (isset($GLOBALS['ABT_HTTP_MOCK']) && is_callable($GLOBALS['ABT_HTTP_MOCK'])) {
+        return ($GLOBALS['ABT_HTTP_MOCK'])($url, $payload); // فقط برای تستِ خودکار
+    }
+    if ($s['body_format'] === 'form') {
+        $body = http_build_query($payload);
+        $headers[] = 'Content-Type: application/x-www-form-urlencoded; charset=utf-8';
+    } else {
+        $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $headers[] = 'Content-Type: application/json; charset=utf-8';
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $body,
+        CURLOPT_HTTPHEADER     => $headers,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 45,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_SSL_VERIFYPEER => $s['verify_ssl'] === '1',
+        CURLOPT_SSL_VERIFYHOST => $s['verify_ssl'] === '1' ? 2 : 0,
+    ]);
+    $resp = curl_exec($ch);
+    $err = curl_error($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return [$resp, $err, $code];
+}
+
+/* =========================================================================
+   حسابِ مشتری در آراد برندینگ (موبایل‌های پروفایل ۳۶۰ / ساختِ حسابِ جدید)
+   ========================================================================= */
+
+/** پاسخِ «تاجری با این شماره موبایل پیدا نشد» (۴۲۲/۴۰۴) */
+function abt_is_unknown_merchant(?array $r): bool
+{
+    if (!$r || $r['ok'] || !in_array((int) $r['code'], [404, 422], true)) return false;
+    $txt = (string) ($r['parsed']['error'] ?? '') . ' ' . (string) $r['text'];
+    return (bool) preg_match('/تاجر|merchant|(کاربر|user|حساب|account|موبایل|mobile).{0,40}(پیدا|یافت|not\s*found|exist)/iu', $txt);
+}
+
+/** کلیدِ شخص در پروفایلِ ۳۶۰ (کوچک‌ترین شناسه‌ی پرونده) */
+function abt_person_key(PDO $pdo, int $customerId): int
+{
+    if (!function_exists('cc_person_ids')) require_once __DIR__ . '/customer_credit.php';
+    $ids = cc_person_ids($pdo, $customerId);
+    return $ids ? min($ids) : $customerId;
+}
+
+function abt_account_get(PDO $pdo, int $customerId): ?array
+{
+    if (!abt_ready($pdo)) return null;
+    try {
+        $st = $pdo->prepare('SELECT * FROM aradbranding_accounts WHERE person_key = ? LIMIT 1');
+        $st->execute([abt_person_key($pdo, $customerId)]);
+        return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * همه‌ی موبایل‌های این شخص (پروفایلِ ۳۶۰: همه‌ی پرونده‌ها با همان شماره/کدِ ملی، موبایلِ دوم و شماره‌های اضافه)
+ * به قالبِ ۰۹xxxxxxxxx — اول شماره‌ای که قبلاً در آراد برندینگ حساب داشته/ساخته شده، بعد موبایلِ سفارش، بعد بقیه.
+ */
+function abt_person_mobiles(PDO $pdo, array $order): array
+{
+    $cid = (int) $order['customer_id'];
+    $out = [];
+    $acc = abt_account_get($pdo, $cid);
+    if ($acc) $out[] = (string) $acc['mobile'];
+    $out[] = abt_mobile((string) ($order['customer_mobile'] ?? ''));
+    if (!function_exists('cc_person_ids')) require_once __DIR__ . '/customer_credit.php';
+    $ids = array_map('intval', cc_person_ids($pdo, $cid) ?: [$cid]);
+    usort($ids, static fn($a, $b) => ($a === $cid ? -1 : ($b === $cid ? 1 : $a <=> $b))); // پرونده‌ی خودِ سفارش اول
+    $in = implode(',', $ids);
+    try {
+        $rows = [];
+        foreach ($pdo->query("SELECT id, mobile, mobile_2 FROM customers WHERE id IN ($in)")->fetchAll(PDO::FETCH_ASSOC) ?: [] as $c) $rows[(int) $c['id']] = $c;
+        foreach ($ids as $i) {
+            if (!isset($rows[$i])) continue;
+            $out[] = abt_mobile((string) $rows[$i]['mobile']);
+            $out[] = abt_mobile((string) ($rows[$i]['mobile_2'] ?? ''));
         }
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $body,
-            CURLOPT_HTTPHEADER     => $hdr,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 45,
-            CURLOPT_CONNECTTIMEOUT => 8,
-            CURLOPT_SSL_VERIFYPEER => $s['verify_ssl'] === '1',
-            CURLOPT_SSL_VERIFYHOST => $s['verify_ssl'] === '1' ? 2 : 0,
-        ]);
-        $resp = curl_exec($ch);
-        $err = curl_error($ch);
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return [$resp, $err, $code];
+    } catch (Throwable $e) {}
+    try {
+        foreach ($pdo->query("SELECT phone FROM customer_phones WHERE customer_id IN ($in) ORDER BY is_primary DESC, id")->fetchAll(PDO::FETCH_COLUMN) ?: [] as $ph) {
+            $out[] = abt_mobile((string) $ph);
+        }
+    } catch (Throwable $e) {}
+    return array_values(array_unique(array_filter($out, static fn($m) => (bool) preg_match('/^09\d{9}$/', $m))));
+}
+
+/** شماره‌ای از پروفایلِ ۳۶۰ که در آراد برندینگ حساب داشت ← ذخیره برای تیکت‌های بعدی */
+function abt_account_remember(PDO $pdo, array $order, string $mobile, int $userId): void
+{
+    try {
+        $pdo->prepare("INSERT INTO aradbranding_accounts (person_key, customer_id, mobile, status, order_id, created_by, created_at) VALUES (?,?,?,'found',?,?,?)
+            ON DUPLICATE KEY UPDATE mobile = IF(status = 'created', mobile, VALUES(mobile))")
+            ->execute([abt_person_key($pdo, (int) $order['customer_id']), (int) $order['customer_id'], $mobile, (int) $order['id'], $userId ?: null, date('Y-m-d H:i:s')]);
+    } catch (Throwable $e) {
+        error_log('abt_account_remember: ' . $e->getMessage());
+    }
+}
+
+/** رمزِ عبورِ اولیه: ۸ نویسه، بدونِ حروفِ گیج‌کننده (0/O، 1/l/I) — مناسبِ پیامک */
+function abt_gen_password(): string
+{
+    $l = 'abcdefghjkmnpqrstuvwxyz';
+    $d = '23456789';
+    $p = strtoupper($l[random_int(0, strlen($l) - 1)]);
+    for ($i = 0; $i < 3; $i++) $p .= $l[random_int(0, strlen($l) - 1)];
+    for ($i = 0; $i < 4; $i++) $p .= $d[random_int(0, strlen($d) - 1)];
+    return $p;
+}
+
+/** «فهرست_همه_خدمات»: همه‌ی خدماتِ سفارش‌های تأییدشده‌ی این شخص (همه‌ی پرونده‌های ۳۶۰) + سفارشِ فعلی */
+function abt_all_services_text(PDO $pdo, array $order): string
+{
+    if (!function_exists('cc_person_ids')) require_once __DIR__ . '/customer_credit.php';
+    $ids = array_map('intval', cc_person_ids($pdo, (int) $order['customer_id']) ?: [(int) $order['customer_id']]);
+    $in = implode(',', $ids);
+    $lines = [];
+    try {
+        $st = $pdo->prepare("SELECT i.title, i.quantity, i.unit, o.order_number FROM sales_order_items i JOIN sales_orders o ON o.id = i.order_id
+            WHERE (o.customer_id IN ($in) AND o.status = 'approved') OR o.id = ? ORDER BY o.id, i.id");
+        $st->execute([(int) $order['id']]);
+        $seen = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $it) {
+            $qty = (float) ($it['quantity'] ?? 1);
+            $unit = trim((string) ($it['unit'] ?? ''));
+            $q = ($qty != 1.0 || $unit !== '') ? ' — ' . to_persian_digits(rtrim(rtrim(number_format($qty, 2, '.', ''), '0'), '.')) . ($unit !== '' ? ' ' . $unit : '') : '';
+            $line = trim((string) $it['title']) . $q . ' (فاکتور ' . "\u{2066}" . to_persian_digits((string) $it['order_number']) . "\u{2069}" . ')';
+            if (isset($seen[$line])) continue;
+            $seen[$line] = true;
+            $lines[] = to_persian_digits((string) (count($lines) + 1)) . '. ' . $line;
+        }
+    } catch (Throwable $e) {
+        error_log('abt_all_services_text: ' . $e->getMessage());
+    }
+    return $lines ? implode("\n", $lines) : '—';
+}
+
+/** پیغامِ یادآوری برای مسئولِ ارسال */
+function abt_account_notice(array $account): string
+{
+    return 'این مشتری قبلاً در آراد برندینگ حساب نداشت و برایش حسابِ جدید ساخته شد (نام کاربری: ' . $account['username']
+        . ' — رمز عبور: ' . ($account['password'] ?: '—') . '). لطفاً نام کاربری و رمز عبور را برای مشتری پیامک کنید.';
+}
+
+/**
+ * ساختِ حسابِ تاجر در آراد برندینگ با موبایلِ سفارش (یا اولین موبایلِ معتبرِ پروفایل ۳۶۰)، سپس تیکتِ «اطلاعاتِ حساب»
+ * (نام کاربری، رمز، آدرسِ ورود و نامِ همه‌ی خدماتِ خریداری‌شده) و یادآوری به مسئولی که «ارسال» را زده.
+ * @return array{ok:bool, message:string, account?:array}
+ */
+function abt_create_account(PDO $pdo, array $s, array $order, int $userId): array
+{
+    $existing = abt_account_get($pdo, (int) $order['customer_id']);
+    if ($existing && $existing['status'] === 'created') return ['ok' => true, 'message' => 'حساب قبلاً ساخته شده.', 'account' => $existing];
+    $url = trim((string) ($s['acc_api_url'] ?? ''));
+    if (($s['acc_enabled'] ?? '0') !== '1' || !preg_match('#^https?://#i', $url)) {
+        return ['ok' => false, 'message' => 'ساختِ خودکارِ حساب در «تنظیمات تیکت ← مشتری‌ای که در آراد برندینگ حساب ندارد» فعال/تنظیم نشده؛ یا شماره‌ی درستِ مشتری را در پرونده‌اش اضافه کنید، یا حساب را دستی بسازید و دوباره «ارسال» بزنید.'];
+    }
+    $mobiles = abt_person_mobiles($pdo, $order);
+    $orderMobile = abt_mobile((string) ($order['customer_mobile'] ?? ''));
+    $mobile = preg_match('/^09\d{9}$/', $orderMobile) ? $orderMobile : ($mobiles[0] ?? '');
+    if ($mobile === '') return ['ok' => false, 'message' => 'هیچ شماره موبایلِ معتبری (۰۹…) برای ساختِ حساب در پرونده‌ی مشتری نیست.'];
+    $kyc = function_exists('kyc_get') ? kyc_get($pdo, (int) $order['customer_id']) : [];
+    $password = abt_gen_password();
+    $payload = json_decode((string) ($s['acc_extra_json'] ?? ''), true);
+    $payload = is_array($payload) ? $payload : [];
+    foreach ([
+        'acc_field_mobile'   => $mobile,
+        'acc_field_name'     => (string) ($order['customer_name'] ?? ''),
+        'acc_field_password' => $password,
+        'acc_field_national' => ($kyc['id_type'] ?? 'national') === 'national' ? (string) ($kyc['national_id'] ?? '') : '',
+    ] as $cfg => $val) {
+        $name = trim((string) ($s[$cfg] ?? ''));
+        if ($name !== '' && $val !== '') $payload[$name] = $val;
+    }
+    [$resp, $err, $code] = abt_http_post($s, $url, $payload);
+    $text = is_string($resp) ? mb_substr($resp, 0, 4000) : '';
+    $parsed = $text !== '' ? abt_parse_response($text) : ['ok' => null, 'id' => null, 'url' => null, 'error' => null];
+    if ($resp === false || $err !== '' || $code < 200 || $code >= 300 || $parsed['ok'] === false) {
+        $why = $err !== '' ? 'خطای اتصال: ' . $err : 'ساختِ حساب ناموفق بود (کد ' . $code . ')' . ($parsed['error'] ? ': ' . $parsed['error'] : '');
+        if (function_exists('orders_add_history')) orders_add_history($pdo, (int) $order['id'], $userId, 'note', null, null, 'آراد برندینگ: ' . $why);
+        return ['ok' => false, 'message' => $why];
+    }
+    // نام کاربری/رمز/شناسه اگر API برگرداند (وگرنه: موبایل و همان رمزی که فرستادیم)
+    $j = json_decode($text, true);
+    $pools = is_array($j) ? [$j] : [];
+    foreach (['data', 'user', 'merchant', 'result', 'account'] as $k) if (is_array($j) && isset($j[$k]) && is_array($j[$k])) $pools[] = $j[$k];
+    $pick = static function (array $keys) use ($pools): ?string {
+        foreach ($pools as $p) foreach ($keys as $k) if (isset($p[$k]) && is_scalar($p[$k]) && (string) $p[$k] !== '') return (string) $p[$k];
+        return null;
     };
-    [$resp, $err, $code] = $doPost($payload);
-    // اگر آراد برندینگ پیوست‌ها را نپذیرفت (۴۲۲)، تیکت یک بار دیگر بدونِ پیوست ارسال می‌شود (لینکِ اسناد در متن هست)
-    $attField = trim((string) ($s['field_attachments'] ?? ''));
-    $attNote = '';
-    if ($code === 422 && $attField !== '' && !empty($payload[$attField])) {
-        $attErr = is_string($resp) ? (abt_parse_response(mb_substr($resp, 0, 4000))['error'] ?? '') : '';
-        unset($payload[$attField]);
-        [$resp, $err, $code] = $doPost($payload);
-        $attNote = ' — پیوست‌ها پذیرفته نشد' . ($attErr ? ' («' . $attErr . '»)' : '') . '؛ تیکت بدونِ پیوست و با لینکِ اسناد در متن ارسال شد';
-    }
+    $row = [
+        abt_person_key($pdo, (int) $order['customer_id']), (int) $order['customer_id'], $mobile, 'created',
+        mb_substr($pick(['username', 'user_name', 'login']) ?? $mobile, 0, 120),
+        mb_substr($pick(['password', 'pass']) ?? $password, 0, 120),
+        $pick(['user_id', 'merchant_id', 'id']),
+        (int) $order['id'], $userId ?: null, date('Y-m-d H:i:s'), $text,
+    ];
+    $pdo->prepare('INSERT INTO aradbranding_accounts (person_key, customer_id, mobile, status, username, password, external_user_id, order_id, created_by, created_at, response_body)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE customer_id = VALUES(customer_id), mobile = VALUES(mobile), status = VALUES(status), username = VALUES(username),
+            password = VALUES(password), external_user_id = VALUES(external_user_id), order_id = VALUES(order_id), created_by = VALUES(created_by), created_at = VALUES(created_at),
+            response_body = VALUES(response_body), sms_done_by = NULL, sms_done_at = NULL, welcome_ticket_id = NULL, welcome_error = NULL')
+        ->execute($row);
+    $account = abt_account_get($pdo, (int) $order['customer_id']);
+    if (!$account) return ['ok' => false, 'message' => 'حساب در آراد برندینگ ساخته شد ولی ذخیره‌ی آن در آراد کانتکت ناموفق بود.'];
 
-    $now = date('Y-m-d H:i:s');
-    $respText = is_string($resp) ? mb_substr($resp, 0, 4000) : '';
-    $parsed = $respText !== '' ? abt_parse_response($respText) : ['ok' => null, 'id' => null, 'url' => null, 'error' => null];
-    $ok = $resp !== false && $err === '' && $code >= 200 && $code < 300 && $parsed['ok'] !== false;
-
-    if ($ok) {
-        $pdo->prepare("UPDATE aradbranding_tickets SET status = 'sent', attempts = attempts + 1, external_id = ?, external_url = ?, http_code = ?,
-                response_body = ?, last_error = NULL, sent_by = ?, sent_at = ?, updated_at = ? WHERE id = ?")
-            ->execute([$parsed['id'], $parsed['url'], $code, $respText, $userId, $now, $now, (int) $ticket['id']]);
-        if (function_exists('orders_add_history')) {
-            orders_add_history($pdo, (int) $order['id'], $userId, 'note', null, null,
-                'تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» در آراد برندینگ ثبت شد' . ($parsed['id'] ? ' (شماره‌ی تیکت: ' . $parsed['id'] . ')' : '') . '.');
+    // تیکتِ «اطلاعاتِ حساب» برای خودِ مشتری: نام کاربری، رمز، آدرسِ ورود و نامِ همه‌ی خدماتِ خریداری‌شده
+    $vars = [
+        'نام_کاربری' => (string) $account['username'],
+        'رمز_عبور' => (string) $account['password'],
+        'آدرس_ورود' => trim((string) ($s['acc_login_url'] ?? '')) ?: 'https://my.aradbranding.me',
+        'فهرست_همه_خدمات' => abt_all_services_text($pdo, $order),
+    ] + abt_vars($pdo, $order + ['total_amount' => 0, 'quote_id' => 0, 'order_number' => '']); // تیکتِ قرارداد ممکن است سفارش نداشته باشد
+    $vars['موبایل'] = to_persian_digits($mobile);
+    $wTicket = [
+        'id' => 0, 'item_id' => null, 'department' => trim((string) ($s['acc_department'] ?? '')),
+        'subject' => mb_substr(trim(preg_replace('/\s+/u', ' ', abt_render((string) $s['acc_subject_tpl'], $vars))), 0, 250) ?: 'اطلاعات حساب کاربری شما در آراد برندینگ',
+        'message' => trim(preg_replace('/^[ \t]+/mu', '', abt_render(trim((string) $s['acc_body_tpl']) !== '' ? (string) $s['acc_body_tpl'] : abt_default_account_body(), $vars))),
+    ];
+    $wPayload = abt_payload($pdo, $s, $order, $wTicket);
+    if (trim((string) $s['field_phone']) !== '') $wPayload[trim((string) $s['field_phone'])] = $mobile;
+    if (trim((string) $s['field_external']) !== '') $wPayload[trim((string) $s['field_external'])] = 'arad-contact-account-' . (int) $account['id'];
+    $deptField = trim((string) ($s['field_department'] ?? ''));
+    $welcomeErr = null;
+    $welcomeId = null;
+    if ($deptField !== '' && !is_int($wPayload[$deptField] ?? null)) {
+        $welcomeErr = 'واحدِ تیکتِ «اطلاعاتِ حساب» تعیین/پیدا نشد (تنظیمات تیکت ← مشتری‌ای که در آراد برندینگ حساب ندارد).';
+    } else {
+        [$wr, $we, $wc] = abt_http_post($s, trim($s['api_url']), $wPayload);
+        $wt = is_string($wr) ? mb_substr($wr, 0, 4000) : '';
+        $wp = $wt !== '' ? abt_parse_response($wt) : ['ok' => null, 'id' => null, 'url' => null, 'error' => null];
+        if ($wr !== false && $we === '' && $wc >= 200 && $wc < 300 && $wp['ok'] !== false) {
+            $welcomeId = $wp['id'] ?? 'sent';
+        } else {
+            $welcomeErr = $we !== '' ? 'خطای اتصال: ' . $we : 'کد ' . $wc . ($wp['error'] ? ': ' . $wp['error'] : '');
         }
-        return ['ok' => true, 'message' => 'تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» در آراد برندینگ ثبت شد' . ($parsed['id'] ? ' (شماره‌ی تیکت: ' . $parsed['id'] . ')' : '') . $attNote . '.'];
     }
-    $why = $err !== '' ? 'خطای اتصال: ' . $err : ('پاسخِ سامانه (کد ' . $code . ')' . ($parsed['error'] ? ': ' . $parsed['error'] : ''));
-    $pdo->prepare("UPDATE aradbranding_tickets SET status = 'failed', attempts = attempts + 1, http_code = ?, response_body = ?, last_error = ?, updated_at = ? WHERE id = ?")
-        ->execute([$code ?: null, $respText, mb_substr($why, 0, 500), $now, (int) $ticket['id']]);
-    return ['ok' => false, 'message' => 'ارسالِ تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» به آراد برندینگ ناموفق بود — ' . $why];
+    $pdo->prepare('UPDATE aradbranding_accounts SET welcome_ticket_id = ?, welcome_error = ? WHERE id = ?')
+        ->execute([$welcomeId, $welcomeErr !== null ? mb_substr($welcomeErr, 0, 500) : null, (int) $account['id']]);
+    $account['welcome_ticket_id'] = $welcomeId;
+    $account['welcome_error'] = $welcomeErr;
+
+    // یادآوری به مسئولی که «ارسال» را زده: تاریخچه‌ی سفارش + اعلانِ پوش + کادرِ ثابت در صفحه‌ی سفارش تا «پیامک شد» بزند
+    $msg = abt_account_notice($account) . ($welcomeErr === null ? ' تیکتِ «اطلاعاتِ حساب» (با فهرستِ همه‌ی خدمات) هم برای مشتری ثبت شد.' : ' (تیکتِ «اطلاعاتِ حساب» ارسال نشد: ' . $welcomeErr . ')');
+    if (function_exists('orders_add_history')) orders_add_history($pdo, (int) $order['id'], $userId, 'note', null, null, 'آراد برندینگ: ' . $msg);
+    if ($userId && function_exists('send_push_to_user')) {
+        try {
+            send_push_to_user($pdo, $userId, 'حسابِ جدید در آراد برندینگ — ' . ($order['customer_name'] ?? ''),
+                'مشتری قبلاً حساب نداشت. نام کاربری و رمز را برایش پیامک کنید.', 'order_view.php?id=' . (int) $order['id'] . '#abt-account');
+        } catch (Throwable $e) {
+            error_log('abt push: ' . $e->getMessage());
+        }
+    }
+    return ['ok' => true, 'message' => $msg, 'account' => $account];
+}
+
+/** «پیامک شد»: مسئول اعلام می‌کند اطلاعاتِ ورود برای مشتری فرستاده شد */
+function abt_account_sms_done(PDO $pdo, int $customerId, int $userId): bool
+{
+    $acc = abt_account_get($pdo, $customerId);
+    if (!$acc || $acc['status'] !== 'created') return false;
+    $pdo->prepare('UPDATE aradbranding_accounts SET sms_done_by = ?, sms_done_at = ? WHERE id = ?')->execute([$userId, date('Y-m-d H:i:s'), (int) $acc['id']]);
+    if (!empty($acc['order_id']) && function_exists('orders_add_history')) {
+        orders_add_history($pdo, (int) $acc['order_id'], $userId, 'note', null, null, 'اطلاعاتِ ورودِ حسابِ آراد برندینگ برای مشتری پیامک شد.');
+    }
+    return true;
 }
 
 /**

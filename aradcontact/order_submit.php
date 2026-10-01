@@ -136,13 +136,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ─── مدارکِ مشتری: فقط مواردی که هنوز ثبت نشده الزامی است ───
     $kycData = [];
-    foreach (['national_id', 'postal_code', 'address', 'father_name', 'title'] as $kf) {
+    foreach (['national_id', 'id_type', 'postal_code', 'address', 'father_name', 'title'] as $kf) {
         if (isset($_POST[$kf])) $kycData[$kf] = (string) $_POST[$kf];
     }
     $cardFile = $_FILES['national_card'] ?? null;
     $cardSent = $cardFile && (int) ($cardFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
-    if (!$kyc['has_card'] && !$cardSent) $errors[] = 'تصویرِ کارت ملیِ مشتری را بارگذاری کنید (فقط یک‌بار لازم است).';
-    if (!$kyc['has_national_id'] && trim($kycData['national_id'] ?? '') === '') $errors[] = 'کد ملیِ مشتری را وارد کنید.';
+    if (!$kyc['has_card'] && !$cardSent) $errors[] = 'تصویرِ کارت ملیِ مشتری (برای اتباع: کارتِ اقامت یا پاسپورت) را بارگذاری کنید (فقط یک‌بار لازم است).';
+    if (!$kyc['has_national_id'] && trim($kycData['national_id'] ?? '') === '') $errors[] = 'کد ملیِ مشتری را وارد کنید (برای اتباع: کد فراگیر اتباع یا شماره پاسپورت).';
     if (!$kyc['has_address'] && trim($kycData['address'] ?? '') === '') $errors[] = 'آدرسِ مشتری را وارد کنید.';
     if (!$kyc['has_postal'] && trim($kycData['postal_code'] ?? '') === '') $errors[] = 'کد پستیِ مشتری را وارد کنید.';
     if (!$kyc['has_title'] && !in_array($kycData['title'] ?? '', ['آقای', 'خانم'], true)) $errors[] = 'عنوانِ مشتری (آقای/خانم) را انتخاب کنید.';
@@ -378,19 +378,18 @@ require_once __DIR__ . '/includes/layout_top.php';
             <?php if (!$kycMissing): ?><button type="button" class="btn btn-sm btn-link p-0" data-bs-toggle="collapse" data-bs-target="#kycFields">اصلاحِ مدارک</button><?php endif; ?>
           </div>
           <?php if (!$kycMissing): ?>
-            <div class="small text-muted mt-1"><?= e((string) $kyc['title']) ?> — فرزندِ <?= e((string) $kyc['father_name']) ?> — کد ملی <span dir="ltr"><?= e((string) $kyc['national_id']) ?></span> — کدپستی <span dir="ltr"><?= e((string) $kyc['postal_code']) ?></span> — <?= e(mb_strimwidth((string) $kyc['address'], 0, 70, '…')) ?></div>
+            <div class="small text-muted mt-1"><?= e((string) $kyc['title']) ?> — فرزندِ <?= e((string) $kyc['father_name']) ?> — <?= e($kyc['id_label']) ?> <span dir="ltr"><?= e((string) $kyc['national_id']) ?></span> — کدپستی <span dir="ltr"><?= e((string) $kyc['postal_code']) ?></span> — <?= e(mb_strimwidth((string) $kyc['address'], 0, 70, '…')) ?></div>
           <?php endif; ?>
           <div class="collapse <?= $kycMissing ? 'show' : '' ?> mt-2" id="kycFields">
             <div class="row g-2">
               <?php if (!$kyc['has_card'] || !$kycMissing): ?>
               <div class="col-12">
-                <label class="form-label small mb-1">تصویرِ کارت ملیِ مشتری <?= !$kyc['has_card'] ? '*' : '(برای جایگزینی)' ?></label>
+                <label class="form-label small mb-1"><?= e(kyc_card_label($kyc)) ?>ِ مشتری <span class="text-muted">(اتباع: کارتِ اقامت / پاسپورت)</span> <?= !$kyc['has_card'] ? '*' : '(برای جایگزینی)' ?></label>
                 <input type="file" name="national_card" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf">
               </div>
               <?php endif; ?>
               <?php if (!$kyc['has_national_id'] || !$kycMissing): ?>
-              <div class="col-md-6"><label class="form-label small mb-1">کد ملی <?= !$kyc['has_national_id'] ? '*' : '' ?></label>
-                <input name="national_id" class="form-control" dir="ltr" inputmode="numeric" maxlength="12" value="<?= e((string) ($_POST['national_id'] ?? $kyc['national_id'] ?? '')) ?>"></div>
+              <div class="col-md-6"><?= kyc_id_fields_html($kyc, (string) ($_POST['national_id'] ?? $kyc['national_id'] ?? ''), !$kyc['has_national_id'], 'form-label small mb-1') ?></div>
               <?php endif; ?>
               <?php if (!$kyc['has_postal'] || !$kycMissing): ?>
               <div class="col-md-6"><label class="form-label small mb-1">کد پستی <?= !$kyc['has_postal'] ? '*' : '' ?></label>
@@ -520,7 +519,7 @@ require_once __DIR__ . '/includes/layout_top.php';
               <div class="fw-bold small mb-1"><i class="fa-solid fa-file-signature text-warning"></i> پیامِ رضایتِ پرداختِ مشتری</div>
               <div class="small text-muted mb-2">متنِ آماده (با نام، کد ملی و مبلغِ همین فرم) را کپی و برای مشتری بفرستید. اسکرین‌شاتِ ارسالِ پیام را همین‌جا یا بعداً در صفحه‌ی سفارش بارگذاری کنید؛ تا بارگذاری نشود، سفارش برای شما نارنجی می‌ماند و مالی بعد از تأییدِ آن سهمِ عملکرد را پرداخت می‌کند.</div>
               <div class="d-flex flex-wrap gap-2 align-items-center">
-                <?= consent_copy_button((string) $quote['customer_name'], $kyc['has_national_id'] ? (string) $kyc['national_id'] : '', 0, 'paidAmount', $kyc['has_national_id'] ? '' : 'national_id') ?>
+                <?= consent_copy_button((string) $quote['customer_name'], $kyc['has_national_id'] ? (string) $kyc['national_id'] : '', 0, 'paidAmount', $kyc['has_national_id'] ? '' : 'national_id', 'btn btn-sm btn-outline-success', (string) ($kyc['id_label'] ?? 'کد ملی')) ?>
                 <input type="file" name="consent_screenshot" class="form-control form-control-sm" style="max-width:300px" accept="image/jpeg,image/png,image/webp,application/pdf" title="اسکرین‌شاتِ پیامِ رضایت (اختیاری — بعداً هم می‌شود)">
               </div>
             </div>

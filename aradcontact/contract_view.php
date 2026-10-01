@@ -142,6 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach (['national_id', 'postal_code', 'address'] as $k) {
             if (isset($_POST[$k]) && trim((string) $_POST[$k]) !== '') $kycData[$k] = (string) $_POST[$k];
         }
+        if (isset($kycData['national_id']) && isset($_POST['id_type'])) $kycData['id_type'] = (string) $_POST['id_type']; // خالی = تشخیصِ خودکار (اتباع)
         $errors = $kycData ? kyc_save($pdo, (int) $contract['customer_id'], $kycData, null, $uid) : [];
         $pdo->prepare('UPDATE contracts SET contract_date = ?, fields_json = ?, updated_at = ? WHERE id = ?')
             ->execute([$date, json_encode($manual, JSON_UNESCAPED_UNICODE), $now, $id]);

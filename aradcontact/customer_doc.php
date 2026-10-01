@@ -33,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$errors) {
         $errors = kyc_save($pdo, $customerId, [
             'national_id' => (string) ($_POST['national_id'] ?? ''),
+            'id_type'     => (string) ($_POST['id_type'] ?? ''),
             'postal_code' => (string) ($_POST['postal_code'] ?? ''),
             'address'     => (string) ($_POST['address'] ?? ''),
             'father_name' => (string) ($_POST['father_name'] ?? ''),
