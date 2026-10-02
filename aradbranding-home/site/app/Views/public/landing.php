@@ -42,10 +42,8 @@ $globeMarkets = array_values(array_filter($markets, static fn (array $m): bool =
 // Every country reached by a route drawn on the globe also gets a flag card (unless the admin already listed it).
 $routeCountries = [
     ['IQ', 'عراق', 33.0, 43.5, 'مسیر زمینی از ایران'], ['AF', 'افغانستان', 34.0, 66.0, 'مسیر زمینی از ایران'],
-    ['KE', 'کنیا', 0.3, 37.9, 'دریایی + زمینی از ایران'], ['TZ', 'تانزانیا', -6.4, 34.9, 'دریایی + زمینی از ایران'],
-    ['ZA', 'آفریقای جنوبی', -28.5, 25.5, 'دریایی + زمینی از ایران'], ['NG', 'نیجریه', 9.1, 8.7, 'دریایی + زمینی از ایران'],
+    ['KE', 'کنیا', 0.3, 37.9, 'دریایی + زمینی از ایران'], ['NG', 'نیجریه', 9.1, 8.7, 'دریایی + زمینی از ایران'],
     ['US', 'آمریکا', 39.5, -98.0, 'مسیر دریایی از آفریقا'], ['CA', 'کانادا', 56.0, -106.0, 'مسیر دریایی از آفریقا'],
-    ['GB', 'بریتانیا', 53.5, -1.8, 'مسیر هوایی · لندن'], ['NL', 'هلند', 52.4, 5.6, 'بندر روتردام'],
 ];
 $listed = array_column($globeMarkets, 'code');
 $routeCards = array_values(array_filter($routeCountries, static fn (array $c): bool => !in_array($c[0], $listed, true)));
@@ -188,7 +186,7 @@ $h = $home['hero'];
       </a>
       <?php endforeach; ?>
       <?php foreach ($routeCards as [$code, $name, $lat, $lon, $note]): ?>
-      <a class="tg-card is-secondary is-route" href="<?= e($marketHref($code)) ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= e($note) ?>"<?= in_array($code, ['GB', 'NL'], true) ? ' data-priority="0.5"' : '' ?>>
+      <a class="tg-card is-secondary is-route" href="<?= e($marketHref($code)) ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= e($note) ?>">
         <?= $flagOf($code) ?>
         <span class="tg-card-t"><b><?= e($name) ?></b><small><?= e($note) ?></small></span>
       </a>
