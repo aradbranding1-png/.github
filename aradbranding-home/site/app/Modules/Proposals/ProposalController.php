@@ -228,9 +228,6 @@ final class ProposalController extends Controller
         if (mb_strlen($message) > 1000 || !preg_match('/^[a-f0-9]{32}$/', $token)) {
             return $this->sendForm($request, ['message' => 'پیام حداکثر ۱۰۰۰ نویسه است.'], 422);
         }
-        if ($message !== '' && \App\Core\Security\ContactGuard::contains($message)) {
-            return $this->sendForm($request, ['message' => \App\Core\Security\ContactGuard::message()], 422);
-        }
         try {
             if ((int) $proposal['status'] !== ProposalService::PUBLISHED) {
                 $this->c->get(ProposalService::class)->publish($proposal);

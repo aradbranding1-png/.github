@@ -24,7 +24,7 @@ use App\Modules\Proposals\ProposalService;
               <span><?= e(ProposalService::TYPES[(int) $r['type']] ?? '') ?></span>
               <span class="ltr"><?= e(substr((string) $r['created_at'], 0, 16)) ?></span>
             </div>
-            <?php if ($r['message']): ?><p class="list-note"><?= e(\App\Core\Security\ContactGuard::mask(\App\Core\Support\Str::excerpt((string) $r['message'], 160))) ?></p><?php endif; ?>
+            <?php if ($r['message']): ?><p class="list-note"><?= e(\App\Core\Support\Str::excerpt((string) $r['message'], 160)) ?></p><?php endif; ?>
           </div>
           <?php if ($r['handle']): ?><a class="btn btn-ghost btn-sm" href="/p/<?= e($r['handle']) ?>">صفحه فرستنده</a><?php endif; ?>
         </li>

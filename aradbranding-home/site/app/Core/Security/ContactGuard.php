@@ -7,9 +7,9 @@ namespace App\Core\Security;
 use App\Core\Support\Str;
 
 /**
- * Keeps off-platform contact details out of everything users write: phone numbers, e-mail
- * addresses, web addresses and messenger / social IDs. Traders reach each other only inside
- * the platform (pages, proposals and letters), so no layer may carry them.
+ * Keeps off-platform contact details out of text other traders can browse (business pages,
+ * proposals, profile text): phone numbers, e-mail addresses, web addresses and messenger /
+ * social IDs. Private letters are not filtered: that is where traders exchange contacts.
  *
  * Used twice: on save (reject with a clear message) and on render (mask anything that
  * slipped through or was saved before this rule existed).
@@ -66,8 +66,8 @@ final class ContactGuard
 
     public static function message(): string
     {
-        return 'نوشتن شماره تماس، ایمیل، آیدی واتساپ، تلگرام، اینستاگرام و دیگر شبکه‌های اجتماعی یا نشانی وب‌سایت مجاز نیست. '
-            . 'ارتباط با تجار فقط از داخل سامانه (نامه‌ها، پیشنهادها و صفحه تجاری) انجام می‌شود.';
+        return 'در این بخش که همه می‌بینند، نوشتن شماره تماس، ایمیل، آیدی واتساپ، تلگرام، اینستاگرام و دیگر شبکه‌های اجتماعی یا نشانی وب‌سایت مجاز نیست. '
+            . 'این اطلاعات را می‌توانید در نامه خصوصی برای تاجر مورد نظر بفرستید.';
     }
 
     private static function prepare(string $text): string

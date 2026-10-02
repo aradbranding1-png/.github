@@ -90,7 +90,7 @@ $url = static fn (string $folder, string $cat): string => '/letters?folder=' . $
                     <span class="mail-time"><?= e(fa_date($r['last_message_at'])) ?></span>
                   </span>
                   <span class="mail-subject"><?php if ($category === 'all'): ?><span class="chip"><?= e(LetterService::TYPE_LABELS[(int) $r['thread_type']] ?? '') ?></span> <?php endif; ?><?= e($r['subject']) ?></span>
-                  <span class="mail-preview"><?= e(\App\Core\Security\ContactGuard::mask((string) $r['preview'])) ?></span>
+                  <span class="mail-preview"><?= e($r['preview']) ?></span>
                 </span>
                 <?php if ($unread): ?><em class="badge" aria-label="<?= e(fa_num($r['unread_count'])) ?> خوانده‌نشده"><?= e(fa_num($r['unread_count'])) ?></em><?php endif; ?>
               </a>

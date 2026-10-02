@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.13.0)
+# aradbranding.app — Home page redesign (v1.13.1)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth or database schema were changed (v1.13.0 changes contact behaviour
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.13.0.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.13.1.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -110,3 +110,7 @@ Earth textures are from the three.js examples (NASA Blue Marble / Black Marble d
 - Business pages no longer collect or show off-platform contacts: the contact fields are gone from `pages/form.php`, `PageService::encodeContent` no longer stores `contacts`, and `PublicPageController` drops any stored `contacts` (cache key `pagemodel2:`). Signed-in visitors see an in-platform «ارتباط با این کسب‌وکار» block (letter / proposal).
 - `ContactGuard` (phones, e-mail, links, messenger and social IDs) now runs on save for every page text field, private letters, replies, public letters, proposal messages and profile text (`city`, `company_name`, `business_area`, `bio`). On render it masks old letter bodies, inbox previews, received-proposal notes and all page text.
 - Changed files: `app/Core/Security/ContactGuard.php`, `app/Modules/Pages/{PageController,PageService,PageLabels,PublicPageController}.php`, `app/Modules/Letters/LetterController.php`, `app/Modules/Proposals/ProposalController.php`, `app/Modules/Users/AccountController.php`, `app/Views/pages/form.php`, `app/Views/public/page.php`, `app/Views/letters/{index,show}.php`, `app/Views/proposals/received.php`.
+
+## v1.13.1
+
+- Letters are not filtered any more (private letters, replies, public letters and the note sent with a proposal): `LetterController`, `ProposalController`, `letters/{index,show}.php` and `proposals/received.php` are back to their original code and ship in the package so 1.13.0 is overwritten. Public text stays guarded: pages, proposals (now also masked on render in `proposals/show.php` and `card.php`) and profile text.

@@ -36,7 +36,7 @@ $count = count($messages['rows']);
     <?php foreach ($messages['rows'] as $i => $m): $mine = (int) $m['sender_id'] === (int) $user['id']; $author = $cards[(int) $m['sender_id']] ?? null; ?>
       <li class="msg<?= $mine ? ' mine' : '' ?>"<?= $i === $count - 1 ? ' id="last"' : '' ?>>
         <div class="msg-meta"><b><?= $mine ? 'شما' : e($name($author)) ?></b><span><?= e(fa_date($m['created_at'])) ?></span></div>
-        <div class="msg-body"><?= nl2br(e(\App\Core\Security\ContactGuard::mask((string) $m['body'])), false) ?></div>
+        <div class="msg-body"><?= nl2br(e((string) $m['body']), false) ?></div>
       </li>
     <?php endforeach; ?>
   </ol>

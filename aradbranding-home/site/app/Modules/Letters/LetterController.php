@@ -8,7 +8,6 @@ use App\Core\Http\Controller;
 use App\Core\Http\HttpException;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
-use App\Core\Security\ContactGuard;
 use App\Core\Security\Idempotency;
 use App\Core\Support\Ulid;
 use App\Modules\Pages\PageRouter;
@@ -121,9 +120,6 @@ final class LetterController extends Controller
         if ($body === '' || mb_strlen($body) > 10000) {
             return $this->redirect('/letters/' . $thread['uid'] . '#reply', 'متن پاسخ را بنویسید (حداکثر ۱۰٬۰۰۰ نویسه).', 'error');
         }
-        if (ContactGuard::contains($body)) {
-            return $this->redirect('/letters/' . $thread['uid'] . '#reply', ContactGuard::message(), 'error');
-        }
         try {
             $letters->reply($user, $thread, $body);
         } catch (ValidationFailed $e) {
@@ -183,7 +179,6 @@ final class LetterController extends Controller
         if ($body === '' || mb_strlen($body) > 10000) {
             $errors['body'] = 'متن نامه را بنویسید (حداکثر ۱۰٬۰۰۰ نویسه).';
         }
-        $errors += $this->offPlatform(['subject' => $subject, 'body' => $body]);
         if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
             $errors['body'] = 'فرم منقضی شده است؛ دوباره ارسال کنید.';
         }
@@ -264,7 +259,6 @@ final class LetterController extends Controller
                 $errors['body'] = 'متن نامه را بنویسید (حداکثر ۱۰٬۰۰۰ نویسه).';
             }
         }
-        $errors += $this->offPlatform(['subject' => $subject, 'body' => $body]);
         $handles = array_values(array_unique(array_filter(array_map(
             static fn (string $h): string => strtolower(trim(ltrim(trim($h), '@'))),
             preg_split('/[\s,،]+/u', (string) $request->input('handles', '')) ?: []
@@ -323,21 +317,6 @@ final class LetterController extends Controller
             return $this->redirect('/letters/public/' . $campaign['uid'], reset($e->errors), 'error');
         }
         return $this->redirect('/letters/public/' . $campaign['uid'], 'نامه در صف ارسال قرار گرفت. پیشرفت را همین‌جا ببینید.');
-    }
-
-    /**
-     * Letters stay inside the platform: no phone numbers, e-mail, links or messenger / social IDs.
-     * @param array<string, string> $fields @return array<string, string>
-     */
-    private function offPlatform(array $fields): array
-    {
-        $errors = [];
-        foreach ($fields as $field => $text) {
-            if ($text !== '' && ContactGuard::contains($text)) {
-                $errors[$field] = ContactGuard::message();
-            }
-        }
-        return $errors;
     }
 
     private function recipient(string $handle): ?array
