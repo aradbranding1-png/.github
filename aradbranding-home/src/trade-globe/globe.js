@@ -92,6 +92,24 @@ const LAND_ROUTES = [
   { id: 'ir-tr', name: 'تهران ← آنکارا', via: 'مرز زمینی بازرگان', pts: [[35.7, 51.4], [36.7, 48.5], [38.1, 46.3], [39.4, 44.4], [39.9, 41.3], [39.75, 37.0], [39.9, 32.9]] },
 ];
 
+// Iran → Africa: by sea from Bandar Abbas to an African port, then by road (green, with trucks) inland.
+// Plus Africa → North America by sea.
+const IR_GULF_OUT = [PORTS.bandarabbas, [26.4, 56.7], [24.6, 58.9], [22.0, 60.6], [17.0, 57.5], [12.5, 53.0]];
+const AFRICA_SEA = [
+  { id: 'ir-ke', name: 'بندرعباس ← مومباسا (کنیا)', via: 'دریای عرب · اقیانوس هند', pts: [...IR_GULF_OUT, [6.0, 50.5], [0.0, 46.0], [-3.2, 41.0], [-4.05, 39.75]] },
+  { id: 'ir-tz', name: 'بندرعباس ← دارالسلام (تانزانیا)', via: 'اقیانوس هند', pts: [...IR_GULF_OUT, [6.0, 51.5], [-1.0, 47.0], [-5.0, 41.5], [-6.8, 39.5]] },
+  { id: 'ir-za', name: 'بندرعباس ← دوربان (آفریقای جنوبی)', via: 'کانال موزامبیک', pts: [...IR_GULF_OUT, [5.0, 52.0], [-4.0, 45.0], [-11.0, 42.2], [-16.0, 41.0], [-21.0, 37.8], [-26.0, 35.2], [-29.9, 31.3]] },
+  { id: 'ir-ng', name: 'بندرعباس ← لاگوس (نیجریه)', via: 'کانال سوئز · تنگه جبل‌الطارق', pts: [...IR_GULF_OUT, PORTS.babelmandeb, [16.5, 41.0], [21.0, 38.0], [26.0, 35.2], [28.3, 33.3], PORTS.suez, PORTS.portsaid, [33.3, 28.0], [35.0, 20.0], [36.8, 12.5], [37.6, 7.0], [36.6, 0.0], PORTS.gibraltar, [33.0, -10.0], [25.0, -17.5], [15.0, -19.0], [8.0, -15.0], [4.4, -8.0], [4.2, -2.0], [5.8, 2.0], [6.35, 3.35]] },
+  { id: 'ng-us', name: 'لاگوس ← نیویورک (آمریکا)', via: 'اقیانوس اطلس', pts: [[6.35, 3.35], [4.0, -2.0], [5.0, -15.0], [12.0, -30.0], [24.0, -50.0], [33.0, -64.0], [38.5, -71.0], PORTS.newyork] },
+  { id: 'za-ca', name: 'دوربان ← هالیفاکس (کانادا)', via: 'دماغه امید نیک · اقیانوس اطلس', pts: [[-29.9, 31.3], [-34.0, 27.0], [-35.2, 20.0], [-33.0, 16.0], [-24.0, 6.0], [-8.0, -15.0], [10.0, -32.0], [28.0, -48.0], [40.0, -58.0], [44.6, -63.5]] },
+];
+const AFRICA_LAND = [
+  { id: 'ke-land', name: 'مومباسا ← نایروبی ← کامپالا', via: 'حمل زمینی با تریلی (کنیا · اوگاندا)', pts: [[-4.05, 39.67], [-3.4, 38.6], [-2.5, 37.9], [-1.29, 36.82], [-0.3, 35.3], [0.35, 32.58]] },
+  { id: 'tz-land', name: 'دارالسلام ← دودوما ← موانزا', via: 'حمل زمینی با تریلی (تانزانیا)', pts: [[-6.8, 39.28], [-6.6, 37.7], [-6.17, 35.74], [-4.9, 34.1], [-2.52, 32.9]] },
+  { id: 'za-land', name: 'دوربان ← ژوهانسبورگ', via: 'حمل زمینی با تریلی (آفریقای جنوبی)', pts: [[-29.86, 31.02], [-29.6, 30.4], [-28.6, 29.6], [-27.4, 28.9], [-26.2, 28.05]] },
+  { id: 'ng-land', name: 'لاگوس ← ابوجا ← کانو', via: 'حمل زمینی با تریلی (نیجریه)', pts: [[6.45, 3.39], [7.4, 3.9], [8.5, 4.55], [9.06, 7.49], [10.5, 7.44], [12.0, 8.52]] },
+];
+
 const CITIES = {
   tehran: [35.7, 51.4, 'تهران'], istanbul: [41.0, 28.9, 'استانبول'], dubai: [25.25, 55.3, 'دبی'], frankfurt: [50.1, 8.7, 'فرانکفورت'],
   beijing: [39.9, 116.4, 'پکن'], moscow: [55.75, 37.6, 'مسکو'], delhi: [28.6, 77.2, 'دهلی'], newyork: [40.7, -74.0, 'نیویورک'],
@@ -469,12 +487,13 @@ function init(root) {
   const lite = root.getAttribute('data-mode') === 'login';
   const Q = weak
     ? { seg: 72, dpr: 1.5, clouds: false, tex: '1k', air: 4, ships: 5, planes: 3, tubeSeg: 220 }
-    : { seg: 128, dpr: 2, clouds: true, tex: '2k', air: AIR_ROUTES.length, ships: 7, planes: 6, tubeSeg: 420 };
+    : { seg: 128, dpr: 2, clouds: true, tex: '2k', air: AIR_ROUTES.length, ships: 13, planes: 6, tubeSeg: 420 };
   if (lite) {
     Q.ships = weak ? 2 : 3;
     Q.planes = weak ? 1 : 2;
   }
-  const SEA_LIST = lite ? SEA_ROUTES.filter((r) => ['cn-eu', 'cn-me', 'in-me'].includes(r.id)) : SEA_ROUTES;
+  const SEA_LIST = lite ? SEA_ROUTES.filter((r) => ['cn-eu', 'cn-me', 'in-me'].includes(r.id)) : [...SEA_ROUTES, ...(weak ? AFRICA_SEA.slice(0, 3) : AFRICA_SEA)];
+  const LAND_LIST = lite ? LAND_ROUTES : [...LAND_ROUTES, ...AFRICA_LAND];
   const AIR_LIST = lite ? [['tehran', 'dubai'], ['dubai', 'delhi'], ['istanbul', 'frankfurt']] : AIR_ROUTES.slice(0, Q.air);
 
   let renderer;
@@ -600,7 +619,7 @@ function init(root) {
     return addRoute(airCurve(A, B), 'air', { name: `${A[2]} ← ${B[2]}`, via: 'مسیر هوایی باری' });
   });
   // Land corridors from Iran to its neighbours (sign-in globe only), drawn in green with trucks on them.
-  const landRoutes = lite ? LAND_ROUTES.map((r) => addRoute(seaCurve(r.pts, 1.003), 'land', r)) : [];
+  const landRoutes = LAND_LIST.map((r) => addRoute(seaCurve(r.pts, 1.003), 'land', r));
 
   // ---- nodes (ports, hubs) and moving trade particles
   const nodeList = Object.values(CITIES).map(([la, lo]) => {
@@ -611,8 +630,7 @@ function init(root) {
     const p = ll(c.at[0], c.at[1], 1.006);
     nodeList.push([p.x, p.y, p.z, '#27C7FF', 40]);
   });
-  LAND_ROUTES.forEach((r) => {
-    if (!lite) return;
+  LAND_LIST.forEach((r) => {
     [r.pts[0], r.pts[r.pts.length - 1]].forEach(([la, lo]) => {
       const p = ll(la, lo, 1.006);
       nodeList.push([p.x, p.y, p.z, '#16C784', 36]);
@@ -667,6 +685,12 @@ function init(root) {
     { route: 0, t: 0.7, speed: 1.15, name: 'کشتی کانتینربر' },
     { route: 4, t: 0.35, speed: 1.05, name: 'کشتی کانتینربر' },
     { route: 6, t: 0.5, speed: 0.9, name: 'کشتی کانتینربر' },
+    { route: 7, t: 0.45, speed: 1.0, name: 'کشتی کانتینربر' },
+    { route: 8, t: 0.7, speed: 0.9, name: 'کشتی فله‌بر' },
+    { route: 9, t: 0.25, speed: 1.1, name: 'کشتی کانتینربر' },
+    { route: 10, t: 0.55, speed: 1.2, name: 'کشتی کانتینربر' },
+    { route: 11, t: 0.4, speed: 1.0, name: 'کشتی کانتینربر' },
+    { route: 12, t: 0.6, speed: 0.95, name: 'کشتی کانتینربر' },
   ].filter((s) => s.route < seaRoutes.length).slice(0, Q.ships);
   const SHIP_SCALE = weak ? 0.095 : 0.085;
   const ships = SHIP_PLAN.map((s, i) => {

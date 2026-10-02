@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.12.2)
+# aradbranding.app — Home page redesign (v1.12.3)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth, database schema or other public pages were changed. v1.10.1 adds 
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.12.2.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.12.3.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -79,3 +79,7 @@ Earth textures are from the three.js examples (NASA Blue Marble / Black Marble d
 ## v1.12.2
 
 - Sign-in globe: green land corridors (`LAND_ROUTES` in `globe.js`, login mode only) Iran → Iraq / Afghanistan / Turkey with moving trucks; slimmer register card; auth brand text «سامانه توسعه تجارت».
+
+## v1.12.3
+
+- Home globe: Iran → Africa composite routes (`AFRICA_SEA` + green `AFRICA_LAND` with trucks) and Africa → USA/Canada sea lanes; desktop hero copy and globe no longer overlap.

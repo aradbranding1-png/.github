@@ -568,3 +568,14 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
 /* The country list never grows wider than its field (no sideways overflow on phones). */
 .th .ss-panel { min-width: 0; width: 100%; max-width: calc(100vw - 24px); }
 .th .ss-list li { white-space: normal; overflow-wrap: anywhere; }
+/* Desktop hero: the headline column and the globe never overlap */
+@media (min-width: 1121px) {
+  .th-hero-copy { width: min(540px, 40%); }
+  .tg-stage { --gx: .64; --grw: .215; --grh: .34; }
+}
+@media (min-width: 1400px) { .tg-stage { --gx: .625; } }
+@media (min-width: 1400px) and (max-width: 1560px) { .tg-stage { --gx: .615; } }
+@media (max-width: 1120px) and (min-width: 861px) {
+  .th-hero-copy { width: min(480px, 44%); }
+  .tg-stage { --gx: .7; --grw: .25; --grh: .34; }
+}
