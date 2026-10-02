@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.3)
+# aradbranding.app — Home page redesign (v1.15.4)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -167,3 +167,7 @@ Other changes:
   - the panel header shows the title;
   - the account form has a chooser.
 - FAQ answer corrected in `HomeContent`. Saved copies of the old text are rewritten on read via `RETIRED`.
+
+## v1.15.4 (incremental package)
+
+- `dist/aradbranding-1.15.4-update.zip`: `public_html/assets/panel-theme.css` (compact notifications dropdown on phones). Install on top of 1.15.3.

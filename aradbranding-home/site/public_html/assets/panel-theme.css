@@ -822,3 +822,9 @@ html.drawer-open .bottom-nav, html.drawer-open .fab { display: none; }
 .pmini-type { flex: none; padding: 1px 8px; border-radius: 999px; background: var(--gold-soft); color: var(--gold-on); font-weight: 700; font-size: 11px; }
 .disc-pair:has(> .disc:only-child) { grid-template-columns: minmax(0, 1fr); }
 .disc-pair > .disc:only-child .pmini-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+
+/* 1.15.4: on phones the notifications dropdown is a compact panel under the bell, not a full-width sheet. */
+@media (max-width: 760px) {
+  .notif-panel { inset-inline-start: auto; inset-inline-end: 8px; width: min(320px, calc(100vw - 16px)); }
+  .notif-panel .notif-body { max-height: min(60vh, 420px); overflow-y: auto; overscroll-behavior: contain; }
+}
