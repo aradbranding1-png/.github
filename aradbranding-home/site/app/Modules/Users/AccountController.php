@@ -53,10 +53,14 @@ final class AccountController extends Controller
             'company_name' => ['max:200'],
             'business_area' => ['max:200'],
             'bio' => ['max:2000'],
+            'trade_role' => ['max:20'],
             'remove_avatar' => ['bool'],
         ], ['first_name' => 'نام', 'last_name' => 'نام خانوادگی', 'phone' => 'شماره تلفن', 'phone_cc' => 'کد کشور',
             'city' => 'شهر', 'company_name' => 'نام شرکت', 'business_area' => 'حوزه فعالیت', 'bio' => 'درباره من']);
 
+        if (!isset(TradeRoles::TRADE[(string) ($d['trade_role'] ?? '')])) {
+            $errors['trade_role'] = 'نقش تجاری را از فهرست انتخاب کنید.';
+        }
         // Profile text is seen by other traders; it may not carry off-platform contact details.
         foreach (['city', 'company_name', 'business_area', 'bio'] as $field) {
             if (!isset($errors[$field]) && is_string($d[$field] ?? null) && ContactGuard::contains($d[$field])) {
@@ -96,9 +100,9 @@ final class AccountController extends Controller
                         $avatar, $user['id']]
                 );
                 $db->exec(
-                    'UPDATE user_profiles SET city = ?, company_name = ?, business_area = ?, bio = ?, updated_at = NOW(3)
+                    'UPDATE user_profiles SET city = ?, company_name = ?, business_area = ?, trade_role = ?, bio = ?, updated_at = NOW(3)
                      WHERE user_id = ?',
-                    [$d['city'], $d['company_name'], $d['business_area'], $d['bio'], $user['id']]
+                    [$d['city'], $d['company_name'], $d['business_area'], $d['trade_role'], $d['bio'], $user['id']]
                 );
             });
         } catch (\PDOException $e) {

@@ -1037,7 +1037,8 @@ function init(root) {
   const overlaps = (a, b, pad) => a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
 
   function pickCards() {
-    const boxes = obstacles.slice();
+    // A card that is still fading out keeps its space, so a newcomer never appears on top of it.
+    const boxes = obstacles.concat(cards.filter((c) => !c.on && c.alpha > 0.08).map((c) => ({ x: c.px, y: c.py, w: c.w, h: c.h })));
     const anchors = [];
     const score = (c) => (c.hover ? 10 : 0) + c.f + (c.on ? 0.15 : 0) - c.priority * 0.15;
     cards.forEach((c) => { c.next = false; });
@@ -1082,6 +1083,13 @@ function init(root) {
       pickedAt = now;
       pickCards();
     }
+    // Between choices the globe keeps turning: if two shown cards drift into each other, the weaker one gives way now.
+    const kept = [];
+    cards.filter((c) => c.on).sort((a, b) => (b.hover - a.hover) || (b.f - a.f)).forEach((c) => {
+      const box = { x: c.px, y: c.py, w: c.w, h: c.h };
+      if (!c.hover && kept.some((k) => overlaps(box, k, 2))) { c.on = false; return; }
+      kept.push(box);
+    });
     cards.forEach((c, i) => {
       c.alpha = (c.alpha || 0) + ((c.on ? c.o : 0) - (c.alpha || 0)) * 0.14;
       let o = c.alpha < 0.01 ? 0 : c.alpha;

@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.2)
+# aradbranding.app — Home page redesign (v1.15.3)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -154,3 +154,16 @@ Other changes:
 ## v1.15.2 (incremental package)
 
 - `dist/aradbranding-1.15.2-update.zip`: `app/Views/public/_trade_sprite.php` (corrected IQ flag; new flags NE, MR, FR, AR, PE, MX, MA, KR, ID, SG, PK, OM, SY) and `app/Views/public/landing.php` (globe cards for ES, FR, MA, MR, NE, MX, PE, AR, OM, SY, PK, KZ, KR, ID, SG). Install on top of 1.15.1.
+
+## v1.15.3 (incremental package)
+
+`dist/aradbranding-1.15.3-update.zip` contains the following; install it on top of 1.15.2.
+- Globe cards IR, AU, ZA, TZ, GB, MY, GH, EG, LY, with new flags AU, MY, GH, EG and LY in the sprite.
+- Globe layout tweaks in `trade-globe.js`: a fading card keeps its space, and overlaps between shown cards are resolved every frame.
+- Trade role (`user_profiles.trade_role`):
+  - migration `2026_10_11_000001_trade_role.php`;
+  - `Users/TradeRoles`;
+  - `Auth` loads `role_slug` and `trade_role`;
+  - the panel header shows the title;
+  - the account form has a chooser.
+- FAQ answer corrected in `HomeContent`. Saved copies of the old text are rewritten on read via `RETIRED`.

@@ -64,6 +64,16 @@ $avatarUrl = media($user['avatar_path'] ?? null);
     <?= $this->partial('partials/field', ['name' => 'city', 'label' => 'شهر', 'old' => $old, 'errors' => $errors, 'attrs' => ['maxlength' => 100]]) ?>
     <?= $this->partial('partials/field', ['name' => 'company_name', 'label' => 'نام شرکت', 'old' => $old, 'errors' => $errors, 'attrs' => ['maxlength' => 200]]) ?>
   </div>
+  <div class="field<?= isset($errors['trade_role']) ? ' has-error' : '' ?>">
+    <span class="label">نقش تجاری شما</span>
+    <div class="ff-chips">
+      <?php $tr = (string) ($old['trade_role'] ?? '') ?: \App\Modules\Users\TradeRoles::DEFAULT; foreach (\App\Modules\Users\TradeRoles::TRADE as $k => $label): ?>
+        <label class="ff-chip"><input type="radio" name="trade_role" value="<?= e($k) ?>"<?= $tr === $k ? ' checked' : '' ?>><span><?= e($label) ?></span></label>
+      <?php endforeach; ?>
+    </div>
+    <div class="hint">زیر نام شما در سامانه نمایش داده می‌شود.</div>
+    <?php if (isset($errors['trade_role'])): ?><div class="error"><?= e($errors['trade_role']) ?></div><?php endif; ?>
+  </div>
   <?= $this->partial('partials/field', ['name' => 'business_area', 'label' => 'حوزه فعالیت', 'old' => $old, 'errors' => $errors, 'hint' => 'مثال: زعفران، تجهیزات پزشکی، سنگ ساختمانی', 'attrs' => ['maxlength' => 200]]) ?>
   <?= $this->partial('partials/field', ['name' => 'bio', 'label' => 'درباره من', 'type' => 'textarea', 'old' => $old, 'errors' => $errors, 'attrs' => ['maxlength' => 2000]]) ?>
   <div class="field">

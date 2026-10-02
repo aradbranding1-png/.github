@@ -44,6 +44,8 @@ final class Auth
                             COALESCE(uc.unread_notifications, 0) AS unread_notifications,
                             (SELECT COUNT(*) FROM thread_participants tp WHERE tp.user_id = u.id AND tp.folder = 1 AND tp.thread_type = 1 AND tp.unread_count > 0) AS unread_private,
                             (SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id ORDER BY r.id LIMIT 1) AS role_name,
+                            (SELECT r.slug FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id ORDER BY r.id LIMIT 1) AS role_slug,
+                            (SELECT p.trade_role FROM user_profiles p WHERE p.user_id = u.id) AS trade_role,
                             (SELECT COUNT(*) FROM announcements a WHERE a.deleted_at IS NULL AND a.id > COALESCE(uc.last_announcement_id, 0)) AS unread_official
                      FROM users u
                      JOIN countries c ON c.id = u.country_id

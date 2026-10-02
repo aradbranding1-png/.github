@@ -53,7 +53,7 @@ $isActive = static function (string $href) use ($path, $letterType): bool {
 };
 $avatarUrl = media($user['avatar_path'] ?? null);
 $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
-$roleName = (string) ($user['role_name'] ?? '') !== '' ? (string) $user['role_name'] : (!empty($isStaff) ? 'کارشناس سامانه' : 'عضو سامانه');
+$roleName = \App\Modules\Users\TradeRoles::title($user['role_slug'] ?? null, $user['trade_role'] ?? null);
 $unreadNotes = (int) ($user['unread_notifications'] ?? 0);
 $today = '';
 if (class_exists(\IntlDateFormatter::class)) {
