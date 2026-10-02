@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.9)
+# aradbranding.app — Home page redesign (v1.15.10)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -204,3 +204,16 @@ Other changes:
 - `letters/send.php` and `letters/public_new.php`: the field is a list with one handle per line.
 - `panel.js` and `panel-theme.css`: the live count and the field's styles.
 - `LetterController`: a pasted page link `…/p/handle/…` is read as its handle.
+
+## v1.15.10 (incremental package)
+
+`dist/aradbranding-1.15.10-update.zip` replaces the logo. Install it on top of 1.15.9.
+- New images: `assets/brand/logo-192.webp`, both favicons and the four PWA icons.
+- Cache-busting bumps in these files: `logo-192.webp?v=2` and the icons/manifest `?v=3`, plus service-worker cache `sadt-v3`.
+  - `partials/head.php`
+  - the layouts
+  - `landing.php`
+  - the letter views
+  - `app.js`
+  - `service-worker.js`
+  - `manifest.webmanifest`
