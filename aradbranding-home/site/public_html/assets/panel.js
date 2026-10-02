@@ -31,6 +31,34 @@
     });
   });
 
+  // «کیف پول مشتریان»: quick amounts and a live preview of the balance after the change.
+  var amount = document.querySelector('.wa-amount');
+  if (amount) {
+    var form = amount.closest('form');
+    var preview = form.querySelector('.wa-preview');
+    var balance = parseInt(amount.getAttribute('data-balance'), 10) || 0;
+    var waFa = function (n) { return n.toLocaleString('fa-IR'); };
+    var waDigits = function (v) {
+      return parseInt(String(v).replace(/[۰-۹]/g, function (d) { return d.charCodeAt(0) - 1776; })
+        .replace(/[٠-٩]/g, function (d) { return d.charCodeAt(0) - 1632; }).replace(/\D+/g, ''), 10) || 0;
+    };
+    var update = function () {
+      var n = waDigits(amount.value);
+      var debit = (form.querySelector('input[name="direction"]:checked') || {}).value === 'debit';
+      if (!n) { preview.textContent = ''; preview.classList.remove('is-bad'); return; }
+      var after = debit ? balance - n : balance + n;
+      preview.textContent = (debit ? 'کسر ' : 'افزایش ') + waFa(n) + ' Star · موجودی پس از ثبت: ' + waFa(Math.max(after, 0)) + ' Star'
+        + (after < 0 ? ' (موجودی کافی نیست)' : '');
+      preview.classList.toggle('is-bad', after < 0);
+    };
+    form.querySelectorAll('[data-amount]').forEach(function (b) {
+      b.addEventListener('click', function () { amount.value = b.getAttribute('data-amount'); update(); amount.focus(); });
+    });
+    amount.addEventListener('input', update);
+    form.addEventListener('change', update);
+    update();
+  }
+
   // Report bars: widths come from data-w (CSP: no inline styles in the markup).
   document.querySelectorAll('.rp-track i[data-w]').forEach(function (i) {
     i.style.width = Math.max(0, Math.min(100, parseInt(i.getAttribute('data-w'), 10) || 0)) + '%';

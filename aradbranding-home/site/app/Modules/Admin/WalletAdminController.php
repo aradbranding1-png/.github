@@ -96,7 +96,8 @@ final class WalletAdminController extends AdminController
         if (!$this->allows($request, 'wallet.' . $direction)) {
             throw new HttpException(403);
         }
-        $stars = (int) Str::latinDigits(preg_replace('/[^\d۰-۹]/u', '', (string) $request->input('stars', '0')) ?? '0');
+        // «۱٬۰۰۰», «1,000», «١٠٠٠» and «1000» all mean one thousand Stars.
+        $stars = (int) (preg_replace('/\D+/', '', Str::latinDigits((string) $request->input('stars', '0'))) ?: '0');
         $note = trim((string) $request->input('note', ''));
         $token = (string) $request->input('token', '');
         $errors = [];

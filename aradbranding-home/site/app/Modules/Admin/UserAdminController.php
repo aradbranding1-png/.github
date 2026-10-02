@@ -156,7 +156,8 @@ final class UserAdminController extends AdminController
         if (!$this->allows($request, 'wallet.' . $direction)) {
             throw new HttpException(403);
         }
-        $stars = (int) Str::latinDigits((string) $request->input('stars', '0'));
+        // «۱٬۰۰۰», «1,000», «١٠٠٠» and «1000» all mean one thousand Stars (a separator used to cut the number short).
+        $stars = (int) (preg_replace('/\D+/', '', Str::latinDigits((string) $request->input('stars', '0'))) ?: '0');
         $note = trim((string) $request->input('note', ''));
         if ($stars <= 0 || $stars > 1_000_000 || $note === '') {
             return $this->show($request, ['wallet' => 'تعداد Star و دلیل الزامی است.'], 422);

@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.7)
+# aradbranding.app — Home page redesign (v1.15.8)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -191,3 +191,9 @@ Other changes:
 - New `partials/stars_short.php`.
 - `letters/compose.php`, `letters/campaign.php`, `proposals/send.php` and `public/page.php`: when the balance is short, the send button is disabled and the notice explains the shortfall.
 - `app.css`: notice and disabled-button styles.
+
+## v1.15.8 (incremental package)
+
+- `dist/aradbranding-1.15.8-update.zip` contains the following; install it on top of 1.15.7.
+  - Exact Star amounts in admin wallet changes (`WalletAdminController`, `UserAdminController`): every non-digit is stripped after Persian/Arabic digit normalisation.
+  - Quick amounts and a live balance preview (`admin/wallet.php`, `panel.js`, `panel-theme.css`).

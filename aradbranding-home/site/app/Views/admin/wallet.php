@@ -58,7 +58,13 @@ $dir = ($old['direction'] ?? '') === 'debit' ? 'debit' : ($canCredit ? 'credit' 
               </div>
             </fieldset>
             <div class="row row-2">
-              <div class="field<?= $cls('stars') ?>"><label for="wa-stars">تعداد Star</label><input class="input" id="wa-stars" name="stars" inputmode="numeric" dir="ltr" value="<?= e($old['stars'] ?? '') ?>" required><?= $err('stars') ?></div>
+              <div class="field<?= $cls('stars') ?>">
+                <label for="wa-stars">تعداد Star</label>
+                <input class="input wa-amount" id="wa-stars" name="stars" type="text" inputmode="numeric" autocomplete="off" dir="ltr" placeholder="مثلاً 1000" value="<?= e($old['stars'] ?? '') ?>" required data-balance="<?= (int) $customer['balance'] ?>">
+                <div class="wa-quick" aria-label="مقدارهای آماده"><?php foreach ([100, 500, 1000, 5000, 10000] as $n): ?><button type="button" class="ff-chip-btn" data-amount="<?= $n ?>"><?= fa_int($n) ?></button><?php endforeach; ?></div>
+                <div class="hint wa-preview" aria-live="polite"></div>
+                <?= $err('stars') ?>
+              </div>
               <div class="field<?= $cls('password') ?>"><label for="wa-pw">رمز عبور شما</label><input class="input" id="wa-pw" name="password" type="password" autocomplete="current-password" dir="ltr" required><div class="hint">برای تأیید تغییر مالی.</div><?= $err('password') ?></div>
             </div>
             <div class="field<?= $cls('note') ?>"><label for="wa-note">توضیح</label><textarea class="textarea" id="wa-note" name="note" rows="2" maxlength="255" required placeholder="مثلاً: شارژ بابت سفارش شماره ۱۲۴۵ / جبران خطای سامانه"><?= e($old['note'] ?? '') ?></textarea><div class="hint">مشتری این توضیح را در گردش حساب و اعلان خود می‌بیند.</div><?= $err('note') ?></div>
