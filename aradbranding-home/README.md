@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.0)
+# aradbranding.app — Home page redesign (v1.15.1)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth or database schema were changed (v1.13.0 changes contact behaviour
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.15.0.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.15.0.zip (full) + dist/aradbranding-1.15.1-update.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -145,3 +145,8 @@ Other changes:
 - Turn-taking globe cards (`globe.js`).
 - Anchored, content-width combobox (`app.js`).
 - No focus zoom on touch devices (`app.css`).
+
+## v1.15.1 (incremental package)
+
+- `dist/aradbranding-1.15.1-update.zip` holds only the changed file (`public_html/assets/trade-globe.js`) plus `VERSION`, `CHANGELOG.md` and the unchanged `bootstrap/app.php` the updater requires. Install it on top of 1.15.0.
+- Globe cards: a fresh choice a few times a second picks at most 6/4/3 (desktop/tablet/phone) of the most front-facing countries whose cards fit without overlapping each other or the hero text, with a small bonus for cards already shown. Cards fade in and out in place; the slot-hopping and turn-taking logic of 1.14–1.15.0 is gone.

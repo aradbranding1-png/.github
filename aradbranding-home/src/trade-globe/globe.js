@@ -732,7 +732,7 @@ function init(root) {
     hit.userData = { type: 'country', el };
     world.add(hit);
     hitTargets.push(hit);
-    return { el, local: p, w: 0, h: 0, hover: false, priority: el.dataset.priority !== undefined ? +el.dataset.priority || 0 : el.classList.contains('is-home') ? 0 : el.classList.contains('is-secondary') ? 0.6 : 0.3, wait: 0, hold: 0 };
+    return { el, local: p, w: 0, h: 0, hover: false, priority: el.dataset.priority !== undefined ? +el.dataset.priority || 0 : el.classList.contains('is-home') ? 0 : el.classList.contains('is-secondary') ? 0.6 : 0.3, on: false, alpha: 0 };
   });
   cards.forEach((c) => {
     c.el.addEventListener('pointerenter', () => { c.hover = true; c.el.classList.add('is-hot'); });
@@ -1027,72 +1027,68 @@ function init(root) {
   const compact = () => W < 720;
 
   // Candidate slots (in card widths/heights) tried in order when a card's preferred spot is taken.
-  const SLOTS = [[0, 0], [0, 1], [0, -1], [-1, 0], [1, 0], [-1, 1], [-1, -1], [1, 1], [1, -1], [0, 2], [0, -2], [-2, 0], [-2, 1]];
+  // Card layout: only a few countries at a time — the ones facing the viewer most, far enough apart on screen that
+  // their cards cannot overlap (each other, the hero text or the side rail). The choice is re-made a few times a
+  // second with a bonus for cards already showing, so as the globe turns, countries hand over smoothly instead of
+  // jostling; cards never jump to another slot, they just fade in or out where they belong.
+  const maxCards = () => (W < 720 ? 3 : W < 1100 ? 4 : 6);
+  const minGap = () => (W < 720 ? 70 : 96);
+  let pickedAt = 0;
+  const overlaps = (a, b, pad) => a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
+
+  function pickCards() {
+    const boxes = obstacles.slice();
+    const anchors = [];
+    const score = (c) => (c.hover ? 10 : 0) + c.f + (c.on ? 0.15 : 0) - c.priority * 0.15;
+    cards.forEach((c) => { c.next = false; });
+    let n = 0;
+    cards.filter((c) => c.w && (c.f > 0.32 || c.hover)).sort((a, b) => score(b) - score(a)).forEach((c) => {
+      if (n >= maxCards() && !c.hover) return;
+      const box = { x: c.px, y: c.py, w: c.w, h: c.h };
+      if (!c.hover && boxes.some((b) => overlaps(box, b, 10))) return;
+      if (!c.hover && anchors.some((a) => Math.hypot(a.x - c.sx, a.y - c.sy) < minGap())) return;
+      c.next = true;
+      boxes.push(box);
+      anchors.push({ x: c.sx, y: c.sy });
+      n++;
+    });
+    cards.forEach((c) => { c.on = c.next; });
+  }
 
   function updateOverlays() {
     center.set(0, 0, 0).project(camera);
     cScr.x = (center.x * 0.5 + 0.5) * W;
     cScr.y = (-center.y * 0.5 + 0.5) * H;
     const r = rPx * view.zoom;
-    // On compact layouts only the best-facing primary cards are shown.
-    let allowed = null;
-    if (compact()) {
-      const ranked = cards.map((c, i) => ({ i, f: project(c.local, scr).f - c.priority })).sort((a, b) => b.f - a.f);
-      allowed = new Set(ranked.slice(0, 3).map((x) => x.i));
-    }
-    // Pass 1: anchor and preferred box for every card.
-    cards.forEach((c, i) => {
+    // Pass 1: anchor and the card's own box (placed outward from the globe centre).
+    cards.forEach((c) => {
       project(c.local, scr);
-      let o = MathUtils.smoothstep(scr.f, 0.04, 0.28);
-      if (allowed && !allowed.has(i)) o = 0;
       let dx = scr.x - cScr.x;
       let dy = scr.y - cScr.y;
       const dl = Math.hypot(dx, dy) || 1;
       dx /= dl; dy /= dl;
       const push = compact() ? 26 : 42 + (1 - Math.min(1, dl / r)) * 26;
-      const cx = scr.x + dx * (push + c.w * 0.5) ;
+      const cx = scr.x + dx * (push + c.w * 0.5);
       const cy = scr.y + dy * (push * 0.6 + c.h * 0.5) - (compact() ? 10 : 18);
-      c.sx = scr.x; c.sy = scr.y; c.f = scr.f; c.o = o;
+      c.sx = scr.x; c.sy = scr.y; c.f = scr.f;
+      c.o = MathUtils.smoothstep(scr.f, 0.2, 0.45);
       c.px = MathUtils.clamp(cx - c.w / 2, 6, W - c.w - 6);
       c.py = MathUtils.clamp(cy - c.h / 2, safeTop, H - c.h - 6);
     });
-    // Pass 2: declutter. A card that collides slides to a free slot nearby; with no free slot it fades out. Cards take
-    // turns: a hidden card gains rank while it waits, and a card that just appeared keeps its place for a few
-    // seconds, so every country (Germany, Kenya…) gets shown instead of the same few staying in front.
+    // Pass 2: who is shown (a few times a second, or at once when the pointer is on a card).
     const now = performance.now();
-    const dt = Math.min(0.25, Math.max(0, (now - (updateOverlays.last || now)) / 1000));
-    updateOverlays.last = now;
-    const rank = (c) => c.priority - Math.min(0.7, c.wait * 0.1) - (now < c.hold ? 1 : 0);
-    const placed = obstacles.slice();
-    const hit = (x, y, w, h) => placed.some((q) => x < q.x + q.w + 4 && x + w + 4 > q.x && y < q.y + q.h + 4 && y + h + 4 > q.y);
-    cards.map((c) => c).sort((a, b) => (b.hover - a.hover) || (rank(a) - rank(b)) || (b.f - a.f)).forEach((c) => {
-      let off = 0, offX = 0, room = true;
-      if (c.o > 0.02 && c.w) {
-        const stepY = c.h + 6, stepX = c.w + 8;
-        room = false;
-        for (const [kx, ky] of SLOTS) {
-          const x = MathUtils.clamp(c.px + kx * stepX, 6, W - c.w - 6);
-          const y = MathUtils.clamp(c.py + ky * stepY, safeTop, H - c.h - 6);
-          if (!hit(x, y, c.w, c.h)) { offX = x - c.px; off = y - c.py; room = true; break; }
-        }
-        if (!room && !c.priority) room = true;
-        if (room) placed.push({ x: c.px + offX, y: c.py + off, w: c.w, h: c.h });
-        if (room && !c.shown) c.hold = now + 7000;
-        c.wait = room ? 0 : c.wait + dt;
-        c.shown = room;
-      } else {
-        c.shown = false;
-      }
-      c.ox = c.ox === undefined ? offX : c.ox + (offX - c.ox) * 0.18;
-      c.oy = c.oy === undefined ? off : c.oy + (off - c.oy) * 0.18;
-      c.fade = c.fade === undefined ? (room ? 1 : 0) : c.fade + ((room ? 1 : 0) - c.fade) * 0.15;
-    });
+    const hovering = cards.some((c) => c.hover && !c.on);
+    if (now - pickedAt > 300 || hovering) {
+      pickedAt = now;
+      pickCards();
+    }
     cards.forEach((c, i) => {
-      let o = c.o * c.fade;
+      c.alpha = (c.alpha || 0) + ((c.on ? c.o : 0) - (c.alpha || 0)) * 0.14;
+      let o = c.alpha < 0.01 ? 0 : c.alpha;
       if (c.hover) o = Math.max(o, 0.95);
       scr.x = c.sx; scr.y = c.sy;
-      const x = MathUtils.clamp(c.px + c.ox, 6, W - c.w - 6);
-      const y = MathUtils.clamp(c.py + c.oy, safeTop, H - c.h - 6);
+      const x = c.px;
+      const y = c.py;
       c.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${(0.9 + 0.1 * o).toFixed(3)})`;
       c.el.style.opacity = o.toFixed(3);
       c.el.style.visibility = o < 0.02 ? 'hidden' : 'visible';
