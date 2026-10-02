@@ -55,6 +55,8 @@ $palette = ['#C99A3E', '#1E7FC4', '#A8383A', '#D9DEE6', '#2D7A5A', '#D0702E', '#
   <symbol id="flag-DE" viewBox="0 0 30 20"><rect width="30" height="6.67" fill="#000"/><rect y="6.67" width="30" height="6.67" fill="#DD0000"/><rect y="13.33" width="30" height="6.67" fill="#FFCE00"/></symbol>
   <symbol id="flag-RU" viewBox="0 0 30 20"><rect width="30" height="6.67" fill="#fff"/><rect y="6.67" width="30" height="6.67" fill="#0039A6"/><rect y="13.33" width="30" height="6.67" fill="#D52B1E"/></symbol>
   <symbol id="flag-BR" viewBox="0 0 30 20"><rect width="30" height="20" fill="#009C3B"/><path d="M15 2.2 27.4 10 15 17.8 2.6 10z" fill="#FFDF00"/><circle cx="15" cy="10" r="4.4" fill="#002776"/><path d="M10.8 9.2q4.4-1.2 8.4 1.6" stroke="#fff" stroke-width=".7" fill="none"/></symbol>
+  <symbol id="flag-IQ" viewBox="0 0 30 20"><rect width="30" height="6.67" fill="#CE1126"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#000"/><path d="M10 11.5h10" stroke="#007A3D" stroke-width="1.6"/></symbol>
+  <symbol id="flag-AF" viewBox="0 0 30 20"><rect width="10" height="20" fill="#000"/><rect x="10" width="10" height="20" fill="#D32011"/><rect x="20" width="10" height="20" fill="#007A36"/><circle cx="15" cy="10" r="3" fill="none" stroke="#fff" stroke-width=".8"/></symbol>
   <symbol id="flag-IR" viewBox="0 0 30 20"><rect width="30" height="6.67" fill="#239F40"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#DA0000"/><circle cx="15" cy="10" r="1.6" fill="none" stroke="#DA0000" stroke-width=".6"/></symbol>
 
   <!-- Market skylines (240×150) -->

@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.12.1)
+# aradbranding.app — Home page redesign (v1.12.2)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth, database schema or other public pages were changed. v1.10.1 adds 
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.12.1.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.12.2.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -75,3 +75,7 @@ Earth textures are from the three.js examples (NASA Blue Marble / Black Marble d
 - Auth pages fit one desktop frame (card scrolls inside), slogan no longer overlaps, login title/CTA texts, register field alignment, joined phone control, avatar hint under the button.
 - `app.js` searchable select: list-only scrolling (no page jump) and no auto-focus on touch screens; home dropdown capped to its field width.
 - Panel theme: `data-default-theme="system"` follows `prefers-color-scheme` live; the theme button cycles automatic → light → dark (`sadt-theme-mode`).
+
+## v1.12.2
+
+- Sign-in globe: green land corridors (`LAND_ROUTES` in `globe.js`, login mode only) Iran → Iraq / Afghanistan / Turkey with moving trucks; slimmer register card; auth brand text «سامانه توسعه تجارت».

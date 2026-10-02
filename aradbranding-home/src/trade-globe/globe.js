@@ -85,6 +85,13 @@ const SEA_ROUTES = [
   { id: 'us-pa', name: 'نیویورک ← لس‌آنجلس', via: 'کانال پاناما', pts: [PORTS.newyork, [35.0, -73.5], [27.0, -75.5], [20.5, -73.8], [15.0, -76.5], [9.5, -79.9], PORTS.panama, [7.8, -80.5], [8.0, -84.0], [12.0, -92.0], [17.0, -102.0], [23.0, -110.5], [29.0, -116.0], PORTS.losangeles] },
 ];
 
+// Road corridors (lat, lon waypoints over land): Iran → Iraq, Afghanistan, Turkey.
+const LAND_ROUTES = [
+  { id: 'ir-iq', name: 'تهران ← بغداد', via: 'مرز زمینی مهران / خسروی', pts: [[35.7, 51.4], [34.8, 48.5], [34.3, 47.1], [33.9, 46.0], [33.3, 44.4]] },
+  { id: 'ir-af', name: 'مشهد ← هرات ← کابل', via: 'مرز زمینی دوغارون', pts: [[36.3, 59.6], [35.3, 60.6], [34.35, 62.2], [34.0, 64.5], [34.3, 67.0], [34.5, 69.2]] },
+  { id: 'ir-tr', name: 'تهران ← آنکارا', via: 'مرز زمینی بازرگان', pts: [[35.7, 51.4], [36.7, 48.5], [38.1, 46.3], [39.4, 44.4], [39.9, 41.3], [39.75, 37.0], [39.9, 32.9]] },
+];
+
 const CITIES = {
   tehran: [35.7, 51.4, 'تهران'], istanbul: [41.0, 28.9, 'استانبول'], dubai: [25.25, 55.3, 'دبی'], frankfurt: [50.1, 8.7, 'فرانکفورت'],
   beijing: [39.9, 116.4, 'پکن'], moscow: [55.75, 37.6, 'مسکو'], delhi: [28.6, 77.2, 'دهلی'], newyork: [40.7, -74.0, 'نیویورک'],
@@ -338,6 +345,28 @@ function makeShip(seed) {
   return { group, wake, glow, lights, hit };
 }
 
+/** Semi-trailer truck, length 1 along +z (cab forward), wheels on y = 0. */
+function makeTruck() {
+  const parts = [
+    boxAt(0.2, 0.2, 0.66, 0, 0.17, -0.12, '#E9EEF5'),
+    boxAt(0.204, 0.04, 0.6, 0, 0.13, -0.12, '#16C784'),
+    boxAt(0.2, 0.2, 0.22, 0, 0.17, 0.36, '#0F7A52'),
+    boxAt(0.18, 0.07, 0.04, 0, 0.22, 0.47, '#9fe6c6'),
+    boxAt(0.22, 0.05, 0.92, 0, 0.06, 0.02, '#1B2438'),
+  ];
+  [-0.36, -0.24, 0.1, 0.38].forEach((z) => {
+    parts.push(boxAt(0.04, 0.07, 0.08, -0.11, 0.035, z, '#0B0F18'));
+    parts.push(boxAt(0.04, 0.07, 0.08, 0.11, 0.035, z, '#0B0F18'));
+  });
+  const mesh = new Mesh(mergeGeometries(parts), new MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.2, emissive: new Color('#12324a'), emissiveIntensity: 0.6 }));
+  const group = new Group();
+  group.add(mesh);
+  group.add(pointCloud([[-0.07, 0.12, 0.48, '#FFFFFF', 26], [0.07, 0.12, 0.48, '#FFFFFF', 26], [-0.09, 0.1, -0.46, '#FF3B3B', 22], [0.09, 0.1, -0.46, '#FF3B3B', 22]]));
+  const hit = new Mesh(new SphereGeometry(0.7, 8, 6), new MeshBasicMaterial({ visible: false }));
+  group.add(hit);
+  return { group, hit };
+}
+
 /** Cargo aircraft, nose along +z. */
 function makePlane() {
   const parts = [];
@@ -534,18 +563,19 @@ function init(root) {
   const hitTargets = [];
   const seaColor = new Color('#1FB8FF');
   const airColor = new Color('#7FE3FF');
+  const landColor = new Color('#16C784');
   const goldColor = new Color('#F5C65D');
 
   function addRoute(curve, kind, info) {
-    const radius = kind === 'sea' ? 0.0022 : 0.0015;
-    const segs = kind === 'sea' ? Q.tubeSeg : Math.round(Q.tubeSeg * 0.35);
+    const radius = kind === 'air' ? 0.0015 : kind === 'land' ? 0.003 : 0.0022;
+    const segs = kind === 'air' ? Math.round(Q.tubeSeg * 0.35) : kind === 'land' ? Math.round(Q.tubeSeg * 0.5) : Q.tubeSeg;
     const len = curve.getLength();
     const mat = new ShaderMaterial({
       vertexShader: ROUTE_VS, fragmentShader: ROUTE_FS, transparent: true, depthWrite: false, blending: AdditiveBlending,
       uniforms: {
-        uColor: { value: kind === 'sea' ? seaColor : airColor }, uTime: { value: 0 },
-        uSpeed: { value: kind === 'sea' ? 0.35 : 0.6 }, uRepeat: { value: Math.max(4, len * (kind === 'sea' ? 16 : 10)) },
-        uBase: { value: kind === 'sea' ? 0.5 : 0.32 }, uHi: { value: 0 }, uReveal: reveal,
+        uColor: { value: kind === 'sea' ? seaColor : kind === 'land' ? landColor : airColor }, uTime: { value: 0 },
+        uSpeed: { value: kind === 'air' ? 0.6 : 0.35 }, uRepeat: { value: Math.max(4, len * (kind === 'air' ? 10 : kind === 'land' ? 40 : 16)) },
+        uBase: { value: kind === 'air' ? 0.32 : kind === 'land' ? 0.8 : 0.55 }, uHi: { value: 0 }, uReveal: reveal,
       },
     });
     const line = new Mesh(new TubeGeometry(curve, segs, radius, 5, false), mat);
@@ -569,6 +599,8 @@ function init(root) {
     const B = CITIES[b];
     return addRoute(airCurve(A, B), 'air', { name: `${A[2]} ← ${B[2]}`, via: 'مسیر هوایی باری' });
   });
+  // Land corridors from Iran to its neighbours (sign-in globe only), drawn in green with trucks on them.
+  const landRoutes = lite ? LAND_ROUTES.map((r) => addRoute(seaCurve(r.pts, 1.003), 'land', r)) : [];
 
   // ---- nodes (ports, hubs) and moving trade particles
   const nodeList = Object.values(CITIES).map(([la, lo]) => {
@@ -578,6 +610,13 @@ function init(root) {
   CHOKEPOINTS.forEach((c) => {
     const p = ll(c.at[0], c.at[1], 1.006);
     nodeList.push([p.x, p.y, p.z, '#27C7FF', 40]);
+  });
+  LAND_ROUTES.forEach((r) => {
+    if (!lite) return;
+    [r.pts[0], r.pts[r.pts.length - 1]].forEach(([la, lo]) => {
+      const p = ll(la, lo, 1.006);
+      nodeList.push([p.x, p.y, p.z, '#16C784', 36]);
+    });
   });
   const nodes = pointCloud(nodeList, 1);
   world.add(nodes);
@@ -598,7 +637,7 @@ function init(root) {
   const particleRoutes = [];
   routeMeshes.forEach((r, i) => {
     const count = r.kind === 'sea' ? 3 : 2;
-    for (let k = 0; k < count; k++) particleRoutes.push({ r, t: (k / count + i * 0.13) % 1, v: (r.kind === 'sea' ? 0.05 : 0.11) / r.len });
+    for (let k = 0; k < count; k++) particleRoutes.push({ r, t: (k / count + i * 0.13) % 1, v: (r.kind === 'air' ? 0.11 : r.kind === 'land' ? 0.03 : 0.05) / r.len });
   });
   const pg = new BufferGeometry();
   const pPos = new Float32Array(particleRoutes.length * 3);
@@ -606,7 +645,7 @@ function init(root) {
   const pSize = new Float32Array(particleRoutes.length);
   const pPhase = new Float32Array(particleRoutes.length);
   particleRoutes.forEach((p, i) => {
-    const c = p.r.kind === 'sea' ? new Color('#7FD8FF') : new Color('#FFE2A0');
+    const c = p.r.kind === 'sea' ? new Color('#7FD8FF') : p.r.kind === 'land' ? new Color('#7CF2B8') : new Color('#FFE2A0');
     pCol.set([c.r, c.g, c.b], i * 3);
     pSize[i] = p.r.kind === 'sea' ? 48 : 40;
     pPhase[i] = i;
@@ -638,6 +677,16 @@ function init(root) {
     m.hit.userData = { type: 'ship', info: { name: s.name, route: route.info.name, via: route.info.via, speed: FA(14 + (i * 3) % 9) } };
     hitTargets.push(m.hit);
     return { ...m, route, t: s.t, v: (0.012 * s.speed) / route.len };
+  });
+
+  const TRUCK_SCALE = weak ? 0.07 : 0.06;
+  const trucks = landRoutes.map((route, i) => {
+    const m = makeTruck();
+    m.group.scale.setScalar(TRUCK_SCALE);
+    world.add(m.group);
+    m.hit.userData = { type: 'truck', info: { name: 'کامیون باری', route: route.info.name, via: route.info.via } };
+    hitTargets.push(m.hit);
+    return { ...m, route, t: (0.15 + i * 0.3) % 1, v: (0.006 + (i % 2) * 0.0015) / route.len };
   });
 
   const planes = airRoutes.slice(0, Q.planes).map((route, i) => {
@@ -830,12 +879,17 @@ function init(root) {
       add('tg-tip-s', d.info.route);
       add('tg-tip-s', d.info.via);
       add('tg-tip-m', `سرعت نمایشی ${d.info.speed} گره دریایی`);
+    } else if (d.type === 'truck') {
+      add('tg-tip-k', 'حمل زمینی');
+      add('tg-tip-t', d.info.name);
+      add('tg-tip-s', d.info.route);
+      add('tg-tip-s', d.info.via);
     } else if (d.type === 'plane') {
       add('tg-tip-k', 'پرواز باری');
       add('tg-tip-t', d.info.name);
       add('tg-tip-s', d.info.route);
     } else if (d.type === 'route') {
-      add('tg-tip-k', d.kind === 'sea' ? 'مسیر دریایی' : 'مسیر هوایی');
+      add('tg-tip-k', d.kind === 'sea' ? 'مسیر دریایی' : d.kind === 'land' ? 'مسیر زمینی' : 'مسیر هوایی');
       add('tg-tip-t', d.info.name);
       add('tg-tip-s', d.info.via);
     } else if (d.type === 'country') {
@@ -844,7 +898,7 @@ function init(root) {
       add('tg-tip-t', el.getAttribute('data-name') || '');
       const n = el.getAttribute('data-note');
       if (n) add('tg-tip-s', n);
-      add('tg-tip-m', 'برای مشاهده تجار این کشور کلیک کنید');
+      if (el.tagName === 'A') add('tg-tip-m', 'برای مشاهده تجار این کشور کلیک کنید');
     }
     tip.hidden = false;
   }
@@ -1045,6 +1099,17 @@ function init(root) {
       s.wake.material.uniforms.uTime.value = time;
       s.wake.material.uniforms.uAlpha.value = f;
       s.glow.material.uniforms.uAlpha.value = f;
+    });
+
+    trucks.forEach((k) => {
+      k.t = (k.t + k.v * dt * motion) % 1;
+      k.route.curve.getPointAt(k.t, tmp);
+      k.route.curve.getTangentAt(k.t, tmp2);
+      const n = tmp.clone().normalize();
+      orient(k.group, tmp.copy(n).multiplyScalar(1.0026), tmp2, n);
+      const f = edgeFade(k.t);
+      k.group.visible = f > 0.02;
+      k.group.scale.setScalar(TRUCK_SCALE * (0.3 + 0.7 * f));
     });
 
     planes.forEach((p) => {

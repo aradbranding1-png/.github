@@ -240,3 +240,14 @@ body.is-launching .auth-card { transform: translateY(-4px) scale(.99); opacity: 
 .auth-title { white-space: normal; text-wrap: balance; font-size: clamp(20px, 1.75vw, 24px); }
 .auth-register .auth-card h1 { font-size: clamp(22px, 2.2vw, 28px); }
 .auth-card h1.auth-title { font-size: clamp(20px, 1.75vw, 24px); }
+/* Register: a slimmer card and a globe kept to the left half, so the card never covers the earth */
+@media (min-width: 901px) {
+  .auth-register .auth-card { width: min(500px, 38vw); padding-inline: 26px; }
+  .auth-register .tg-stage { --gx: .3; --grh: .4; --grw: .22; }
+  .auth .tg-stage { --grw: .25; }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+  .auth-register .auth-card { width: min(460px, 44vw); }
+  .auth-register .tg-stage { --gx: .27; --grw: .2; }
+}
+.auth .tg-card.is-land::before { background: #16C784; box-shadow: 0 0 10px #16C784; }

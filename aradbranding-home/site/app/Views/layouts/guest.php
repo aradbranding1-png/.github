@@ -9,6 +9,7 @@ $isRegister = str_contains($content, 'action="/register"');
 $cards = [
     ['IR', 'ایران', 32.5, 53.7], ['AE', 'امارات', 24.0, 54.5], ['IN', 'هند', 22.0, 78.5],
     ['CN', 'چین', 33.5, 106.0], ['TR', 'ترکیه', 39.0, 35.0],
+    ['IQ', 'عراق', 33.0, 43.5, true], ['AF', 'افغانستان', 34.0, 66.0, true],
 ];
 ?>
 <!doctype html>
@@ -35,8 +36,8 @@ $cards = [
     <svg class="tg-lines"></svg>
     <div class="tg-labels"></div>
     <div class="tg-cards">
-      <?php foreach ($cards as [$code, $name, $lat, $lon]): ?>
-      <span class="tg-card<?= $code === 'IR' ? ' is-home' : '' ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="بازار هدف">
+      <?php foreach ($cards as $card): [$code, $name, $lat, $lon] = $card; $secondary = !empty($card[4]); ?>
+      <span class="tg-card<?= $code === 'IR' ? ' is-home' : '' ?><?= $secondary ? ' is-secondary is-land' : '' ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= $secondary ? 'مسیر حمل زمینی از ایران' : 'بازار هدف' ?>">
         <svg class="th-flag" viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-<?= e($code) ?>"/></svg>
         <span class="tg-card-t"><b><?= e($name) ?></b></span>
       </span>
@@ -49,7 +50,7 @@ $cards = [
 <header class="auth-top">
   <a class="auth-brand" href="/" aria-label="سامانه توسعه تجارت · صفحه اصلی">
     <span class="brand-mark th-mark"><svg class="icon"><use href="#i-mark"/></svg></span>
-    <span class="th-brand-name">آراد برندینگ<small>سامانه توسعه تجارت</small></span>
+    <span class="th-brand-name">سامانه توسعه تجارت<small>شبکه بین‌المللی تجار</small></span>
   </a>
   <a class="auth-back" href="/">بازگشت به سایت<svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-arrow"/></svg></a>
 </header>
@@ -58,7 +59,7 @@ $cards = [
   <div class="auth-card" id="auth-card">
     <div class="auth-card-brand">
       <span class="brand-mark th-mark"><svg class="icon"><use href="#i-mark"/></svg></span>
-      <span class="th-brand-name">آراد برندینگ<small>سامانه توسعه تجارت</small></span>
+      <span class="th-brand-name">سامانه توسعه تجارت<small>شبکه بین‌المللی تجار</small></span>
     </div>
     <?= $this->partial('partials/flash', ['flashes' => $flashes ?? []]) ?>
     <?= $content ?>
