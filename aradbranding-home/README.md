@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.10)
+# aradbranding.app — Home page redesign (v1.15.11)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -217,3 +217,7 @@ Other changes:
   - `app.js`
   - `service-worker.js`
   - `manifest.webmanifest`
+
+## v1.15.11 (incremental package)
+
+`dist/aradbranding-1.15.11-update.zip` should be installed on top of 1.15.10. It makes the sidebar brand name white (`panel-theme.css`).

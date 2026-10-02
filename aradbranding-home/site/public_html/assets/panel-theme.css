@@ -80,7 +80,9 @@ body.panel-ui::before {
 .panel-ui .sidebar::after { content: ""; position: absolute; inset-inline: 0; top: 0; height: 180px; pointer-events: none; background: radial-gradient(240px 140px at 70% 0%, rgba(243, 198, 91, .12), transparent 70%); }
 .panel-ui .brand { position: relative; padding: 4px 8px 18px; margin-bottom: 10px; gap: 12px; border-bottom: 1px solid var(--s-line); }
 .panel-ui .brand-mark { width: 42px; height: 42px; border-radius: 13px; background: var(--foil); color: #102039; box-shadow: 0 0 22px rgba(243, 198, 91, .35), inset 0 1px 0 rgba(255, 255, 255, .55); border: 0; }
-.panel-ui .brand-name { font-size: 16px; font-weight: 900; color: var(--gold-1); line-height: 1.35; }
+.panel-ui .brand-name { font-size: 16px; font-weight: 900; color: #F4F7FB; line-height: 1.35; }
+.drawer-head .brand-name { color: #F4F7FB; }
+.drawer-head .brand-name small { color: #8FA3BA; }
 .panel-ui .brand-name small { font-size: 11px; color: var(--s-muted); font-weight: 500; }
 .side-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; margin-inline: -4px; padding-inline: 4px; }
 .side-scroll::-webkit-scrollbar { display: none; }
