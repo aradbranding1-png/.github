@@ -1,0 +1,13 @@
+{
+  "name": "aradbranding-trade-globe",
+  "private": true,
+  "description": "3D trade globe for the aradbranding.app home page; builds public_html/assets/trade-globe.js",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "three": "0.186.1"
+  }
+}
