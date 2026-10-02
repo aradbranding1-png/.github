@@ -17,6 +17,7 @@ use App\Modules\Reference\ReferenceData;
  * Public landing page. No inline CSS/JS and no per-user content, so the HTML is publicly cacheable (CDN-ready).
  * Statistics are shown only when the admin switches them on (cached totals, never live counts).
  * Country ids come from the cached reference data so market cards link to the real /discover/country/{id} pages.
+ * All texts, links, lists and section switches come from HomeContent (edited at /admin/home).
  */
 final class HomeController
 {
@@ -26,12 +27,15 @@ final class HomeController
 
     public function index(Request $request): Response
     {
-        $showStats = (bool) $this->c->get(Settings::class)->get('landing.show_stats', false);
+        $settings = $this->c->get(Settings::class);
+        $showStats = (bool) $settings->get('landing.show_stats', false);
         $metrics = $this->c->get(MetricsService::class);
 
         $countryIds = [];
+        $countryNames = [];
         foreach ($this->c->get(ReferenceData::class)->countries() as $country) {
             $countryIds[(string) $country['code']] = (int) $country['id'];
+            $countryNames[(string) $country['code']] = (string) $country['name_fa'];
         }
         $countryStats = [];
         if ($showStats) {
@@ -41,8 +45,10 @@ final class HomeController
         }
 
         $html = $this->c->get(View::class)->render('public/landing', [
+            'home' => (new HomeContent($settings))->get(),
             'stats' => $showStats ? $metrics->totals() : null,
             'countryIds' => $countryIds,
+            'countryNames' => $countryNames,
             'countryStats' => $countryStats,
             'publishFee' => $this->c->get(\App\Modules\Proposals\ProposalService::class)->publishFee(),
             'baseUrl' => rtrim((string) Env::get('APP_URL', ''), '/'),

@@ -122,6 +122,18 @@ $palette = ['#C99A3E', '#1E7FC4', '#A8383A', '#D9DEE6', '#2D7A5A', '#D0702E', '#
     <g stroke="#F5C65D" stroke-width="1" opacity=".5"><path d="M110 126h20M114 132h12M40 130h18M180 134h20"/></g>
   </symbol>
 
+  <symbol id="sky-GEN" viewBox="0 0 240 150">
+    <rect width="240" height="150" fill="url(#tgs-sky)"/><circle cx="120" cy="100" r="40" fill="url(#tgs-sun)"/>
+    <g fill="url(#tgs-bld)">
+      <rect x="4" y="88" width="18" height="32"/><rect x="26" y="70" width="14" height="50"/><rect x="44" y="80" width="20" height="40"/><rect x="68" y="56" width="16" height="64"/>
+      <rect x="150" y="66" width="16" height="54"/><rect x="170" y="50" width="14" height="70"/><rect x="188" y="78" width="20" height="42"/><rect x="212" y="62" width="14" height="58"/><rect x="228" y="90" width="12" height="30"/>
+    </g>
+    <path d="M100 120V40l10-12 10 12v80zM124 120V58h18v62z" fill="url(#tgs-glass)"/><path d="M110 28V14" stroke="#cfe6fa" stroke-width="1"/>
+    <g fill="#FFD978" opacity=".85"><?= $windows(6, 18, 92, 116) . $windows(28, 36, 74, 116) . $windows(46, 60, 84, 116) . $windows(70, 80, 60, 116) . $windows(152, 236, 54, 116, 6, 35) ?></g>
+    <rect y="120" width="240" height="30" fill="url(#tgs-water)"/>
+    <g stroke="#F5C65D" stroke-width="1" opacity=".5"><path d="M100 126h22M106 132h12M40 130h16M180 134h20"/></g>
+  </symbol>
+
   <!-- Product art (80×56) -->
   <symbol id="prod-saffron" viewBox="0 0 80 56">
     <rect width="80" height="56" rx="8" fill="#2a0c0c"/>
@@ -176,6 +188,8 @@ $palette = ['#C99A3E', '#1E7FC4', '#A8383A', '#D9DEE6', '#2D7A5A', '#D0702E', '#
   <symbol id="m-box" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
   <symbol id="m-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
   <symbol id="m-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="m-coin" viewBox="0 0 24 24"><ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></symbol>
+  <symbol id="m-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
   <symbol id="m-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></symbol>
 
   <!-- Banner art (600×180) -->

@@ -1,93 +1,79 @@
 <?php
 /**
- * @var array|null $stats @var string $baseUrl @var int $publishFee
+ * Public home page. Every text, link, list and section switch comes from $home (App\Modules\System\HomeContent,
+ * edited by the admin at /admin/home). Numbers are real cached totals only when public stats are switched on.
+ *
+ * @var array $home @var array|null $stats @var string $baseUrl @var int $publishFee
  * @var array<string, int> $countryIds ISO code → countries.id (links to /discover/country/{id})
+ * @var array<string, string> $countryNames ISO code → Persian name
  * @var array<int, array> $countryStats country id → users/pages/proposals (only when public stats are switched on)
  */
+use App\Modules\System\HomeContent;
+
+$home = $home ?? HomeContent::defaults();
 $countryIds = $countryIds ?? [];
+$countryNames = $countryNames ?? [];
 $countryStats = $countryStats ?? [];
+$show = $home['show'];
 // Paid features are listed from the live settings: if publishing a proposal costs Stars, it is never described as free.
 $paid = $publishFee > 0
     ? 'انتشار پیشنهاد در فید، مشاهده کامل صفحه تجار دیگر و ارسال نامه و پیشنهاد'
     : 'مشاهده کامل صفحه تجار دیگر و ارسال نامه و پیشنهاد';
-$faq = [
-    ['عضویت هزینه دارد؟', 'نه. عضویت، ساخت صفحه تجاری به چند زبان و پاسخ‌دادن به نامه‌ها رایگان است. ' . $paid . ' با اعتبار داخلی «Stars» انجام می‌شود.'],
-    ['Stars چیست؟', 'Stars اعتبار داخلی سامانه است و برای ' . $paid . ' استفاده می‌شود. هزینه داخلی و بین‌المللی جداست و پیش از هر کسر، دقیقاً می‌بینید چند Star لازم است.'],
-    ['صفحه تجاری چندزبانه چطور کار می‌کند؟', 'برای هر زبان یک صفحه می‌سازید. هر تاجری که صفحه شما را باز کند، بر اساس کشور و زبان حسابش، صفحه مناسب را می‌بیند. خودتان تعیین می‌کنید چه کسی کدام صفحه را ببیند.'],
-    ['اطلاعات تماس من امن است؟', 'شماره تماس، ایمیل و راه‌های ارتباطی فقط در بخش کامل صفحه و برای تجار واردشده نمایش داده می‌شود. در معرفی عمومی و پیشنهادها اجازه درج اطلاعات تماس داده نمی‌شود.'],
-    ['ارتباط تجاری چطور ساخته می‌شود؟', 'هر بار تاجری به نامه یا پیشنهاد شما پاسخ دهد، یک ارتباط تجاری ثبت می‌شود. شبکه شما با هر گفتگو بزرگ‌تر می‌شود.'],
-    ['از چه کشورهایی عضو می‌شوند؟', 'سامانه بین‌المللی است و تجار همه کشورها و زبان‌ها می‌توانند عضو شوند، صفحه بسازند و با هم ارتباط بگیرند.'],
-];
-$countries = [['IR', 'ایران'], ['AE', 'امارات'], ['TR', 'ترکیه'], ['IQ', 'عراق'], ['AF', 'افغانستان'], ['RU', 'روسیه'], ['CN', 'چین'], ['IN', 'هند'],
-    ['OM', 'عمان'], ['QA', 'قطر'], ['AZ', 'آذربایجان'], ['AM', 'ارمنستان'], ['KZ', 'قزاقستان'], ['DE', 'آلمان'], ['GB', 'بریتانیا'], ['IT', 'ایتالیا']];
+$fill = static fn (string $t): string => HomeContent::fill($t, $paid);
+$faq = array_map(static fn (array $f): array => [$f['q'], $fill($f['a'])], $home['faq']);
 
-// Markets shown on the globe and in the market cards. Coordinates anchor the floating cards on the 3D globe.
-$markets = [
-    'CN' => ['name' => 'چین', 'lat' => 33.5, 'lon' => 106.0, 'secondary' => false],
-    'IN' => ['name' => 'هند', 'lat' => 22.0, 'lon' => 78.5, 'secondary' => false],
-    'AE' => ['name' => 'امارات', 'lat' => 24.0, 'lon' => 54.5, 'secondary' => false],
-    'TR' => ['name' => 'ترکیه', 'lat' => 39.0, 'lon' => 35.0, 'secondary' => false],
-    'DE' => ['name' => 'آلمان', 'lat' => 51.0, 'lon' => 10.3, 'secondary' => true],
-    'RU' => ['name' => 'روسیه', 'lat' => 56.0, 'lon' => 40.0, 'secondary' => true],
-    'BR' => ['name' => 'برزیل', 'lat' => -11.0, 'lon' => -50.0, 'secondary' => true],
-];
+$hasSky = ['CN' => true, 'IN' => true, 'AE' => true, 'TR' => true];
+$markets = array_values(array_filter($home['markets'], static fn (array $m): bool => $m['code'] !== ''));
 $marketHref = static fn (string $code): string => isset($countryIds[$code]) ? '/discover/country/' . $countryIds[$code] : '/discover';
 $marketStat = static function (string $code) use ($countryIds, $countryStats): ?array {
     $id = $countryIds[$code] ?? null;
     return $id !== null && isset($countryStats[$id]) ? $countryStats[$id] : null;
 };
 $maxProposals = 1;
-foreach (array_keys($markets) as $code) {
-    $maxProposals = max($maxProposals, (int) ($marketStat($code)['proposals'] ?? 0));
+foreach ($markets as $m) {
+    $maxProposals = max($maxProposals, (int) ($marketStat($m['code'])['proposals'] ?? 0));
 }
 $marketNote = static function (string $code) use ($marketStat): string {
     $s = $marketStat($code);
-    if ($s === null) {
-        return 'تجار و فرصت‌های این بازار';
-    }
-    return '+' . fa_int((int) $s['proposals']) . ' فرصت · ' . fa_int((int) $s['users']) . ' عضو';
+    return $s === null ? 'تجار و فرصت‌های این بازار' : '+' . fa_int((int) $s['proposals']) . ' فرصت · ' . fa_int((int) $s['users']) . ' عضو';
 };
+$cardMarkets = array_values(array_filter($markets, static fn (array $m): bool => $m['card']));
+$globeMarkets = array_values(array_filter($markets, static fn (array $m): bool => $m['globe']));
 
-// Stats strip: real cached totals when the admin switches them on, otherwise platform facts that are always true.
-$strip = $stats !== null
-    ? [
-        ['value' => (int) $stats['users'], 'plus' => true, 'label' => 'تاجر عضو', 'icon' => 'm-people'],
-        ['value' => (int) $stats['countries'], 'plus' => false, 'label' => 'کشور فعال', 'icon' => 'm-globe'],
-        ['value' => (int) $stats['proposals'], 'plus' => true, 'label' => 'فرصت تجاری فعال', 'icon' => 'm-box'],
-        ['value' => (int) $stats['connections'], 'plus' => true, 'label' => 'ارتباط تجاری', 'icon' => 'm-chart'],
-    ]
-    : [
-        ['value' => 243, 'plus' => false, 'label' => 'کشور و منطقه قابل انتخاب', 'icon' => 'm-globe'],
-        ['value' => 27, 'plus' => false, 'label' => 'زبان برای صفحه تجاری', 'icon' => 'm-page'],
-        ['value' => 6, 'plus' => false, 'label' => 'نوع فرصت تجاری', 'icon' => 'm-box'],
-        ['value' => null, 'text' => 'رایگان', 'label' => 'عضویت و ساخت صفحه', 'icon' => 'm-star'],
-    ];
+// Stats strip: real cached totals when the admin switches them on, otherwise the admin's fixed facts.
+$strip = [];
+if ($stats !== null) {
+    foreach ($home['stats_live'] as $s) {
+        $strip[] = ['value' => (int) ($stats[$s['metric']] ?? 0), 'plus' => $s['metric'] !== 'countries', 'label' => $s['label'], 'icon' => $s['icon']];
+    }
+} else {
+    foreach ($home['stats_static'] as $s) {
+        $digits = strtr($s['value'], ['۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9', '٬' => '', ',' => '']);
+        $plus = str_starts_with($digits, '+');
+        $digits = ltrim($digits, '+');
+        $strip[] = ctype_digit($digits) && $digits !== ''
+            ? ['value' => (int) $digits, 'plus' => $plus, 'label' => $s['label'], 'icon' => $s['icon']]
+            : ['value' => null, 'text' => $s['value'], 'label' => $s['label'], 'icon' => $s['icon']];
+    }
+}
 
-// Quick searches into published proposals (/search?type=proposals). Illustrative shortcuts, not live demand data.
-$shortcuts = [
-    ['art' => 'prod-saffron', 'product' => 'زعفران', 'market' => 'چین', 'code' => 'CN', 'mode' => 'm-plane', 'tag' => 'کشاورزی'],
-    ['art' => 'prod-dates', 'product' => 'خرما', 'market' => 'روسیه', 'code' => 'RU', 'mode' => 'm-ship', 'tag' => 'مواد غذایی'],
-    ['art' => 'prod-pistachio', 'product' => 'پسته', 'market' => 'هند', 'code' => 'IN', 'mode' => 'm-ship', 'tag' => 'خشکبار'],
-    ['art' => 'prod-petro', 'product' => 'محصولات پتروشیمی', 'market' => 'ترکیه', 'code' => 'TR', 'mode' => 'm-ship', 'tag' => 'صنعتی'],
-    ['art' => 'prod-carpet', 'product' => 'فرش دستباف', 'market' => 'آلمان', 'code' => 'DE', 'mode' => 'm-plane', 'tag' => 'صنایع دستی'],
-];
-$searchHref = static function (string $q, ?string $code) use ($countryIds): string {
+$searchHref = static function (string $q, string $code) use ($countryIds): string {
     $params = ['type' => 'proposals', 'q' => $q];
-    if ($code !== null && isset($countryIds[$code])) {
+    if (isset($countryIds[$code])) {
         $params['country'] = $countryIds[$code];
     }
     return '/search?' . http_build_query($params);
 };
-
-// Platform modules → existing routes (signed-out visitors are sent to /login and returned afterwards).
-$modules = [
-    ['href' => '/proposals', 'icon' => 'm-chart', 'title' => 'فرصت‌های تجاری', 'text' => 'خرید، فروش، مشارکت و نمایندگی'],
-    ['href' => '/discover', 'icon' => 'm-globe', 'title' => 'بازارهای هدف', 'text' => 'کشف تجار بر اساس کشور'],
-    ['href' => '/connections', 'icon' => 'm-people', 'title' => 'شبکه تجاری', 'text' => 'ارتباط‌های ساخته‌شده شما'],
-    ['href' => '/letters', 'icon' => 'm-letter', 'title' => 'نامه‌های تجاری', 'text' => 'نامه اختصاصی و عمومی'],
-    ['href' => '/pages', 'icon' => 'm-page', 'title' => 'صفحه تجاری', 'text' => 'معرفی چندزبانه کسب‌وکار'],
-    ['href' => '/wallet', 'icon' => 'm-star', 'title' => 'Stars', 'text' => 'اعتبار داخلی و گردش حساب'],
-];
+$chipCodes = array_values(array_filter(explode(',', $home['countries']['codes'])));
+$finderCodes = array_values(array_unique(array_merge(array_column($markets, 'code'), $chipCodes)));
+$nameOf = static function (string $code) use ($markets, $countryNames): string {
+    foreach ($markets as $m) {
+        if ($m['code'] === $code && $m['name'] !== '') {
+            return $m['name'];
+        }
+    }
+    return $countryNames[$code] ?? $code;
+};
 
 $schema = [
     '@context' => 'https://schema.org',
@@ -95,15 +81,23 @@ $schema = [
         ['@type' => 'Organization', 'name' => 'سامانه توسعه تجارت', 'alternateName' => 'Arad Branding', 'url' => $baseUrl . '/', 'logo' => $baseUrl . '/icons/icon-512.png'],
         ['@type' => 'WebSite', 'name' => 'سامانه توسعه تجارت', 'url' => $baseUrl . '/', 'inLanguage' => 'fa',
             'potentialAction' => ['@type' => 'SearchAction', 'target' => $baseUrl . '/search?q={q}', 'query-input' => 'required name=q']],
-        ['@type' => 'FAQPage', 'mainEntity' => array_map(static fn ($q) => ['@type' => 'Question', 'name' => $q[0], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $q[1]]], $faq)],
     ],
 ];
+if ($show['faq'] && $faq !== []) {
+    $schema['@graph'][] = ['@type' => 'FAQPage', 'mainEntity' => array_map(static fn ($q) => ['@type' => 'Question', 'name' => $q[0], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $q[1]]], $faq)];
+}
 $desc = 'شبکه بین‌المللی تجار و فعالان اقتصادی: صفحه تجاری چندزبانه بسازید، فرصت‌های تجاری را کشف کنید و مستقیم با تجار کشورهای مختلف ارتباط بگیرید. عضویت رایگان است.';
 $flagUse = static fn (string $code): string => '<svg class="th-flag" viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-' . e($code) . '"/></svg>';
+$flagOf = static fn (string $code): string => in_array($code, ['CN', 'IN', 'AE', 'TR', 'DE', 'RU', 'BR', 'IR'], true)
+    ? $flagUse($code) : '<span class="th-flag th-flag-emoji" aria-hidden="true">' . flag($code) . '</span>';
 $icon = static fn (string $id, string $cls = 'th-ic'): string => '<svg class="' . e($cls) . '" viewBox="0 0 24 24" aria-hidden="true"><use href="#' . e($id) . '"/></svg>';
+$live = static fn (string $text): string => strtr(e($text), [
+    '{sea}' => '<span data-live="sea">۷</span>', '{air}' => '<span data-live="air">۱۰</span>', '{nodes}' => '<span data-live="nodes">۱۹</span>',
+]);
+$h = $home['hero'];
 ?>
 <!doctype html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" data-theme="dark">
 <head>
 <?= $this->partial('partials/head') ?>
 <link rel="stylesheet" href="<?= e(asset('trade-home.css')) ?>">
@@ -137,37 +131,29 @@ $icon = static fn (string $id, string $cls = 'th-ic'): string => '<svg class="' 
       <span class="th-brand-name">سامانه توسعه تجارت<small>Arad Branding · شبکه بین‌المللی تجار</small></span>
     </a>
     <nav class="th-nav" aria-label="ناوبری اصلی">
-      <a class="is-active" href="/" aria-current="page">صفحه اصلی</a>
-      <a href="/discover">بازارهای هدف</a>
-      <a href="/proposals">فرصت‌های تجاری</a>
-      <a href="/connections">شبکه تجاری</a>
-      <a class="th-nav-xl" href="/letters">نامه‌ها</a>
-      <a href="#how">چطور کار می‌کند</a>
-      <a class="th-nav-xl" href="#stars">Stars</a>
-      <a class="th-nav-xl" href="#faq">پرسش‌ها</a>
+      <?php foreach ($home['nav'] as $i => $n): if ($n['href'] === '') { continue; } $isHome = $n['href'] === '/'; ?>
+      <a class="<?= $isHome ? 'is-active' : '' ?><?= $i >= 5 ? ' th-nav-xl' : '' ?>" href="<?= e($n['href']) ?>"<?= $isHome ? ' aria-current="page"' : '' ?>><?= e($n['label']) ?></a>
+      <?php endforeach; ?>
     </nav>
     <form class="th-search" method="get" action="/search" role="search">
       <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-      <input type="search" name="q" placeholder="جستجوی تاجر، کالا یا فرصت…" aria-label="جستجو" enterkeyhint="search">
+      <input type="search" name="q" placeholder="<?= e($home['header']['search_placeholder']) ?>" aria-label="جستجو" enterkeyhint="search">
     </form>
     <div class="th-actions">
       <span class="th-lang" title="زبان سامانه"><?= $icon('m-globe') ?>FA</span>
-      <a class="th-btn th-btn-ghost" href="/login">ورود</a>
-      <a class="th-btn th-btn-gold" href="/register">ثبت‌نام</a>
+      <a class="th-btn th-btn-ghost" href="/login"><?= e($home['header']['login_label']) ?></a>
+      <a class="th-btn th-btn-gold" href="/register"><?= e($home['header']['register_label']) ?></a>
       <details class="th-menu">
         <summary aria-label="منو"><?= $icon('m-menu') ?></summary>
         <div class="th-menu-panel">
           <form class="th-search th-search-m" method="get" action="/search" role="search">
             <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-            <input type="search" name="q" placeholder="جستجوی تاجر، کالا یا فرصت…" aria-label="جستجو" enterkeyhint="search">
+            <input type="search" name="q" placeholder="<?= e($home['header']['search_placeholder']) ?>" aria-label="جستجو" enterkeyhint="search">
           </form>
           <nav aria-label="منوی موبایل">
-            <a href="/"><?= $icon('m-globe') ?>صفحه اصلی</a>
-            <?php foreach ($modules as $m): ?><a href="<?= e($m['href']) ?>"><?= $icon($m['icon']) ?><?= e($m['title']) ?></a><?php endforeach; ?>
-            <a href="#how"><?= $icon('m-chart') ?>چطور کار می‌کند</a>
-            <a href="#faq"><?= $icon('m-letter') ?>پرسش‌های پرتکرار</a>
+            <?php foreach ($home['nav'] as $n): if ($n['href'] === '') { continue; } ?><a href="<?= e($n['href']) ?>"><?= $icon('m-arrow') ?><?= e($n['label']) ?></a><?php endforeach; ?>
           </nav>
-          <div class="th-menu-cta"><a class="th-btn th-btn-ghost" href="/login">ورود</a><a class="th-btn th-btn-gold" href="/register">عضویت رایگان</a></div>
+          <div class="th-menu-cta"><a class="th-btn th-btn-ghost" href="/login"><?= e($home['header']['login_label']) ?></a><a class="th-btn th-btn-gold" href="/register"><?= e($home['header']['register_label']) ?></a></div>
         </div>
       </details>
     </div>
@@ -183,41 +169,45 @@ $icon = static fn (string $id, string $cls = 'th-ic'): string => '<svg class="' 
     </div>
     <svg class="tg-lines" aria-hidden="true"></svg>
     <div class="tg-labels" aria-hidden="true"></div>
+    <?php if ($show['cards']): ?>
     <div class="tg-cards">
-      <?php foreach ($markets as $code => $m): ?>
-      <a class="tg-card<?= $m['secondary'] ? ' is-secondary' : '' ?>" href="<?= e($marketHref($code)) ?>" data-lat="<?= e($m['lat']) ?>" data-lon="<?= e($m['lon']) ?>" data-name="<?= e($m['name']) ?>" data-note="<?= e($marketNote($code)) ?>">
-        <?= $flagUse($code) ?>
-        <span class="tg-card-t"><b><?= e($m['name']) ?></b><small><?= e($marketNote($code)) ?></small></span>
+      <?php foreach ($globeMarkets as $m): ?>
+      <a class="tg-card<?= $m['secondary'] ? ' is-secondary' : '' ?>" href="<?= e($marketHref($m['code'])) ?>" data-lat="<?= e($m['lat']) ?>" data-lon="<?= e($m['lon']) ?>" data-name="<?= e($m['name']) ?>" data-note="<?= e($marketNote($m['code'])) ?>">
+        <?= $flagOf($m['code']) ?>
+        <span class="tg-card-t"><b><?= e($m['name']) ?></b><small><?= e($marketNote($m['code'])) ?></small></span>
       </a>
       <?php endforeach; ?>
     </div>
+    <?php endif; ?>
     <div class="tg-tip" role="status" hidden></div>
     </div>
 
     <div class="th-hero-in">
       <div class="th-hero-copy">
-        <p class="th-badge"><?= $icon('m-globe') ?>بستر ارتباطات تجارت جهانی</p>
-        <h1 id="hero-title"><span class="th-h1-gold">تجارت جهانی</span><span class="th-h1-sub">همین حالا در دسترس شماست</span></h1>
-        <p class="th-lead">دسترسی به بازارهای جهانی، فرصت‌های تجاری، تأمین‌کنندگان، خریداران و مسیرهای تجارت بین‌المللی در یک سامانه یکپارچه.</p>
+        <?php if ($h['badge'] !== ''): ?><p class="th-badge"><?= $icon('m-globe') ?><?= e($h['badge']) ?></p><?php endif; ?>
+        <h1 id="hero-title"><span class="th-h1-gold"><?= e($h['title']) ?></span><?php if ($h['subtitle'] !== ''): ?><span class="th-h1-sub"><?= e($h['subtitle']) ?></span><?php endif; ?></h1>
+        <?php if ($h['lead'] !== ''): ?><p class="th-lead"><?= e($h['lead']) ?></p><?php endif; ?>
         <div class="th-cta">
-          <a class="th-btn th-btn-gold th-btn-lg" href="/register">شروع تجارت<?= $icon('m-arrow') ?></a>
-          <a class="th-btn th-btn-glass th-btn-lg" href="/proposals"><span class="th-play"><?= $icon('m-play') ?></span>مشاهده فرصت‌ها</a>
+          <?php if ($h['cta1_label'] !== '' && $h['cta1_href'] !== ''): ?><a class="th-btn th-btn-gold th-btn-lg" href="<?= e($h['cta1_href']) ?>"><?= e($h['cta1_label']) ?><?= $icon('m-arrow') ?></a><?php endif; ?>
+          <?php if ($h['cta2_label'] !== '' && $h['cta2_href'] !== ''): ?><a class="th-btn th-btn-glass th-btn-lg" href="<?= e($h['cta2_href']) ?>"><span class="th-play"><?= $icon('m-play') ?></span><?= e($h['cta2_label']) ?></a><?php endif; ?>
         </div>
-        <p class="th-note">بدون هزینه عضویت · صفحه تجاری چندزبانه · ارتباط مستقیم</p>
+        <?php if ($h['note'] !== ''): ?><p class="th-note"><?= e($h['note']) ?></p><?php endif; ?>
       </div>
     </div>
 
+    <?php if ($show['rail'] && $home['rail'] !== []): ?>
     <aside class="th-rail" aria-label="نمای زنده نقشه">
-      <div class="th-rail-i"><?= $icon('m-globe') ?><span><small>پوشش جهانی</small><b>۲۴۳ کشور</b></span></div>
-      <div class="th-rail-i"><?= $icon('m-ship') ?><span><small>مسیرهای دریایی روی نقشه</small><b><span data-live="sea">۷</span> مسیر</b></span></div>
-      <div class="th-rail-i"><?= $icon('m-plane') ?><span><small>مسیرهای هوایی باری</small><b><span data-live="air">۱۰</span> مسیر</b></span></div>
-      <div class="th-rail-i"><?= $icon('m-anchor') ?><span><small>بنادر و هاب‌های تجاری</small><b><span data-live="nodes">۱۹</span> گره</b></span></div>
+      <?php foreach ($home['rail'] as $r): ?>
+      <div class="th-rail-i"><?= $icon($r['icon']) ?><span><small><?= e($r['label']) ?></small><b><?= $live($r['value']) ?></b></span></div>
+      <?php endforeach; ?>
     </aside>
-    <p class="th-hint" aria-hidden="true"><span>بکشید تا بچرخد</span> · <span>دوبار کلیک برای بزرگنمایی</span> · نمایش تصویری مسیرهای تجارت جهانی</p>
+    <?php endif; ?>
+    <?php if ($h['hint'] !== ''): ?><p class="th-hint" aria-hidden="true"><?= e($h['hint']) ?></p><?php endif; ?>
   </section>
 
+  <?php if ($show['stats'] && $strip !== []): ?>
   <section class="th-stats" aria-label="<?= $stats !== null ? 'آمار سامانه' : 'سامانه در یک نگاه' ?>">
-    <?php foreach ($strip as $i => $s): ?>
+    <?php foreach ($strip as $s): ?>
     <div class="th-stat">
       <span class="th-stat-ic"><?= $icon($s['icon']) ?></span>
       <span class="th-stat-t">
@@ -228,135 +218,179 @@ $icon = static fn (string $id, string $cls = 'th-ic'): string => '<svg class="' 
     </div>
     <?php endforeach; ?>
   </section>
+  <?php endif; ?>
 
-  <section class="th-discover" aria-labelledby="discover-title">
+  <?php if ($show['finder'] || ($show['markets'] && $cardMarkets !== []) || ($show['opps'] && $home['opps'] !== [])): ?>
+  <section class="th-discover<?= !$show['finder'] ? ' no-finder' : '' ?><?= !($show['markets'] && $cardMarkets !== []) ? ' no-markets' : '' ?><?= !($show['opps'] && $home['opps'] !== []) ? ' no-opps' : '' ?>" aria-label="کشف بازار">
+    <?php if ($show['finder']): $f = $home['finder']; ?>
     <div class="th-finder th-glass">
       <div class="th-finder-h">
         <span class="th-ring"><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-compass"/></svg></span>
         <div>
-          <h2 id="discover-title">بازار بعدی خود را پیدا کنید</h2>
-          <p>در میان تجار، صفحه‌های تجاری و فرصت‌های منتشرشده کشورهای مختلف جستجو کنید و بازار هدف محصول خود را بشناسید.</p>
+          <h2><?= e($f['title']) ?></h2>
+          <?php if ($f['text'] !== ''): ?><p><?= e($f['text']) ?></p><?php endif; ?>
         </div>
       </div>
       <form class="th-finder-f" method="get" action="/search">
         <label class="th-field"><span>محصول یا کالا</span><input type="search" name="q" placeholder="مثلاً زعفران، خرما، فولاد…" enterkeyhint="search"></label>
         <label class="th-field"><span>کشور</span>
-          <select name="country">
+          <select name="country" aria-label="کشور">
             <option value="0">همه کشورها</option>
-            <?php foreach ($markets + array_fill_keys(array_column($countries, 0), null) as $code => $_):
-                if (!isset($countryIds[$code])) { continue; }
-                $label = $markets[$code]['name'] ?? (array_column($countries, 1, 0)[$code] ?? $code); ?>
-            <option value="<?= (int) $countryIds[$code] ?>"><?= e($label) ?></option>
+            <?php foreach ($finderCodes as $code): if (!isset($countryIds[$code])) { continue; } ?>
+            <option value="<?= (int) $countryIds[$code] ?>"><?= e($nameOf($code)) ?></option>
             <?php endforeach; ?>
           </select>
         </label>
         <label class="th-field"><span>نوع نتیجه</span>
-          <select name="type">
+          <select name="type" aria-label="نوع نتیجه">
             <option value="proposals">فرصت‌های تجاری</option>
             <option value="traders">تجار</option>
             <option value="pages">صفحه‌های تجاری</option>
           </select>
         </label>
-        <button class="th-btn th-btn-gold th-btn-block" type="submit"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>جستجوی بازارها</button>
+        <button class="th-btn th-btn-gold th-btn-block" type="submit"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><?= e($f['button']) ?></button>
       </form>
     </div>
+    <?php endif; ?>
 
-    <div class="th-markets" aria-label="بازارهای هدف">
-      <?php foreach (['CN', 'IN', 'AE', 'TR'] as $code): $s = $marketStat($code); ?>
-      <a class="th-market" href="<?= e($marketHref($code)) ?>">
-        <svg class="th-market-art" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#sky-<?= e($code) ?>"/></svg>
+    <?php if ($show['markets'] && $cardMarkets !== []): ?>
+    <div class="th-markets n-<?= min(4, count($cardMarkets)) ?>" aria-label="بازارهای هدف">
+      <?php foreach ($cardMarkets as $m): $s = $marketStat($m['code']); ?>
+      <a class="th-market" href="<?= e($marketHref($m['code'])) ?>">
+        <span class="th-market-art">
+          <?php if ($m['image'] !== ''): ?>
+          <img src="<?= e(media($m['image'])) ?>" alt="" loading="lazy" decoding="async">
+          <?php else: ?>
+          <svg viewBox="0 0 240 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#sky-<?= isset($hasSky[$m['code']]) ? e($m['code']) : 'GEN' ?>"/></svg>
+          <?php endif; ?>
+          <span class="th-market-n"><?= $flagOf($m['code']) ?><b><?= e($m['name']) ?></b></span>
+        </span>
         <span class="th-market-b">
-          <span class="th-market-n"><?= $flagUse($code) ?><b><?= e($markets[$code]['name']) ?></b></span>
-          <small><?= $s !== null ? '+' . fa_int((int) $s['proposals']) . ' فرصت' : 'مشاهده تجار این کشور' ?></small>
+          <small class="th-market-note"><?= $s !== null ? '+' . fa_int((int) $s['proposals']) . ' فرصت · ' . fa_int((int) $s['users']) . ' عضو' : 'تجار و فرصت‌های این بازار' ?></small>
+          <span class="th-facts">
+            <?php if ($m['port'] !== ''): ?><span><?= $icon('m-anchor', 'th-ic th-ic-sm') ?><i>بندر اصلی</i><b><?= e($m['port']) ?></b></span><?php endif; ?>
+            <?php if ($m['currency'] !== ''): ?><span><?= $icon('m-coin', 'th-ic th-ic-sm') ?><i>واحد پول</i><b><?= e($m['currency']) ?></b></span><?php endif; ?>
+            <?php if ($m['timezone'] !== ''): ?><span><?= $icon('m-clock', 'th-ic th-ic-sm') ?><i>منطقه زمانی</i><b dir="ltr"><?= e($m['timezone']) ?></b></span><?php endif; ?>
+          </span>
           <span class="th-market-f">
             <?php if ($s !== null): ?><span class="th-bar"><i data-w="<?= (int) round(100 * (int) $s['proposals'] / $maxProposals) ?>"></i></span><?php else: ?><span class="th-bar th-bar-idle"><i></i></span><?php endif; ?>
+            <span class="th-market-cta">مشاهده تجار</span>
             <span class="th-go"><?= $icon('m-arrow') ?></span>
           </span>
         </span>
       </a>
       <?php endforeach; ?>
     </div>
+    <?php endif; ?>
 
-    <div class="th-opps th-glass" aria-labelledby="opps-title">
-      <div class="th-opps-h"><h2 id="opps-title"><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-spark"/></svg>فرصت‌های تجاری</h2><a href="/proposals">مشاهده همه<?= $icon('m-arrow') ?></a></div>
-      <p class="th-opps-s">جستجوی سریع در پیشنهادهای منتشرشده</p>
+    <?php if ($show['opps'] && $home['opps'] !== []): $oh = $home['opps_head']; ?>
+    <div class="th-opps th-glass">
+      <div class="th-opps-h"><h2><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-spark"/></svg><?= e($oh['title']) ?></h2><?php if ($oh['link_label'] !== '' && $oh['link_href'] !== ''): ?><a href="<?= e($oh['link_href']) ?>"><?= e($oh['link_label']) ?><?= $icon('m-arrow') ?></a><?php endif; ?></div>
+      <?php if ($oh['subtitle'] !== ''): ?><p class="th-opps-s"><?= e($oh['subtitle']) ?></p><?php endif; ?>
       <ul>
-        <?php foreach ($shortcuts as $sc): ?>
-        <li><a href="<?= e($searchHref($sc['product'], $sc['code'])) ?>">
-          <svg class="th-opp-art" viewBox="0 0 80 56" aria-hidden="true"><use href="#<?= e($sc['art']) ?>"/></svg>
-          <span class="th-opp-t"><b><?= e($sc['product']) ?> <?= $icon('m-arrow', 'th-ic th-ic-sm') ?> <?= e($sc['market']) ?></b><small><?= $flagUse($sc['code']) ?><?= e($sc['tag']) ?> · <?= $icon($sc['mode'], 'th-ic th-ic-sm') ?></small></span>
+        <?php foreach ($home['opps'] as $o): ?>
+        <li><a href="<?= e($searchHref($o['product'], $o['code'])) ?>">
+          <?php if ($o['image'] !== ''): ?><img class="th-opp-art" src="<?= e(media($o['image'])) ?>" alt="" loading="lazy" decoding="async"><?php else: ?><svg class="th-opp-art" viewBox="0 0 80 56" aria-hidden="true"><use href="#<?= e($o['art']) ?>"/></svg><?php endif; ?>
+          <span class="th-opp-t"><b><?= e($o['product']) ?><?php if ($o['market'] !== ''): ?> <?= $icon('m-arrow', 'th-ic th-ic-sm') ?> <?= e($o['market']) ?><?php endif; ?></b><small><?php if ($o['code'] !== ''): ?><?= $flagOf($o['code']) ?><?php endif; ?><?= e($o['tag']) ?> · <?= $icon($o['mode'] === 'air' ? 'm-plane' : 'm-ship', 'th-ic th-ic-sm') ?></small></span>
           <span class="th-go"><?= $icon('m-arrow') ?></span>
         </a></li>
         <?php endforeach; ?>
       </ul>
     </div>
+    <?php endif; ?>
   </section>
+  <?php endif; ?>
 
-  <section class="th-modules" aria-label="بخش‌های سامانه">
+  <?php if (($show['modules'] && $home['modules'] !== []) || $show['banner']): ?>
+  <section class="th-modules<?= !($show['modules'] && $home['modules'] !== []) ? ' no-modules' : '' ?><?= !$show['banner'] ? ' no-banner' : '' ?>" aria-label="بخش‌های سامانه">
+    <?php if ($show['modules'] && $home['modules'] !== []): ?>
     <div class="th-mod-grid">
-      <?php foreach ($modules as $m): ?>
-      <a class="th-mod" href="<?= e($m['href']) ?>"><?= $icon($m['icon'], 'th-ic th-ic-lg') ?><b><?= e($m['title']) ?></b><small><?= e($m['text']) ?></small></a>
+      <?php foreach ($home['modules'] as $m): if ($m['href'] === '') { continue; } ?>
+      <a class="th-mod" href="<?= e($m['href']) ?>"><?= $icon($m['icon'], 'th-ic th-ic-lg') ?><b><?= e($m['title']) ?></b><?php if ($m['text'] !== ''): ?><small><?= e($m['text']) ?></small><?php endif; ?></a>
       <?php endforeach; ?>
     </div>
-    <a class="th-banner" href="#how">
+    <?php endif; ?>
+    <?php if ($show['banner']): $b = $home['banner']; ?>
+    <a class="th-banner" href="<?= e($b['href'] !== '' ? $b['href'] : '#how') ?>">
+      <?php if ($b['image'] !== ''): ?>
+      <img class="th-banner-art" src="<?= e(media($b['image'])) ?>" alt="" loading="lazy" decoding="async">
+      <?php else: ?>
       <svg class="th-banner-art" viewBox="0 0 600 180" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#banner-ship"/></svg>
-      <span class="th-banner-t"><b>مسیر مطمئن<br>تجارت بین‌المللی</b><small>ببینید سامانه چطور کار می‌کند</small></span>
+      <?php endif; ?>
+      <span class="th-banner-t"><b><?= e($b['title']) ?></b><?php if ($b['subtitle'] !== ''): ?><small><?= e($b['subtitle']) ?></small><?php endif; ?></span>
       <span class="th-banner-play"><?= $icon('m-play') ?></span>
     </a>
+    <?php endif; ?>
   </section>
+  <?php endif; ?>
 
+  <?php if ($show['how']): $hw = $home['how']; ?>
   <section class="th-sec" id="how">
-    <header class="th-sec-h"><p class="th-kicker">مسیر شروع</p><h2>چطور کار می‌کند</h2><p>سامانه توسعه تجارت جایی است که تولیدکننده، بازرگان و ارائه‌دهنده خدمات، خود را به بازارهای دیگر معرفی می‌کند و طرف معامله‌اش را پیدا می‌کند. هر گفتگو یک ارتباط تجاری می‌سازد و هر ارتباط، درِ بازار تازه‌ای را باز می‌کند.</p></header>
+    <header class="th-sec-h"><p class="th-kicker"><?= e($hw['kicker']) ?></p><h2><?= e($hw['title']) ?></h2><?php if ($hw['intro'] !== ''): ?><p><?= e($hw['intro']) ?></p><?php endif; ?></header>
+    <?php if ($home['steps'] !== []): ?>
     <ol class="th-steps">
-      <li><b>عضو شوید</b><span>در کمتر از یک دقیقه و رایگان.</span></li>
-      <li><b>صفحه تجاری بسازید</b><span>به هر زبانی که مشتریانتان صحبت می‌کنند.</span></li>
-      <li><b>فرصت‌ها را کشف کنید</b><span>پیشنهادهای خرید، فروش، مشارکت و سرمایه‌گذاری.</span></li>
-      <li><b>ارتباط بگیرید</b><span>پیشنهاد و نامه بفرستید؛ هر پاسخ، یک ارتباط تجاری.</span></li>
+      <?php foreach ($home['steps'] as $st): ?><li><b><?= e($st['title']) ?></b><span><?= e($st['text']) ?></span></li><?php endforeach; ?>
     </ol>
+    <?php endif; ?>
   </section>
+  <?php endif; ?>
 
+  <?php if ($show['features'] && $home['features'] !== []): $fh = $home['features_head']; ?>
   <section class="th-sec" id="features">
-    <header class="th-sec-h"><p class="th-kicker">ابزارهای سامانه</p><h2>امکانات</h2></header>
+    <header class="th-sec-h"><p class="th-kicker"><?= e($fh['kicker']) ?></p><h2><?= e($fh['title']) ?></h2></header>
     <div class="th-features">
-      <article class="th-glass"><?= $icon('m-page', 'th-ic th-ic-lg') ?><h3>صفحه تجاری چندزبانه</h3><p>یک وب‌سایت کوچک برای کسب‌وکار شما. هر بازدیدکننده صفحه هم‌زبان خودش را می‌بیند و در گوگل هم پیدا می‌شوید.</p></article>
-      <article class="th-glass"><?= $icon('m-chart', 'th-ic th-ic-lg') ?><h3>پیشنهادهای تجاری</h3><p>فرصت خرید، فروش، مشارکت یا نمایندگی را با تصویر منتشر کنید و در فید تجار کشورهای دیگر دیده شوید.</p></article>
-      <article class="th-glass"><?= $icon('m-letter', 'th-ic th-ic-lg') ?><h3>نامه اختصاصی و عمومی</h3><p>به یک تاجر نامه بزنید، یا با یک نامه تجار یک کشور، زبان یا حوزه را باخبر کنید. پاسخ‌دادن همیشه رایگان است.</p></article>
-      <article class="th-glass"><?= $icon('m-people', 'th-ic th-ic-lg') ?><h3>شبکه ارتباطات</h3><p>هر پاسخ، یک ارتباط تجاری ثبت می‌کند. شبکه‌ای که با هر گفتگو بزرگ‌تر می‌شود.</p></article>
+      <?php foreach ($home['features'] as $ft): ?>
+      <article class="th-glass"><?= $icon($ft['icon'], 'th-ic th-ic-lg') ?><h3><?= e($ft['title']) ?></h3><p><?= e($ft['text']) ?></p></article>
+      <?php endforeach; ?>
     </div>
   </section>
+  <?php endif; ?>
 
+  <?php if ($show['stars']): $sr = $home['stars']; ?>
   <section class="th-sec th-stars" id="stars">
     <div>
-      <p class="th-kicker">اعتبار داخلی</p>
-      <h2>Stars؛ اعتبار داخلی، شفاف و منصفانه</h2>
-      <p>عضویت، ساخت صفحه و پاسخ‌دادن رایگان است. برای <?= e($paid) ?>، از Stars استفاده می‌کنید. پیش از هر کسر، دقیقاً می‌بینید چقدر لازم است.</p>
+      <p class="th-kicker"><?= e($sr['kicker']) ?></p>
+      <h2><?= e($sr['title']) ?></h2>
+      <?php if ($sr['text'] !== ''): ?><p><?= e($fill($sr['text'])) ?></p><?php endif; ?>
     </div>
-    <ul class="th-stars-list th-glass"><li><?= $icon('m-star') ?>هزینه داخلی و بین‌المللی جدا</li><li><?= $icon('m-star') ?>بسته‌های خرید با Star هدیه</li><li><?= $icon('m-star') ?>گردش حساب کامل و قابل پیگیری</li></ul>
+    <?php if ($home['stars_items'] !== []): ?>
+    <ul class="th-stars-list th-glass"><?php foreach ($home['stars_items'] as $it): ?><li><?= $icon('m-star') ?><?= e($it['text']) ?></li><?php endforeach; ?></ul>
+    <?php endif; ?>
   </section>
+  <?php endif; ?>
 
+  <?php if ($show['countries'] && $chipCodes !== []): $cc = $home['countries']; ?>
   <section class="th-sec" id="countries">
-    <header class="th-sec-h"><p class="th-kicker">شبکه بین‌المللی</p><h2>تجار از کشورهای مختلف</h2></header>
-    <div class="th-chips"><?php foreach ($countries as [$code, $name]): ?><a class="th-chip" href="<?= e($marketHref($code)) ?>"><span aria-hidden="true"><?= flag($code) ?></span><?= e($name) ?></a><?php endforeach; ?><span class="th-chip">و کشورهای دیگر…</span></div>
+    <header class="th-sec-h"><p class="th-kicker"><?= e($cc['kicker']) ?></p><h2><?= e($cc['title']) ?></h2></header>
+    <div class="th-chips"><?php foreach ($chipCodes as $code): ?><a class="th-chip" href="<?= e($marketHref($code)) ?>"><span aria-hidden="true"><?= flag($code) ?></span><?= e($nameOf($code)) ?></a><?php endforeach; ?><?php if ($cc['more'] !== ''): ?><span class="th-chip"><?= e($cc['more']) ?></span><?php endif; ?></div>
   </section>
+  <?php endif; ?>
 
+  <?php if ($show['faq'] && $faq !== []): $fq = $home['faq_head']; ?>
   <section class="th-sec" id="faq">
-    <header class="th-sec-h"><p class="th-kicker">پاسخ‌ها</p><h2>پرسش‌های پرتکرار</h2></header>
+    <header class="th-sec-h"><p class="th-kicker"><?= e($fq['kicker']) ?></p><h2><?= e($fq['title']) ?></h2></header>
     <div class="th-faq"><?php foreach ($faq as [$q, $a]): ?><details class="th-glass"><summary><?= e($q) ?></summary><p><?= e($a) ?></p></details><?php endforeach; ?></div>
   </section>
+  <?php endif; ?>
 
+  <?php if ($show['final']): $fn = $home['final']; ?>
   <section class="th-sec th-final">
     <div class="th-final-in th-glass">
-      <h2>شبکه تجاری خود را از امروز بسازید</h2>
-      <p>عضویت رایگان است و کمتر از یک دقیقه طول می‌کشد.</p>
-      <div class="th-cta th-cta-center"><a class="th-btn th-btn-gold th-btn-lg" href="/register">عضویت رایگان</a><a class="th-btn th-btn-glass th-btn-lg" href="/login">ورود به سامانه</a></div>
+      <h2><?= e($fn['title']) ?></h2>
+      <?php if ($fn['text'] !== ''): ?><p><?= e($fn['text']) ?></p><?php endif; ?>
+      <div class="th-cta th-cta-center">
+        <?php if ($fn['cta1_label'] !== '' && $fn['cta1_href'] !== ''): ?><a class="th-btn th-btn-gold th-btn-lg" href="<?= e($fn['cta1_href']) ?>"><?= e($fn['cta1_label']) ?></a><?php endif; ?>
+        <?php if ($fn['cta2_label'] !== '' && $fn['cta2_href'] !== ''): ?><a class="th-btn th-btn-glass th-btn-lg" href="<?= e($fn['cta2_href']) ?>"><?= e($fn['cta2_label']) ?></a><?php endif; ?>
+      </div>
     </div>
   </section>
+  <?php endif; ?>
 </main>
 
 <footer class="th-foot">
   <div class="th-foot-in">
     <a class="th-brand" href="/"><span class="brand-mark th-mark"><svg class="icon"><use href="#i-mark"/></svg></span><span class="th-brand-name">سامانه توسعه تجارت<small>© <bdi>aradbranding.app</bdi></small></span></a>
-    <nav aria-label="پیوندهای پایین صفحه"><a href="/register">عضویت</a><a href="/login">ورود</a><a href="/discover">بازارهای هدف</a><a href="/proposals">فرصت‌ها</a><a href="#faq">پرسش‌ها</a></nav>
+    <nav aria-label="پیوندهای پایین صفحه"><a href="/register">عضویت</a><a href="/login">ورود</a><a href="/discover">بازارهای هدف</a><a href="/proposals">فرصت‌ها</a><?php if ($show['faq']): ?><a href="#faq">پرسش‌ها</a><?php endif; ?></nav>
   </div>
 </footer>
 </body>

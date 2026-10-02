@@ -1,0 +1,27 @@
+/* /admin/home editor — uses the app.css design tokens (works in both themes) */
+.hp-intro { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.hp-intro p { margin-top: 6px; line-height: 1.9; max-width: 70ch; }
+.hp-sec > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.hp-sec > summary::-webkit-details-marker { display: none; }
+.hp-sec > summary h2 { display: flex; align-items: center; gap: 10px; }
+.hp-sec > summary h2::before { content: "+"; width: 26px; height: 26px; border-radius: 8px; display: inline-grid; place-items: center; border: 1px solid var(--line); color: var(--gold); font-size: 16px; }
+.hp-sec[open] > summary h2::before { content: "−"; }
+.hp-sec[open] > summary { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.hp-sec h3 { font-size: 15px; font-weight: 800; margin: 18px 0 4px; color: var(--gold); }
+.hp-switches { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 18px; }
+.hp-rows { display: grid; gap: 12px; margin-top: 10px; }
+.hp-row { margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); min-width: 0; }
+.hp-row.is-new { border-style: dashed; background: transparent; }
+.hp-row legend { padding: 0 8px; font-size: 12.5px; font-weight: 800; color: var(--muted); }
+.hp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; align-items: start; }
+.hp-grid .field { margin: 0; min-width: 0; }
+.hp-grid .field:has(.textarea) { grid-column: 1 / -1; }
+.hp-bool { align-self: end; padding-bottom: 8px; }
+.hp-image { grid-column: 1 / -1; display: grid; gap: 8px; }
+.hp-image img { width: 180px; max-width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.hp-sec > .hp-image img { aspect-ratio: 16 / 6; width: 320px; }
+.hp-row-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.hp-order { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.hp-order .input { width: 70px; min-height: 36px; text-align: center; }
+.hp-reset { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-color: color-mix(in srgb, #d9534f 40%, var(--line)); }
+.hp-reset p { margin-top: 4px; }
