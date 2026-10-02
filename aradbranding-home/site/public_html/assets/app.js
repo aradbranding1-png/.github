@@ -196,7 +196,12 @@
       active = Math.max(0, Math.min(idx, vis.length - 1));
       vis[active].li.classList.add('is-active');
       input.setAttribute('aria-activedescendant', vis[active].li.id);
-      vis[active].li.scrollIntoView({ block: 'nearest' });
+      // Scroll only the list (scrollIntoView would also move the page, which jumps on phones).
+      var li = vis[active].li;
+      var top = li.offsetTop - list.offsetTop;
+      var bottom = top + li.offsetHeight;
+      if (top < list.scrollTop) list.scrollTop = top;
+      else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
     }
     function filter() {
       var q = norm(input.value);

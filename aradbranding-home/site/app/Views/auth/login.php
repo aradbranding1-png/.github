@@ -1,5 +1,5 @@
 <?php /** @var array $old @var string $next @var string|null $error */ ?>
-<h1 class="auth-title">ورود به تجارتخانه</h1>
+<h1 class="auth-title">ورود به سامانه توسعه تجارت</h1>
 <p class="auth-lead">به مرکز تجارت جهانی آراد خوش آمدید</p>
 <?php if ($error): ?><div class="auth-alert" role="alert" id="login-error"><?= e($error) ?></div><?php endif; ?>
 <form class="auth-form" method="post" action="/login" novalidate data-auth-form>
@@ -23,7 +23,7 @@
     </button>
   </label>
   <label class="auth-check"><input type="checkbox" name="remember" value="1" checked><span class="auth-box" aria-hidden="true"></span>مرا به خاطر بسپار</label>
-  <button class="auth-submit" type="submit" data-busy="در حال ورود…"><span>ورود به تجارتخانه</span><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-arrow"/></svg></button>
+  <button class="auth-submit" type="submit" data-busy="در حال ورود…"><span>ورود به سامانه</span><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-arrow"/></svg></button>
 </form>
 <div class="auth-sep"><span>حساب کاربری ندارید؟</span></div>
-<a class="auth-outline" href="/register"><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg>ثبت‌نام کنید</a>
+<a class="auth-outline" href="/register"><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg>عضویت در سامانه</a>

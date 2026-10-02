@@ -86,7 +86,7 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
 };
 ?>
 <!doctype html>
-<html lang="fa" dir="rtl" data-default-theme="light">
+<html lang="fa" dir="rtl" data-default-theme="system">
 <head>
 <?= $this->partial('partials/head') ?>
 <link rel="stylesheet" href="<?= e(asset('panel-theme.css')) ?>">
@@ -134,7 +134,7 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
             <a class="notif-all" href="/notifications">همه اعلان‌ها</a>
           </div>
         </details>
-        <button class="icon-btn theme-btn" type="button" data-theme-toggle aria-label="تغییر حالت روشن و تاریک"><svg class="icon"><use href="#i-theme"/></svg></button>
+        <button class="icon-btn theme-btn" type="button" data-theme-cycle aria-label="حالت نمایش: خودکار (مطابق دستگاه)" title="حالت نمایش: خودکار (مطابق دستگاه)"><svg class="icon"><use href="#i-theme"/></svg><i class="theme-auto" aria-hidden="true">A</i></button>
         <details class="profile">
           <summary aria-label="منوی حساب کاربری">
             <?= $avatar('avatar') ?>

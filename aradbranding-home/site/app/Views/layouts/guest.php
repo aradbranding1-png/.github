@@ -67,11 +67,6 @@ $cards = [
 
 <footer class="auth-foot">
   <p class="auth-slogan"><span>تجارت جهانی،</span><b>یک قدم نزدیک‌تر</b></p>
-  <nav class="auth-links" aria-label="بخش‌های سامانه">
-    <a href="/discover"><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-globe"/></svg>بازارهای هدف</a>
-    <a href="/proposals"><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-chart"/></svg>فرصت‌های تجاری</a>
-    <a href="/connections"><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-people"/></svg>شبکه تجاری</a>
-  </nav>
 </footer>
 </body>
 </html>

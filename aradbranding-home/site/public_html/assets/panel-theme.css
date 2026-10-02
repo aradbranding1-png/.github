@@ -564,3 +564,7 @@ html.drawer-open .bottom-nav, html.drawer-open .fab { display: none; }
   .ad-row-bottom { grid-template-columns: minmax(0, 2.3fr) minmax(0, 1fr); }
   .ad-quick { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); }
 }
+/* Theme button: small "A" badge while the panel follows the device */
+.theme-btn { position: relative; }
+.theme-auto { position: absolute; bottom: 3px; inset-inline-end: 3px; display: none; width: 14px; height: 14px; border-radius: 5px; place-items: center; font-style: normal; font-size: 9px; font-weight: 900; line-height: 1; color: #102039; background: var(--foil); }
+:root[data-theme-mode="system"] .theme-auto { display: grid; }

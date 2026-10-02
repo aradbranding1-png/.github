@@ -565,3 +565,6 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
 .th-seg label:hover span { color: var(--th-ink); background: rgba(255, 255, 255, .04); }
 .th-seg input:checked + span { color: var(--th-gold-ink); background: var(--th-foil); box-shadow: 0 6px 18px -6px rgba(245, 198, 93, .55), inset 0 1px 0 rgba(255, 255, 255, .55); }
 .th-seg input:focus-visible + span { outline: 2px solid var(--th-gold); outline-offset: 2px; }
+/* The country list never grows wider than its field (no sideways overflow on phones). */
+.th .ss-panel { min-width: 0; width: 100%; max-width: calc(100vw - 24px); }
+.th .ss-list li { white-space: normal; overflow-wrap: anywhere; }

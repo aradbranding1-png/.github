@@ -75,4 +75,27 @@
       requestAnimationFrame(step);
     });
   }
+
+  // Theme button: automatic (device) → light → dark → automatic…
+  var labels = { system: 'خودکار (مطابق دستگاه)', light: 'روشن', dark: 'تیره' };
+  var root = document.documentElement;
+  var themeBtn = document.querySelector('[data-theme-cycle]');
+  var paintBtn = function () {
+    if (!themeBtn) return;
+    var m = root.getAttribute('data-theme-mode') || 'system';
+    themeBtn.setAttribute('aria-label', 'حالت نمایش: ' + labels[m]);
+    themeBtn.setAttribute('title', 'حالت نمایش: ' + labels[m]);
+  };
+  if (themeBtn) {
+    paintBtn();
+    themeBtn.addEventListener('click', function () {
+      var order = ['system', 'light', 'dark'];
+      var next = order[(order.indexOf(root.getAttribute('data-theme-mode') || 'system') + 1) % 3];
+      root.setAttribute('data-theme-mode', next);
+      var sys = window.__sadtSystemTheme ? window.__sadtSystemTheme() : 'light';
+      root.setAttribute('data-theme', next === 'system' ? sys : next);
+      try { if (next === 'system') localStorage.removeItem('sadt-theme-mode'); else localStorage.setItem('sadt-theme-mode', next); } catch (e) {}
+      paintBtn();
+    });
+  }
 })();
