@@ -39,6 +39,15 @@ $marketNote = static function (string $code) use ($marketStat): string {
 };
 $cardMarkets = array_values(array_filter($markets, static fn (array $m): bool => $m['card']));
 $globeMarkets = array_values(array_filter($markets, static fn (array $m): bool => $m['globe']));
+// Every country reached by a route drawn on the globe also gets a flag card (unless the admin already listed it).
+$routeCountries = [
+    ['IQ', 'عراق', 33.0, 43.5, 'مسیر زمینی از ایران'], ['AF', 'افغانستان', 34.0, 66.0, 'مسیر زمینی از ایران'],
+    ['KE', 'کنیا', 0.3, 37.9, 'دریایی + زمینی از ایران'], ['TZ', 'تانزانیا', -6.4, 34.9, 'دریایی + زمینی از ایران'],
+    ['ZA', 'آفریقای جنوبی', -28.5, 25.5, 'دریایی + زمینی از ایران'], ['NG', 'نیجریه', 9.1, 8.7, 'دریایی + زمینی از ایران'],
+    ['US', 'آمریکا', 39.5, -98.0, 'مسیر دریایی از آفریقا'], ['CA', 'کانادا', 56.0, -106.0, 'مسیر دریایی از آفریقا'],
+];
+$listed = array_column($globeMarkets, 'code');
+$routeCards = array_values(array_filter($routeCountries, static fn (array $c): bool => !in_array($c[0], $listed, true)));
 
 // Stats strip: real cached totals when the admin switches them on, otherwise the admin's fixed facts.
 $strip = [];
@@ -88,7 +97,7 @@ if ($show['faq'] && $faq !== []) {
 }
 $desc = 'شبکه بین‌المللی تجار و فعالان اقتصادی: صفحه تجاری چندزبانه بسازید، فرصت‌های تجاری را کشف کنید و مستقیم با تجار کشورهای مختلف ارتباط بگیرید. عضویت رایگان است.';
 $flagUse = static fn (string $code): string => '<svg class="th-flag" viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-' . e($code) . '"/></svg>';
-$flagOf = static fn (string $code): string => in_array($code, ['CN', 'IN', 'AE', 'TR', 'DE', 'RU', 'BR', 'IR'], true)
+$flagOf = static fn (string $code): string => in_array($code, ['CN', 'IN', 'AE', 'TR', 'DE', 'RU', 'BR', 'IR', 'IQ', 'AF', 'KE', 'TZ', 'ZA', 'NG', 'US', 'CA'], true)
     ? $flagUse($code) : '<span class="th-flag th-flag-emoji" aria-hidden="true">' . flag($code) . '</span>';
 $icon = static fn (string $id, string $cls = 'th-ic'): string => '<svg class="' . e($cls) . '" viewBox="0 0 24 24" aria-hidden="true"><use href="#' . e($id) . '"/></svg>';
 $live = static fn (string $text): string => strtr(e($text), [
@@ -175,6 +184,12 @@ $h = $home['hero'];
       <a class="tg-card<?= $m['secondary'] ? ' is-secondary' : '' ?>" href="<?= e($marketHref($m['code'])) ?>" data-lat="<?= e($m['lat']) ?>" data-lon="<?= e($m['lon']) ?>" data-name="<?= e($m['name']) ?>" data-note="<?= e($marketNote($m['code'])) ?>">
         <?= $flagOf($m['code']) ?>
         <span class="tg-card-t"><b><?= e($m['name']) ?></b><small><?= e($marketNote($m['code'])) ?></small></span>
+      </a>
+      <?php endforeach; ?>
+      <?php foreach ($routeCards as [$code, $name, $lat, $lon, $note]): ?>
+      <a class="tg-card is-secondary is-route" href="<?= e($marketHref($code)) ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= e($note) ?>">
+        <?= $flagOf($code) ?>
+        <span class="tg-card-t"><b><?= e($name) ?></b><small><?= e($note) ?></small></span>
       </a>
       <?php endforeach; ?>
     </div>
