@@ -29,9 +29,9 @@ $err = static fn (string $k): string => isset($errors[$k]) ? '<div class="error"
       <input type="hidden" name="token" value="<?= e($token) ?>">
       <div class="field<?= isset($errors['subject']) ? ' has-error' : '' ?>"><label for="f-subject">موضوع</label><input class="input" id="f-subject" name="subject" maxlength="150" value="<?= e($old['subject'] ?? '') ?>" required><?= $err('subject') ?></div>
       <div class="field<?= isset($errors['body']) ? ' has-error' : '' ?>"><label for="f-body">متن نامه</label><textarea class="textarea" id="f-body" name="body" rows="8" maxlength="10000" required><?= e($old['body'] ?? '') ?></textarea><?= $err('body') ?></div>
+      <?php if (!$enough): ?><?= $this->partial('partials/stars_short', ['need' => (int) $price - $balance, 'buyHref' => !empty($buyEnabled) ? '/wallet?need=' . ((int) $price - $balance) . '&next=' . rawurlencode('/letters/new?to=' . $recipient['handle']) : null]) ?><?php endif; ?>
       <div class="form-actions">
-        <?php if ($enough): ?><button class="btn" type="submit"><svg class="icon"><use href="#i-send"/></svg>ارسال با <?= fa_int((int) $price) ?> Star</button>
-        <?php elseif (!empty($buyEnabled)): ?><a class="btn" href="/wallet?need=<?= e((int) $price - $balance) ?>&amp;next=<?= e(rawurlencode('/letters/new?to=' . $recipient['handle'])) ?>">خرید Stars</a><?php endif; ?>
+        <button class="btn" type="submit"<?= $enough ? '' : ' disabled aria-disabled="true"' ?>><svg class="icon"><use href="#i-send"/></svg>ارسال با <?= fa_int((int) $price) ?> Star</button>
         <span class="muted">موجودی: <?= fa_int($balance) ?> Star · پاسخ‌ها رایگان است</span>
       </div>
     </form>

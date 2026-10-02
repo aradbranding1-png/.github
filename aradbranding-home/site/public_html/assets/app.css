@@ -928,3 +928,11 @@ main.content > * { animation: rise .32s var(--ease) both; }
   text-align: justify; text-justify: inter-word;
 }
 .pub .pub-list li { max-width: 100%; }
+
+/* 1.15.7: "not enough Stars" notice next to a disabled send button */
+.stars-short { display: flex; align-items: flex-start; gap: 12px; margin: 12px 0; padding: 14px 16px; border-radius: 16px; border: 1px solid rgba(243, 198, 91, .5); background: linear-gradient(180deg, rgba(243, 198, 91, .14), rgba(243, 198, 91, .06)); color: var(--ink, #EAF1FA); text-align: start; line-height: 1.9; }
+.stars-short-ic { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 12px; background: rgba(243, 198, 91, .2); font-size: 18px; }
+.stars-short b { display: block; font-size: 14px; font-weight: 900; }
+.stars-short span { display: block; font-size: 13px; opacity: .9; }
+.stars-short .btn { margin-top: 8px; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; filter: grayscale(.35); box-shadow: none; }

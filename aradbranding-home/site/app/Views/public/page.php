@@ -48,10 +48,8 @@ $countryName = $page['lang_code'] === 'fa' ? $page['country_fa'] : $page['countr
             <input type="hidden" name="token" value="<?= e($unlock['token']) ?>">
             <button class="btn" type="submit"><span aria-hidden="true">⭐</span> <?= e(str_replace(':n', (string) $unlock['price'], $labels['unlock_btn'])) ?></button>
           </form>
-        <?php elseif (!empty($buyEnabled)): ?>
-          <div class="form-actions form-actions-center">
-            <a class="btn" href="/wallet?need=<?= e($unlock['price'] - $unlock['balance']) ?>&amp;next=<?= e(rawurlencode($unlock['action'] === '' ? '/' : substr($unlock['action'], 0, -7))) ?>"><?= e($labels['buy']) ?></a>
-          </div>
+        <?php else: ?>
+          <?= $this->partial('partials/stars_short', ['need' => $unlock['price'] - $unlock['balance'], 'buyHref' => !empty($buyEnabled) ? '/wallet?need=' . ($unlock['price'] - $unlock['balance']) . '&next=' . rawurlencode($unlock['action'] === '' ? '/' : substr($unlock['action'], 0, -7)) : null]) ?>
         <?php endif; ?>
         <p class="pub-price-note"><?= e(str_replace(':n', (string) $unlock['balance'], $labels['balance'])) ?> · <?= e($unlock['domestic'] ? $labels['domestic'] : $labels['international']) ?></p>
       </section>

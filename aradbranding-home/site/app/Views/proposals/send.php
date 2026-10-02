@@ -28,12 +28,9 @@ $enough = $balance >= $price;
         <textarea class="textarea" id="f-message" name="message" maxlength="1000" rows="4"><?= e($old['message'] ?? '') ?></textarea>
         <?php if (isset($errors['message'])): ?><div class="error"><?= e($errors['message']) ?></div><?php endif; ?>
       </div>
+      <?php if (!$enough): ?><?= $this->partial('partials/stars_short', ['need' => $price - $balance, 'buyHref' => !empty($buyEnabled) ? '/wallet?need=' . ($price - $balance) . '&next=' . rawurlencode('/proposals/send?to=' . $recipient['handle']) : null]) ?><?php endif; ?>
       <div class="form-actions">
-        <?php if ($enough): ?>
-          <button class="btn" type="submit"><svg class="icon"><use href="#i-send"/></svg>ارسال با <?= fa_int($price) ?> Star</button>
-        <?php elseif (!empty($buyEnabled)): ?>
-          <a class="btn" href="/wallet?need=<?= e($price - $balance) ?>&amp;next=<?= e(rawurlencode('/proposals/send?to=' . $recipient['handle'])) ?>">خرید Stars</a>
-        <?php endif; ?>
+        <button class="btn" type="submit"<?= $enough ? '' : ' disabled aria-disabled="true"' ?>><svg class="icon"><use href="#i-send"/></svg>ارسال با <?= fa_int($price) ?> Star</button>
         <span class="muted">موجودی: <?= fa_int($balance) ?> Star</span>
       </div>
     </form>

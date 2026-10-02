@@ -33,8 +33,9 @@ $kindLabel = CampaignService::KINDS[(int) ($campaign['kind'] ?? 2)]['label'] ?? 
         <button class="btn" type="submit"><svg class="icon"><use href="#i-send"/></svg>تأیید و ارسال برای <?= fa_int($total) ?> نفر</button>
         <a class="btn btn-quiet" href="/letters/send">ویرایش</a>
       </form>
-    <?php elseif (!empty($buyEnabled)): ?>
-      <div class="form-actions"><a class="btn" href="/wallet?need=<?= e($cost - $balance) ?>&amp;next=<?= e(rawurlencode('/letters/public/' . $campaign['uid'])) ?>">خرید Stars</a></div>
+    <?php else: ?>
+      <div class="form-actions"><button class="btn" type="button" disabled aria-disabled="true"><svg class="icon"><use href="#i-send"/></svg>تأیید و ارسال برای <?= fa_int($total) ?> نفر</button><a class="btn btn-quiet" href="/letters/send">ویرایش</a></div>
+      <?= $this->partial('partials/stars_short', ['need' => $cost - $balance, 'buyHref' => !empty($buyEnabled) ? '/wallet?need=' . ($cost - $balance) . '&next=' . rawurlencode('/letters/public/' . $campaign['uid']) : null]) ?>
     <?php endif; ?>
   <?php else: ?>
     <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $pct ?>"><span class="progress-<?= (int) round($pct / 5) * 5 ?>"></span></div>

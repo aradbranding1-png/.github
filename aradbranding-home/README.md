@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.6)
+# aradbranding.app — Home page redesign (v1.15.7)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -184,3 +184,10 @@ Other changes:
 - `dist/aradbranding-1.15.6-update.zip` (install it on top of 1.15.5):
   - `public_html/assets/app.js`: an install prompt on touch devices that are not running the installed app. It uses `beforeinstallprompt` where available and shows iOS/Android instructions otherwise. Snoozes are stored in localStorage (`sadt-install-snooze`).
   - `public_html/assets/app.css`: the popup styles, plus justified text in every box of the business page.
+
+## v1.15.7 (incremental package)
+
+`dist/aradbranding-1.15.7-update.zip` contains the following; install it on top of 1.15.6.
+- New `partials/stars_short.php`.
+- `letters/compose.php`, `letters/campaign.php`, `proposals/send.php` and `public/page.php`: when the balance is short, the send button is disabled and the notice explains the shortfall.
+- `app.css`: notice and disabled-button styles.
