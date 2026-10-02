@@ -49,7 +49,7 @@ $cards = [
 
 <header class="auth-top">
   <a class="auth-brand" href="/" aria-label="سامانه توسعه تجارت · صفحه اصلی">
-    <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=2" alt="" width="48" height="48" decoding="async"></span>
+    <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=3" alt="" width="48" height="48" decoding="async"></span>
     <span class="th-brand-name">سامانه توسعه تجارت<small>شبکه بین‌المللی تجار</small></span>
   </a>
   <a class="auth-back" href="/">بازگشت به سایت<svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-arrow"/></svg></a>
@@ -58,7 +58,7 @@ $cards = [
 <main class="auth-main">
   <div class="auth-card" id="auth-card">
     <div class="auth-card-brand">
-      <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=2" alt="" width="48" height="48" decoding="async"></span>
+      <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=3" alt="" width="48" height="48" decoding="async"></span>
       <span class="th-brand-name">سامانه توسعه تجارت<small>شبکه بین‌المللی تجار</small></span>
     </div>
     <?= $this->partial('partials/flash', ['flashes' => $flashes ?? []]) ?>

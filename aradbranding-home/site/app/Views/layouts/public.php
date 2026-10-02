@@ -38,7 +38,7 @@ if ($page['avatar_path']) { $schema['logo'] = $baseUrl . media($page['avatar_pat
 <?= $this->partial('partials/icons') ?>
 <header class="pub-top">
   <a class="brand" href="/" dir="rtl" lang="fa">
-    <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=2" alt="" width="48" height="48" decoding="async"></span>
+    <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=3" alt="" width="48" height="48" decoding="async"></span>
     <span class="brand-name">سامانه توسعه تجارت</span>
   </a>
   <div class="form-actions">

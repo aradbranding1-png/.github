@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.11)
+# aradbranding.app — Home page redesign (v1.15.12)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -221,3 +221,8 @@ Other changes:
 ## v1.15.11 (incremental package)
 
 `dist/aradbranding-1.15.11-update.zip` should be installed on top of 1.15.10. It makes the sidebar brand name white (`panel-theme.css`).
+
+## v1.15.12 (incremental package)
+
+`dist/aradbranding-1.15.12-update.zip` replaces the logo with the gold logo (source: `brand-src/logo-gold.png`) and makes the sidebar brand name gold. Install it on top of 1.15.11.
+- Cache-busting bumps: `logo-192.webp?v=3`, the icons/manifest `?v=4`, and service-worker cache `sadt-v4`.
