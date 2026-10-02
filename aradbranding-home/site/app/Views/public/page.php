@@ -76,10 +76,10 @@ $countryName = $page['lang_code'] === 'fa' ? $page['country_fa'] : $page['countr
         </section>
       <?php endif; endforeach; ?>
       <?php if ($viewer && !$isOwner): ?>
-        <section class="pub-section span pub-reach" lang="fa" dir="rtl">
+        <section class="pub-section span pub-reach">
           <h2><?= e($labels['contact']) ?></h2>
           <p class="muted"><?= e($labels['contact_note']) ?></p>
-          <div class="form-actions">
+          <div class="form-actions" lang="fa" dir="rtl">
             <a class="btn btn-sm" href="/letters/new?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-letter"/></svg>ارسال نامه</a>
             <a class="btn btn-ghost btn-sm" href="/proposals/send?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-send"/></svg>ارسال پیشنهاد تجاری</a>
           </div>

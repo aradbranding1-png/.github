@@ -894,3 +894,8 @@ main.content > * { animation: rise .32s var(--ease) both; }
 /* 1.15: proposal photos are shown in place only (no link, no new tab). */
 .gallery .gallery-item { display: block; break-inside: avoid; margin-bottom: 10px; }
 .gallery img { pointer-events: none; -webkit-user-drag: none; user-select: none; }
+
+/* 1.15.5: business page text is justified (both edges aligned); short labels and chips are left as they are. */
+.pub .pub-teaser, .pub .prose, .pub .prose p, .pub .pub-section > p, .pub .pub-locked p, .pub .pub-reach p {
+  text-align: justify; text-justify: inter-word; hyphens: auto;
+}
