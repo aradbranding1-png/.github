@@ -22,7 +22,7 @@ $paid = $publishFee > 0
 $fill = static fn (string $t): string => HomeContent::fill($t, $paid);
 $faq = array_map(static fn (array $f): array => [$f['q'], $fill($f['a'])], $home['faq']);
 
-$hasSky = ['CN' => true, 'IN' => true, 'AE' => true, 'TR' => true];
+$hasSky = ['CN' => true, 'IN' => true, 'AE' => true, 'TR' => true, 'DE' => true, 'RU' => true, 'IQ' => true];
 $markets = array_values(array_filter($home['markets'], static fn (array $m): bool => $m['code'] !== ''));
 $marketHref = static fn (string $code): string => isset($countryIds[$code]) ? '/discover/country/' . $countryIds[$code] : '/discover';
 $marketStat = static function (string $code) use ($countryIds, $countryStats): ?array {
@@ -45,6 +45,7 @@ $routeCountries = [
     ['KE', 'کنیا', 0.3, 37.9, 'دریایی + زمینی از ایران'], ['TZ', 'تانزانیا', -6.4, 34.9, 'دریایی + زمینی از ایران'],
     ['ZA', 'آفریقای جنوبی', -28.5, 25.5, 'دریایی + زمینی از ایران'], ['NG', 'نیجریه', 9.1, 8.7, 'دریایی + زمینی از ایران'],
     ['US', 'آمریکا', 39.5, -98.0, 'مسیر دریایی از آفریقا'], ['CA', 'کانادا', 56.0, -106.0, 'مسیر دریایی از آفریقا'],
+    ['GB', 'بریتانیا', 53.5, -1.8, 'مسیر هوایی · لندن'], ['NL', 'هلند', 52.4, 5.6, 'بندر روتردام'],
 ];
 $listed = array_column($globeMarkets, 'code');
 $routeCards = array_values(array_filter($routeCountries, static fn (array $c): bool => !in_array($c[0], $listed, true)));
@@ -97,7 +98,7 @@ if ($show['faq'] && $faq !== []) {
 }
 $desc = 'شبکه بین‌المللی تجار و فعالان اقتصادی: صفحه تجاری چندزبانه بسازید، فرصت‌های تجاری را کشف کنید و مستقیم با تجار کشورهای مختلف ارتباط بگیرید. عضویت رایگان است.';
 $flagUse = static fn (string $code): string => '<svg class="th-flag" viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-' . e($code) . '"/></svg>';
-$flagOf = static fn (string $code): string => in_array($code, ['CN', 'IN', 'AE', 'TR', 'DE', 'RU', 'BR', 'IR', 'IQ', 'AF', 'KE', 'TZ', 'ZA', 'NG', 'US', 'CA'], true)
+$flagOf = static fn (string $code): string => in_array($code, ['CN', 'IN', 'AE', 'TR', 'DE', 'RU', 'BR', 'IR', 'IQ', 'AF', 'KE', 'TZ', 'ZA', 'NG', 'US', 'CA', 'GB', 'NL'], true)
     ? $flagUse($code) : '<span class="th-flag th-flag-emoji" aria-hidden="true">' . flag($code) . '</span>';
 $icon = static fn (string $id, string $cls = 'th-ic'): string => '<svg class="' . e($cls) . '" viewBox="0 0 24 24" aria-hidden="true"><use href="#' . e($id) . '"/></svg>';
 $live = static fn (string $text): string => strtr(e($text), [
@@ -187,7 +188,7 @@ $h = $home['hero'];
       </a>
       <?php endforeach; ?>
       <?php foreach ($routeCards as [$code, $name, $lat, $lon, $note]): ?>
-      <a class="tg-card is-secondary is-route" href="<?= e($marketHref($code)) ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= e($note) ?>">
+      <a class="tg-card is-secondary is-route" href="<?= e($marketHref($code)) ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= e($note) ?>"<?= in_array($code, ['GB', 'NL'], true) ? ' data-priority="0.5"' : '' ?>>
         <?= $flagOf($code) ?>
         <span class="tg-card-t"><b><?= e($name) ?></b><small><?= e($note) ?></small></span>
       </a>
@@ -198,7 +199,7 @@ $h = $home['hero'];
     </div>
 
     <div class="th-hero-in">
-      <div class="th-hero-copy">
+      <div class="th-hero-copy" data-tg-avoid>
         <?php if ($h['badge'] !== ''): ?><p class="th-badge"><?= $icon('m-globe') ?><?= e($h['badge']) ?></p><?php endif; ?>
         <h1 id="hero-title"><span class="th-h1-gold"><?= e($h['title']) ?></span><?php if ($h['subtitle'] !== ''): ?><span class="th-h1-sub"><?= e($h['subtitle']) ?></span><?php endif; ?></h1>
         <?php if ($h['lead'] !== ''): ?><p class="th-lead"><?= e($h['lead']) ?></p><?php endif; ?>
@@ -211,7 +212,7 @@ $h = $home['hero'];
     </div>
 
     <?php if ($show['rail'] && $home['rail'] !== []): ?>
-    <aside class="th-rail" aria-label="نمای زنده نقشه">
+    <aside class="th-rail" data-tg-avoid aria-label="نمای زنده نقشه">
       <?php foreach ($home['rail'] as $r): ?>
       <div class="th-rail-i"><?= $icon($r['icon']) ?><span><small><?= e($r['label']) ?></small><b><?= $live($r['value']) ?></b></span></div>
       <?php endforeach; ?>
@@ -270,7 +271,12 @@ $h = $home['hero'];
     <?php endif; ?>
 
     <?php if ($show['markets'] && $cardMarkets !== []): ?>
-    <div class="th-markets n-<?= min(4, count($cardMarkets)) ?>" aria-label="بازارهای هدف">
+    <div class="th-mk<?= count($cardMarkets) > 4 ? ' is-carousel' : '' ?>">
+    <?php if (count($cardMarkets) > 4): ?>
+    <button class="th-mk-nav th-mk-prev" type="button" data-mk="prev" aria-label="بازارهای قبلی"><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-arrow"/></svg></button>
+    <button class="th-mk-nav th-mk-next" type="button" data-mk="next" aria-label="بازارهای بعدی"><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-arrow"/></svg></button>
+    <?php endif; ?>
+    <div class="th-markets n-<?= min(4, count($cardMarkets)) ?>" aria-label="بازارهای هدف" tabindex="0">
       <?php foreach ($cardMarkets as $m): $s = $marketStat($m['code']); ?>
       <a class="th-market" href="<?= e($marketHref($m['code'])) ?>">
         <span class="th-market-art">
@@ -296,6 +302,7 @@ $h = $home['hero'];
         </span>
       </a>
       <?php endforeach; ?>
+    </div>
     </div>
     <?php endif; ?>
 

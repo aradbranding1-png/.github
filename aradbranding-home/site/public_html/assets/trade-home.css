@@ -585,3 +585,28 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
 .tg-card.is-route .tg-card-t small { font-size: 10px; }
 .tg-card.is-route .th-flag { width: 22px; height: 15px; }
 .tg-card.is-route::before { background: #16C784; box-shadow: 0 0 10px #16C784; }
+
+/* Market carousel (1.12.5): more than four markets scroll sideways with arrows, swipe or drag. */
+.th-mk { grid-area: markets; position: relative; min-width: 0; }
+.th-mk > .th-markets { grid-area: auto; }
+.th-mk.is-carousel > .th-markets { display: flex; gap: 12px; scroll-padding-inline: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; cursor: grab; }
+.th-mk.is-carousel > .th-markets::-webkit-scrollbar { display: none; }
+.th-mk.is-carousel > .th-markets.is-drag { cursor: grabbing; scroll-snap-type: none; scroll-behavior: auto; user-select: none; }
+.th-mk.is-carousel > .th-markets.is-drag .th-market { pointer-events: none; }
+.th-mk.is-carousel .th-market { flex: 0 0 calc((100% - 36px) / 4); scroll-snap-align: start; }
+.th-mk.is-carousel .th-market:hover { transform: translateY(-3px); }
+.th-mk-nav { position: absolute; z-index: 3; top: 92px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--th-line-gold); background: rgba(6, 18, 36, .92); color: var(--th-gold); cursor: pointer; box-shadow: 0 8px 22px rgba(0, 0, 0, .5); transition: opacity .25s, transform .25s, background .25s; }
+.th-mk-nav:hover { background: rgba(245, 198, 93, .16); transform: scale(1.08); }
+.th-mk-nav:focus-visible { outline: 2px solid var(--th-cyan, #39d0ff); outline-offset: 2px; }
+.th-mk-nav .th-ic { width: 16px; height: 16px; }
+.th-mk-prev { inset-inline-start: -10px; }
+.th-mk-prev .th-ic { transform: scaleX(-1); }
+.th-mk-next { inset-inline-end: -10px; }
+.th-mk-nav[disabled] { opacity: 0; pointer-events: none; }
+@media (max-width: 1200px) { .th-mk.is-carousel .th-market { flex-basis: calc((100% - 24px) / 3); } }
+@media (max-width: 860px) {
+  .th-mk.is-carousel .th-market { flex-basis: calc((100% - 12px) / 2.15); }
+  .th-mk.is-carousel > .th-markets { gap: 10px; cursor: auto; scroll-padding-inline: 10px; }
+  .th-mk-prev { inset-inline-start: -4px; } .th-mk-next { inset-inline-end: -4px; }
+}
+@media (max-width: 600px) { .th-mk.is-carousel .th-market { flex-basis: 62%; } .th-mk-nav { top: 78px; width: 30px; height: 30px; } }

@@ -732,7 +732,7 @@ function init(root) {
     hit.userData = { type: 'country', el };
     world.add(hit);
     hitTargets.push(hit);
-    return { el, local: p, w: 0, h: 0, hover: false, priority: el.classList.contains('is-secondary') ? 1 : 0 };
+    return { el, local: p, w: 0, h: 0, hover: false, priority: el.dataset.priority !== undefined ? +el.dataset.priority || 0 : el.classList.contains('is-secondary') ? 1 : 0 };
   });
   cards.forEach((c) => {
     c.el.addEventListener('pointerenter', () => { c.hover = true; c.el.classList.add('is-hot'); });
@@ -789,6 +789,19 @@ function init(root) {
     safeTop = num('--safe-top', 6);
   }
 
+  // Page elements the cards must not cover (the hero copy, the side rail), in stage coordinates.
+  let obstacles = [];
+  function readObstacles() {
+    const base = stage.getBoundingClientRect();
+    obstacles = [];
+    document.querySelectorAll('[data-tg-avoid] > *').forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      obstacles.push({ x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height });
+    });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => readObstacles());
+
   function resize() {
     const rect = stage.getBoundingClientRect();
     W = Math.max(1, Math.round(rect.width));
@@ -797,6 +810,7 @@ function init(root) {
     camera.aspect = W / H;
     readLayout();
     cards.forEach((c) => { c.w = c.el.offsetWidth; c.h = c.el.offsetHeight; });
+    readObstacles();
     if (svg) svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     placeCamera();
   }
@@ -1012,6 +1026,9 @@ function init(root) {
   const cScr = { x: 0, y: 0, f: 0 };
   const compact = () => W < 720;
 
+  // Candidate slots (in card widths/heights) tried in order when a card's preferred spot is taken.
+  const SLOTS = [[0, 0], [0, 1], [0, -1], [-1, 0], [1, 0], [-1, 1], [-1, -1], [1, 1], [1, -1], [0, 2], [0, -2], [-2, 0], [-2, 1]];
+
   function updateOverlays() {
     center.set(0, 0, 0).project(camera);
     cScr.x = (center.x * 0.5 + 0.5) * W;
@@ -1023,11 +1040,11 @@ function init(root) {
       const ranked = cards.map((c, i) => ({ i, f: project(c.local, scr).f - c.priority })).sort((a, b) => b.f - a.f);
       allowed = new Set(ranked.slice(0, 3).map((x) => x.i));
     }
+    // Pass 1: anchor and preferred box for every card.
     cards.forEach((c, i) => {
       project(c.local, scr);
       let o = MathUtils.smoothstep(scr.f, 0.12, 0.42);
       if (allowed && !allowed.has(i)) o = 0;
-      if (c.hover) o = Math.max(o, 0.95);
       let dx = scr.x - cScr.x;
       let dy = scr.y - cScr.y;
       const dl = Math.hypot(dx, dy) || 1;
@@ -1035,8 +1052,37 @@ function init(root) {
       const push = compact() ? 26 : 42 + (1 - Math.min(1, dl / r)) * 26;
       const cx = scr.x + dx * (push + c.w * 0.5) ;
       const cy = scr.y + dy * (push * 0.6 + c.h * 0.5) - (compact() ? 10 : 18);
-      const x = MathUtils.clamp(cx - c.w / 2, 6, W - c.w - 6);
-      const y = MathUtils.clamp(cy - c.h / 2, safeTop, H - c.h - 6);
+      c.sx = scr.x; c.sy = scr.y; c.f = scr.f; c.o = o;
+      c.px = MathUtils.clamp(cx - c.w / 2, 6, W - c.w - 6);
+      c.py = MathUtils.clamp(cy - c.h / 2, safeTop, H - c.h - 6);
+    });
+    // Pass 2: declutter. Primary cards first (then the best-facing); a card that collides slides up or down a
+    // row, and a secondary card with no free row fades out until the globe turns. Offsets and fades are eased.
+    const placed = obstacles.slice();
+    const hit = (x, y, w, h) => placed.some((q) => x < q.x + q.w + 4 && x + w + 4 > q.x && y < q.y + q.h + 4 && y + h + 4 > q.y);
+    cards.map((c) => c).sort((a, b) => (b.hover - a.hover) || (a.priority - b.priority) || (b.f - a.f)).forEach((c) => {
+      let off = 0, offX = 0, room = true;
+      if (c.o > 0.02 && c.w) {
+        const stepY = c.h + 6, stepX = c.w + 8;
+        room = false;
+        for (const [kx, ky] of SLOTS) {
+          const x = MathUtils.clamp(c.px + kx * stepX, 6, W - c.w - 6);
+          const y = MathUtils.clamp(c.py + ky * stepY, safeTop, H - c.h - 6);
+          if (!hit(x, y, c.w, c.h)) { offX = x - c.px; off = y - c.py; room = true; break; }
+        }
+        if (!room && !c.priority) room = true;
+        if (room) placed.push({ x: c.px + offX, y: c.py + off, w: c.w, h: c.h });
+      }
+      c.ox = c.ox === undefined ? offX : c.ox + (offX - c.ox) * 0.18;
+      c.oy = c.oy === undefined ? off : c.oy + (off - c.oy) * 0.18;
+      c.fade = c.fade === undefined ? (room ? 1 : 0) : c.fade + ((room ? 1 : 0) - c.fade) * 0.15;
+    });
+    cards.forEach((c, i) => {
+      let o = c.o * c.fade;
+      if (c.hover) o = Math.max(o, 0.95);
+      scr.x = c.sx; scr.y = c.sy;
+      const x = MathUtils.clamp(c.px + c.ox, 6, W - c.w - 6);
+      const y = MathUtils.clamp(c.py + c.oy, safeTop, H - c.h - 6);
       c.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${(0.9 + 0.1 * o).toFixed(3)})`;
       c.el.style.opacity = o.toFixed(3);
       c.el.style.visibility = o < 0.02 ? 'hidden' : 'visible';

@@ -59,4 +59,56 @@
     el.classList.add('th-reveal');
     seen.observe(el);
   });
+
+  // Market carousel: arrows step one card, mouse drag scrolls. RTL scrollLeft runs 0 → negative.
+  document.querySelectorAll('.th-mk.is-carousel').forEach(function (wrap) {
+    var row = wrap.querySelector('.th-markets');
+    var prev = wrap.querySelector('[data-mk="prev"]');
+    var next = wrap.querySelector('[data-mk="next"]');
+    if (!row) return;
+    var rtl = getComputedStyle(row).direction === 'rtl';
+    function step() {
+      var card = row.querySelector('.th-market');
+      return card ? card.getBoundingClientRect().width + 12 : row.clientWidth;
+    }
+    function sync() {
+      var max = row.scrollWidth - row.clientWidth;
+      var pos = Math.abs(row.scrollLeft);
+      if (prev) prev.disabled = pos <= 16;
+      if (next) next.disabled = pos >= max - 16;
+    }
+    function go(dir) { row.scrollBy({ left: (rtl ? -1 : 1) * dir * step(), behavior: 'smooth' }); }
+    if (prev) prev.addEventListener('click', function () { go(-1); });
+    if (next) next.addEventListener('click', function () { go(1); });
+    row.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(rtl ? 1 : -1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(rtl ? -1 : 1); }
+    });
+    row.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+    sync();
+
+    var down = false, moved = false, x0 = 0, s0 = 0;
+    row.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      down = true; moved = false; x0 = e.clientX; s0 = row.scrollLeft;
+    });
+    window.addEventListener('pointermove', function (e) {
+      if (!down) return;
+      var dx = e.clientX - x0;
+      if (!moved && Math.abs(dx) > 5) { moved = true; row.classList.add('is-drag'); }
+      if (moved) row.scrollLeft = s0 - dx;
+    });
+    window.addEventListener('pointerup', function () {
+      if (!down) return;
+      down = false;
+      if (moved) {
+        row.classList.remove('is-drag');
+        var w = step(), snapped = Math.round(row.scrollLeft / w) * w;
+        row.scrollTo({ left: snapped, behavior: 'smooth' });
+      }
+    });
+    row.addEventListener('click', function (e) { if (moved) { e.preventDefault(); moved = false; } }, true);
+    row.addEventListener('dragstart', function (e) { e.preventDefault(); });
+  });
 })();
