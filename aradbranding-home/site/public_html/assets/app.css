@@ -899,3 +899,32 @@ main.content > * { animation: rise .32s var(--ease) both; }
 .pub .pub-teaser, .pub .prose, .pub .prose p, .pub .pub-section > p, .pub .pub-locked p, .pub .pub-reach p {
   text-align: justify; text-justify: inter-word; hyphens: auto;
 }
+
+/* 1.15.6: small "install the app" popup on phones (built by app.js; never on the installed app itself). */
+.pwa-pop { position: fixed; z-index: 9999; inset-inline: 12px; bottom: calc(96px + env(safe-area-inset-bottom)); max-width: 380px; margin-inline: auto; padding: 16px 16px 14px; border-radius: 20px; direction: rtl; text-align: start;
+  background: linear-gradient(180deg, rgba(12, 30, 56, .98), rgba(6, 17, 34, .98)); color: #EAF1FA; border: 1px solid rgba(243, 198, 91, .45);
+  box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .04) inset, 0 0 30px rgba(243, 198, 91, .12);
+  font-size: 13px; line-height: 1.85; opacity: 0; transform: translateY(24px) scale(.97); transition: opacity .35s ease, transform .35s cubic-bezier(.2, .7, .2, 1); }
+.pwa-pop.is-in { opacity: 1; transform: none; }
+.pwa-pop::before { content: ""; position: absolute; inset: 0 18px auto; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #F3C65B, #25C7FF, transparent); }
+.pwa-x { position: absolute; top: 8px; inset-inline-end: 10px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .08); color: #C9D6E6; font-size: 18px; line-height: 1; cursor: pointer; }
+.pwa-head { display: flex; align-items: center; gap: 12px; padding-inline-end: 30px; }
+.pwa-head img { width: 44px; height: 44px; border-radius: 12px; flex: none; box-shadow: 0 6px 16px rgba(0, 0, 0, .4); }
+.pwa-head b { display: block; font-size: 14.5px; font-weight: 900; color: #fff; }
+.pwa-head small { display: block; color: #9DB1C7; font-size: 11.5px; }
+.pwa-text { margin: 10px 0 0; color: #C9D6E6; }
+.pwa-steps { margin: 10px 0 0; padding: 0 18px 0 0; color: #C9D6E6; }
+.pwa-steps li { margin: 2px 0; }
+.pwa-steps b, .pwa-text b { color: #FFD978; font-weight: 800; direction: ltr; unicode-bidi: isolate; }
+.pwa-ic { display: inline-grid; place-items: center; width: 22px; height: 22px; margin: 0 2px; vertical-align: -6px; border-radius: 7px; background: rgba(37, 199, 255, .14); color: #25C7FF; }
+.pwa-ic svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pwa-ic svg circle { fill: currentColor; stroke: none; }
+.pwa-actions { display: flex; gap: 8px; margin-top: 12px; }
+.pwa-btn { flex: 1; min-height: 40px; border: 0; border-radius: 12px; background: linear-gradient(180deg, #FFE39A, #F3C65B 45%, #E7B84B); color: #102039; font: inherit; font-weight: 900; cursor: pointer; box-shadow: 0 8px 20px -8px rgba(243, 198, 91, .7); }
+.pwa-later { min-height: 40px; padding: 0 16px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 12px; background: transparent; color: #C9D6E6; font: inherit; cursor: pointer; }
+@media (min-width: 900px) { .pwa-pop { bottom: 24px; inset-inline: auto 24px; } }
+/* …and every box below it: products, services, markets, locked/contact notes. Long list items wrap inside their chip. */
+.pub .pub-section p, .pub .pub-section li, .pub .pub-section .prose, .pub .pub-section .muted, .pub .pub-body p {
+  text-align: justify; text-justify: inter-word;
+}
+.pub .pub-list li { max-width: 100%; }

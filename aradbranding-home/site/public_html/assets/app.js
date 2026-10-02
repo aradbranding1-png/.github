@@ -313,6 +313,78 @@
     window.addEventListener('load', function () { navigator.serviceWorker.register('/service-worker.js').catch(function () {}); });
   }
 
+  // PWA install prompt for phones and tablets that have not installed the app yet.
+  // Android/Chrome-like browsers: a real «نصب» button (beforeinstallprompt). iPhone/iPad Safari: how to add it
+  // from the Share menu. Other in-app browsers: open the site in Safari/Chrome first. "بعداً" hides it for 3 days.
+  (function () {
+    var KEY = 'sadt-install-snooze';
+    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+    var touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (standalone || !touch || /^\/(login|register|install)/.test(location.pathname)) return;
+    try { if (Date.now() < +(localStorage.getItem(KEY) || 0)) return; } catch (e) {}
+    var ua = navigator.userAgent || '';
+    var ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var iosSafari = ios && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|Instagram|FBAN|FBAV|Telegram/.test(ua);
+    var deferred = null;
+    var box = null;
+    var share = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>';
+    var plus = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg>';
+    var dots = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>';
+
+    function snooze(days) { try { localStorage.setItem(KEY, String(Date.now() + days * 864e5)); } catch (e) {} }
+    function close(days) {
+      if (!box) return;
+      snooze(days);
+      box.classList.remove('is-in');
+      setTimeout(function () { if (box && box.parentNode) box.parentNode.removeChild(box); box = null; }, 350);
+    }
+    function render() {
+      if (box) return;
+      var steps;
+      if (deferred) {
+        steps = '<p class="pwa-text">با نصب، سامانه مثل یک اپلیکیشن روی صفحه اصلی گوشی شما قرار می‌گیرد؛ سریع‌تر باز می‌شود و نامه‌ها و پیشنهادها همیشه در دسترس‌اند.</p>';
+      } else if (iosSafari) {
+        steps = '<ol class="pwa-steps"><li>در پایین سافاری دکمه اشتراک‌گذاری <span class="pwa-ic">' + share + '</span> را بزنید.</li>' +
+          '<li>گزینه <b>Add to Home Screen</b> <span class="pwa-ic">' + plus + '</span> را انتخاب کنید.</li><li>در بالا روی <b>Add</b> بزنید.</li></ol>';
+      } else if (ios) {
+        steps = '<p class="pwa-text">برای نصب، همین صفحه را در <b>Safari</b> باز کنید، سپس از دکمه اشتراک‌گذاری <span class="pwa-ic">' + share + '</span> گزینه <b>Add to Home Screen</b> را بزنید.</p>';
+      } else {
+        steps = '<ol class="pwa-steps"><li>منوی مرورگر <span class="pwa-ic">' + dots + '</span> را باز کنید.</li>' +
+          '<li>گزینه <b>نصب برنامه</b> یا <b>Add to Home screen</b> را بزنید.</li></ol>';
+      }
+      box = document.createElement('div');
+      box.className = 'pwa-pop';
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-label', 'نصب اپلیکیشن سامانه توسعه تجارت');
+      box.innerHTML = '<button class="pwa-x" type="button" aria-label="بستن">×</button>' +
+        '<div class="pwa-head"><img src="/assets/brand/logo-192.webp?v=1" alt="" width="44" height="44"><div><b>اپلیکیشن سامانه توسعه تجارت</b><small>نصب رایگان، بدون نیاز به فروشگاه برنامه</small></div></div>' +
+        steps +
+        '<div class="pwa-actions">' + (deferred ? '<button class="pwa-btn" type="button" data-pwa="install">نصب اپلیکیشن</button>' : '<button class="pwa-btn" type="button" data-pwa="ok">متوجه شدم</button>') +
+        '<button class="pwa-later" type="button" data-pwa="later">بعداً</button></div>';
+      document.body.appendChild(box);
+      box.querySelector('.pwa-x').addEventListener('click', function () { close(3); });
+      box.querySelector('[data-pwa="later"]').addEventListener('click', function () { close(3); });
+      var ok = box.querySelector('[data-pwa="ok"]');
+      if (ok) ok.addEventListener('click', function () { close(14); });
+      var inst = box.querySelector('[data-pwa="install"]');
+      if (inst) inst.addEventListener('click', function () {
+        var ev = deferred; deferred = null;
+        ev.prompt();
+        (ev.userChoice || Promise.resolve({})).then(function (r) { close(r && r.outcome === 'accepted' ? 365 : 3); });
+      });
+      requestAnimationFrame(function () { requestAnimationFrame(function () { if (box) box.classList.add('is-in'); }); });
+    }
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferred = e;
+      if (box) { box.parentNode.removeChild(box); box = null; }
+      setTimeout(render, 1500);
+    });
+    window.addEventListener('appinstalled', function () { close(365); });
+    // Without the browser event (iPhone, Firefox, Samsung Internet…) show the how-to after a short delay.
+    setTimeout(function () { if (!deferred) render(); }, 6000);
+  })();
+
   // Close the floating action sheet on outside click / Escape
   var fab = document.querySelector('details.fab');
   if (fab) {
