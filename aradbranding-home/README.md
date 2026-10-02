@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.12.5)
+# aradbranding.app — Home page redesign (v1.12.6)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth, database schema or other public pages were changed. v1.10.1 adds 
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.12.5.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.12.6.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -92,3 +92,7 @@ Earth textures are from the three.js examples (NASA Blue Marble / Black Marble d
 
 - Home globe: GB (London) and NL (Rotterdam) flag cards. Card declutter in `globe.js`: cards that collide (with each other or with `[data-tg-avoid]` page elements — the hero copy and side rail) move to a free slot; secondary cards with no free slot fade until the globe turns; `data-priority` overrides a card's rank.
 - Target markets: a horizontal carousel (`.th-mk.is-carousel`) when more than four markets are listed — arrows, mouse drag, touch swipe and arrow keys; new default market cards DE, RU and IQ with skylines `sky-DE`, `sky-RU`, `sky-IQ`. Sites that already saved home content in the admin keep their own list: tick «نمایش در بخش بازارها» for the markets to add.
+
+## v1.12.6
+
+- Default opportunity «زعفران» now targets Spain (`flag-ES`). New default market cards ZA, KE, NG, US, CA and BR with skylines `sky-ZA`, `sky-KE`, `sky-NG`, `sky-US`, `sky-CA`, `sky-BR`; `LISTS['markets']` raised to 16. Saved admin content keeps its own lists (edit them in `/admin/home`).

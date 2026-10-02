@@ -30,7 +30,7 @@ final class HomeContent
     ];
     /** Lists and their maximum number of rows. */
     public const LISTS = [
-        'nav' => 10, 'rail' => 6, 'stats_live' => 4, 'stats_static' => 4, 'markets' => 12, 'opps' => 8, 'modules' => 8,
+        'nav' => 10, 'rail' => 6, 'stats_live' => 4, 'stats_static' => 4, 'markets' => 16, 'opps' => 8, 'modules' => 8,
         'steps' => 6, 'features' => 8, 'stars_items' => 6, 'faq' => 12,
     ];
     /** Text fields that may be long. */
@@ -114,11 +114,16 @@ final class HomeContent
                 ['code' => 'DE', 'name' => 'آلمان', 'lat' => 51.0, 'lon' => 10.3, 'globe' => true, 'card' => true, 'secondary' => true, 'port' => 'هامبورگ', 'currency' => 'یورو (EUR)', 'timezone' => 'UTC+1', 'image' => ''],
                 ['code' => 'RU', 'name' => 'روسیه', 'lat' => 56.0, 'lon' => 40.0, 'globe' => true, 'card' => true, 'secondary' => true, 'port' => 'نووروسیسک', 'currency' => 'روبل (RUB)', 'timezone' => 'UTC+3', 'image' => ''],
                 ['code' => 'IQ', 'name' => 'عراق', 'lat' => 33.0, 'lon' => 43.5, 'globe' => true, 'card' => true, 'secondary' => true, 'port' => 'ام‌القصر (بصره)', 'currency' => 'دینار (IQD)', 'timezone' => 'UTC+3', 'image' => ''],
-                ['code' => 'BR', 'name' => 'برزیل', 'lat' => -11.0, 'lon' => -50.0, 'globe' => true, 'card' => false, 'secondary' => true, 'port' => 'سانتوس', 'currency' => 'رئال (BRL)', 'timezone' => 'UTC-3', 'image' => ''],
+                ['code' => 'ZA', 'name' => 'آفریقای جنوبی', 'lat' => -28.5, 'lon' => 25.5, 'globe' => true, 'card' => true, 'secondary' => true, 'port' => 'دوربان', 'currency' => 'رند (ZAR)', 'timezone' => 'UTC+2', 'image' => ''],
+                ['code' => 'KE', 'name' => 'کنیا', 'lat' => 0.3, 'lon' => 37.9, 'globe' => true, 'card' => true, 'secondary' => true, 'port' => 'مومباسا', 'currency' => 'شیلینگ کنیا (KES)', 'timezone' => 'UTC+3', 'image' => ''],
+                ['code' => 'NG', 'name' => 'نیجریه', 'lat' => 9.1, 'lon' => 8.7, 'globe' => true, 'card' => true, 'secondary' => true, 'port' => 'لاگوس (آپاپا)', 'currency' => 'نایرا (NGN)', 'timezone' => 'UTC+1', 'image' => ''],
+                ['code' => 'US', 'name' => 'آمریکا', 'lat' => 39.5, 'lon' => -98.0, 'globe' => true, 'card' => true, 'secondary' => true, 'port' => 'نیویورک', 'currency' => 'دلار (USD)', 'timezone' => 'UTC−5', 'image' => ''],
+                ['code' => 'CA', 'name' => 'کانادا', 'lat' => 56.0, 'lon' => -106.0, 'globe' => true, 'card' => true, 'secondary' => true, 'port' => 'ونکوور', 'currency' => 'دلار کانادا (CAD)', 'timezone' => 'UTC−8', 'image' => ''],
+                ['code' => 'BR', 'name' => 'برزیل', 'lat' => -11.0, 'lon' => -50.0, 'globe' => true, 'card' => true, 'secondary' => true, 'port' => 'سانتوس', 'currency' => 'رئال (BRL)', 'timezone' => 'UTC-3', 'image' => ''],
             ],
             'opps_head' => ['title' => 'فرصت‌های تجاری', 'subtitle' => 'جستجوی سریع در پیشنهادهای منتشرشده', 'link_label' => 'مشاهده همه', 'link_href' => '/proposals'],
             'opps' => [
-                ['product' => 'زعفران', 'code' => 'CN', 'market' => 'چین', 'tag' => 'کشاورزی', 'mode' => 'air', 'art' => 'prod-saffron', 'image' => ''],
+                ['product' => 'زعفران', 'code' => 'ES', 'market' => 'اسپانیا', 'tag' => 'کشاورزی', 'mode' => 'air', 'art' => 'prod-saffron', 'image' => ''],
                 ['product' => 'خرما', 'code' => 'RU', 'market' => 'روسیه', 'tag' => 'مواد غذایی', 'mode' => 'sea', 'art' => 'prod-dates', 'image' => ''],
                 ['product' => 'پسته', 'code' => 'IN', 'market' => 'هند', 'tag' => 'خشکبار', 'mode' => 'sea', 'art' => 'prod-pistachio', 'image' => ''],
                 ['product' => 'محصولات پتروشیمی', 'code' => 'TR', 'market' => 'ترکیه', 'tag' => 'صنعتی', 'mode' => 'sea', 'art' => 'prod-petro', 'image' => ''],

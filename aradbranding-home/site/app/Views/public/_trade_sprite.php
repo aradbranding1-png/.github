@@ -65,6 +65,7 @@ $palette = ['#C99A3E', '#1E7FC4', '#A8383A', '#D9DEE6', '#2D7A5A', '#D0702E', '#
   <symbol id="flag-CA" viewBox="0 0 30 20"><rect width="30" height="20" fill="#fff"/><rect width="7.5" height="20" fill="#D52B1E"/><rect x="22.5" width="7.5" height="20" fill="#D52B1E"/><path d="M15 4.2l1 2 1.8-.6-.6 3 1.6-.8.4 1-2 .9.4 1.3-2-.4V14h-1.2v-3.4l-2 .4.4-1.3-2-.9.4-1 1.6.8-.6-3 1.8.6z" fill="#D52B1E"/></symbol>
   <symbol id="flag-GB" viewBox="0 0 30 20"><rect width="30" height="20" fill="#012169"/><path d="M0 0l30 20M30 0L0 20" stroke="#fff" stroke-width="4"/><path d="M0 0l30 20M30 0L0 20" stroke="#C8102E" stroke-width="1.6"/><path d="M15 0v20M0 10h30" stroke="#fff" stroke-width="6"/><path d="M15 0v20M0 10h30" stroke="#C8102E" stroke-width="3.4"/></symbol>
   <symbol id="flag-NL" viewBox="0 0 30 20"><rect width="30" height="6.67" fill="#AE1C28"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#21468B"/></symbol>
+  <symbol id="flag-ES" viewBox="0 0 30 20"><rect width="30" height="20" fill="#AA151B"/><rect y="5" width="30" height="10" fill="#F1BF00"/><rect x="7" y="7.6" width="3.4" height="4.8" rx=".6" fill="#AA151B"/></symbol>
   <symbol id="flag-IR" viewBox="0 0 30 20"><rect width="30" height="6.67" fill="#239F40"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#DA0000"/><circle cx="15" cy="10" r="1.6" fill="none" stroke="#DA0000" stroke-width=".6"/></symbol>
 
   <!-- Market skylines (240×150) -->
@@ -162,6 +163,50 @@ $palette = ['#C99A3E', '#1E7FC4', '#A8383A', '#D9DEE6', '#2D7A5A', '#D0702E', '#
     <g fill="#FFD978" opacity=".85"><rect x="88" y="100" width="8" height="12"/><?= $windows(152, 226, 62, 116, 6, 35) ?></g>
     <rect y="120" width="240" height="30" fill="url(#tgs-water)"/>
     <g stroke="#F5C65D" stroke-width="1" opacity=".5"><path d="M70 126h40M80 133h20M170 130h24"/></g>
+  </symbol>
+  <symbol id="sky-US" viewBox="0 0 240 150">
+    <rect width="240" height="150" fill="url(#tgs-sky)"/><circle cx="200" cy="96" r="30" fill="url(#tgs-sun)"/>
+    <g fill="url(#tgs-bld)"><rect x="96" y="58" width="20" height="62"/><rect x="118" y="30" width="18" height="90"/><path d="M122 30l5-14 5 14z"/><rect x="126" y="6" width="1.6" height="12"/><rect x="138" y="66" width="22" height="54"/><rect x="162" y="50" width="16" height="70"/><rect x="180" y="78" width="26" height="42"/><rect x="208" y="70" width="32" height="50"/></g>
+    <g fill="#8fbfa8"><rect x="34" y="96" width="18" height="24"/><rect x="38" y="70" width="10" height="26"/><path d="M39 70l4-10 4 10z"/><rect x="47" y="44" width="3" height="20"/><circle cx="48.5" cy="42" r="3.4" fill="#F5C65D"/><path d="M38 64l-4-6M43 62v-7M48 64l4-6"/></g>
+    <g stroke="#8fbfa8" stroke-width="1.6"><path d="M40 62l-4-5M43 61v-6M46 62l4-5"/></g>
+    <g fill="#FFD978" opacity=".85"><?= $windows(98, 114, 62, 116) . $windows(120, 134, 36, 116) . $windows(164, 176, 56, 116) . $windows(210, 238, 74, 116, 6, 40) ?></g>
+    <rect y="120" width="240" height="30" fill="url(#tgs-water)"/>
+  </symbol>
+  <symbol id="sky-CA" viewBox="0 0 240 150">
+    <rect width="240" height="150" fill="url(#tgs-sky)"/><circle cx="50" cy="96" r="30" fill="url(#tgs-sun)"/>
+    <g fill="url(#tgs-bld)"><rect x="70" y="70" width="22" height="50"/><rect x="94" y="56" width="18" height="64"/><rect x="146" y="62" width="20" height="58"/><rect x="168" y="80" width="28" height="40"/><rect x="198" y="72" width="22" height="48"/><rect x="222" y="90" width="18" height="30"/><path d="M0 120l18-26 14 14 12-18 20 30z" opacity=".7"/></g>
+    <g fill="#c9d3e0"><path d="M126 120l2-70h4l2 70z"/><ellipse cx="130" cy="50" rx="9" ry="5"/><rect x="129" y="8" width="2" height="38"/><ellipse cx="130" cy="34" rx="3.4" ry="2"/></g>
+    <g fill="#FFD978" opacity=".85"><?= $windows(72, 90, 74, 116) . $windows(96, 110, 60, 116) . $windows(148, 164, 66, 116) . $windows(200, 218, 76, 116) ?></g>
+    <rect y="120" width="240" height="30" fill="url(#tgs-water)"/>
+  </symbol>
+  <symbol id="sky-BR" viewBox="0 0 240 150">
+    <rect width="240" height="150" fill="url(#tgs-sky)"/><circle cx="176" cy="92" r="30" fill="url(#tgs-sun)"/>
+    <path d="M0 120V96q20-30 46-40 22 8 30 64z" fill="#2c5a48"/><path d="M150 120q14-60 34-62 18 6 22 62z" fill="#2f604c"/>
+    <g fill="#d8dde6"><rect x="38" y="40" width="5" height="18"/><rect x="28" y="44" width="25" height="3.4"/><circle cx="40.5" cy="37" r="3"/></g>
+    <g fill="url(#tgs-bld)"><rect x="80" y="92" width="16" height="28"/><rect x="98" y="84" width="14" height="36"/><rect x="114" y="96" width="20" height="24"/><rect x="210" y="94" width="30" height="26"/></g>
+    <g fill="#FFD978" opacity=".85"><?= $windows(82, 94, 96, 116) . $windows(100, 110, 88, 116) . $windows(212, 238, 98, 116, 6, 40) ?></g>
+    <rect y="120" width="240" height="30" fill="url(#tgs-water)"/>
+  </symbol>
+  <symbol id="sky-ZA" viewBox="0 0 240 150">
+    <rect width="240" height="150" fill="url(#tgs-sky)"/><circle cx="64" cy="70" r="28" fill="url(#tgs-sun)"/>
+    <path d="M0 120V92l30-6 10-30h120l14 26 66 10v28z" fill="#3a4a5e"/><path d="M40 56h120l-6 8H46z" fill="#556a82"/>
+    <g fill="url(#tgs-bld)"><rect x="20" y="96" width="18" height="24"/><rect x="40" y="88" width="14" height="32"/><rect x="56" y="100" width="20" height="20"/><rect x="150" y="92" width="16" height="28"/><rect x="168" y="84" width="12" height="36"/><rect x="182" y="98" width="24" height="22"/></g>
+    <g fill="#FFD978" opacity=".85"><?= $windows(22, 36, 100, 116) . $windows(42, 52, 92, 116) . $windows(170, 178, 88, 116) ?></g>
+    <rect y="120" width="240" height="30" fill="url(#tgs-water)"/>
+  </symbol>
+  <symbol id="sky-KE" viewBox="0 0 240 150">
+    <rect width="240" height="150" fill="url(#tgs-sky)"/><circle cx="56" cy="92" r="32" fill="url(#tgs-sun)"/>
+    <g fill="url(#tgs-bld)"><rect x="110" y="44" width="16" height="76"/><path d="M106 44h24l-4-6h-16z"/><path d="M134 120V96a24 10 0 0 1 48 0v24z"/><rect x="186" y="78" width="18" height="42"/><rect x="206" y="88" width="34" height="32"/><rect x="88" y="80" width="18" height="40"/></g>
+    <g fill="#1b2a22"><rect x="34" y="96" width="3" height="24"/><path d="M14 98q22-12 46 0q-10 4-23 3q-13 1-23-3z"/></g>
+    <g fill="#FFD978" opacity=".85"><?= $windows(112, 124, 50, 116) . $windows(90, 104, 84, 116) . $windows(188, 202, 82, 116) ?></g>
+    <rect y="120" width="240" height="30" fill="#5a4630" opacity=".6"/><rect y="120" width="240" height="30" fill="url(#tgs-water)" opacity=".5"/>
+  </symbol>
+  <symbol id="sky-NG" viewBox="0 0 240 150">
+    <rect width="240" height="150" fill="url(#tgs-sky)"/><circle cx="190" cy="94" r="30" fill="url(#tgs-sun)"/>
+    <g fill="url(#tgs-bld)"><rect x="10" y="80" width="20" height="40"/><rect x="32" y="62" width="18" height="58"/><rect x="52" y="88" width="24" height="32"/><rect x="78" y="50" width="20" height="70"/><rect x="100" y="72" width="16" height="48"/><rect x="118" y="84" width="26" height="36"/><rect x="146" y="66" width="18" height="54"/></g>
+    <path d="M150 118q40-18 90-14" stroke="#c9d3e0" stroke-width="2" fill="none"/><g stroke="#c9d3e0" stroke-width="1" opacity=".7"><path d="M170 112v-12M190 108v-14M210 106v-12M170 100l20-6 20 0"/></g>
+    <g fill="#FFD978" opacity=".85"><?= $windows(12, 28, 84, 116) . $windows(34, 48, 66, 116) . $windows(80, 96, 54, 116) . $windows(148, 162, 70, 116) ?></g>
+    <rect y="120" width="240" height="30" fill="url(#tgs-water)"/>
   </symbol>
   <symbol id="sky-GEN" viewBox="0 0 240 150">
     <rect width="240" height="150" fill="url(#tgs-sky)"/><circle cx="120" cy="100" r="40" fill="url(#tgs-sun)"/>
