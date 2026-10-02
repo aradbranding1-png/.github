@@ -92,7 +92,7 @@ final class PublicPageController extends Controller
     /** @return array<string, mixed> */
     private function model(int $pageId, int $version, int $ownerVersion): array
     {
-        return $this->c->get(Cache::class)->remember("pagemodel:{$pageId}:v{$version}:o{$ownerVersion}", 3600, function () use ($pageId): array {
+        return $this->c->get(Cache::class)->remember("pagemodel2:{$pageId}:v{$version}:o{$ownerVersion}", 3600, function () use ($pageId): array {
             $row = $this->c->get(Connection::class)->first(
                 'SELECT p.id, p.title, p.company_name, p.teaser, p.about, p.content, p.cover_path, p.avatar_path, p.updated_at,
                         l.code AS lang_code, l.direction, l.name AS lang_name,
@@ -109,10 +109,19 @@ final class PublicPageController extends Controller
                 throw new HttpException(404);
             }
             $row['content'] = json_decode((string) ($row['content'] ?? '{}'), true) ?: [];
-            foreach (['title', 'company_name', 'teaser'] as $public) {
-                if (is_string($row[$public] ?? null)) {
-                    $row[$public] = ContactGuard::mask($row[$public]);
+            // Off-platform contact details are never shown: contacts saved by older versions are dropped and any
+            // phone / e-mail / link / messenger ID left in the text is masked.
+            unset($row['content']['contacts']);
+            foreach (['title', 'company_name', 'teaser', 'about'] as $field) {
+                if (is_string($row[$field] ?? null)) {
+                    $row[$field] = ContactGuard::mask($row[$field]);
                 }
+            }
+            foreach (['products', 'services', 'markets'] as $list) {
+                $row['content'][$list] = array_map(
+                    static fn ($item): string => ContactGuard::mask((string) $item),
+                    is_array($row['content'][$list] ?? null) ? $row['content'][$list] : []
+                );
             }
             $row['verified'] = $row['business_verified_at'] !== null;
             unset($row['business_verified_at']);

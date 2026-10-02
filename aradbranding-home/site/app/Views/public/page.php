@@ -5,16 +5,6 @@ $name = $page['company_name'] ?: $page['title'];
 $logo = media($page['avatar_path']);
 $cover = media($page['cover_path']);
 $countryName = $page['lang_code'] === 'fa' ? $page['country_fa'] : $page['country_en'];
-$contactHref = static function (string $type, string $value): ?string {
-    return match ($type) {
-        'phone' => 'tel:' . preg_replace('/[^0-9+]/', '', $value),
-        'email' => 'mailto:' . $value,
-        'whatsapp' => 'https://wa.me/' . preg_replace('/\D/', '', $value),
-        'telegram' => 'https://t.me/' . ltrim($value, '@'),
-        'website' => preg_match('~^https?://~i', $value) ? $value : null,
-        default => null,
-    };
-};
 ?>
 <main class="pub">
   <?php foreach (($flashes ?? []) as $type => $message): ?><div class="alert alert-<?= e($type) ?> pub-alert" role="status"><?= e($message) ?></div><?php endforeach; ?>
@@ -85,17 +75,14 @@ $contactHref = static function (string $type, string $value): ?string {
           <ul class="pub-list"><?php foreach ($c[$key] as $item): ?><li><?= e($item) ?></li><?php endforeach; ?></ul>
         </section>
       <?php endif; endforeach; ?>
-      <?php if (!empty($c['contacts'])): ?>
-        <section class="pub-section">
+      <?php if ($viewer && !$isOwner): ?>
+        <section class="pub-section span pub-reach" lang="fa" dir="rtl">
           <h2><?= e($labels['contact']) ?></h2>
-          <ul class="pub-contacts">
-            <?php foreach ($c['contacts'] as $type => $value): $href = $contactHref($type, (string) $value); ?>
-              <li>
-                <span><?= e($labels[$type] ?? $type) ?></span>
-                <?php if ($href): ?><a href="<?= e($href) ?>" dir="ltr" rel="nofollow noopener" target="_blank"><?= e($value) ?></a><?php else: ?><b><?= e($value) ?></b><?php endif; ?>
-              </li>
-            <?php endforeach; ?>
-          </ul>
+          <p class="muted"><?= e($labels['contact_note']) ?></p>
+          <div class="form-actions">
+            <a class="btn btn-sm" href="/letters/new?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-letter"/></svg>ارسال نامه</a>
+            <a class="btn btn-ghost btn-sm" href="/proposals/send?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-send"/></svg>ارسال پیشنهاد تجاری</a>
+          </div>
         </section>
       <?php endif; ?>
     <?php endif; ?>

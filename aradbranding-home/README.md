@@ -1,11 +1,11 @@
-# aradbranding.app — Home page redesign (v1.12.8)
+# aradbranding.app — Home page redesign (v1.13.0)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
 animated maritime and air routes, 3D container ships and cargo aircraft moving along them, floating
 market cards anchored to the globe, and the rest of the page rebuilt in the dark navy / cyan / gold style.
 
-No APIs, auth, database schema or other public pages were changed. v1.10.1 adds an admin editor for the home page
+No APIs, auth or database schema were changed (v1.13.0 changes contact behaviour on business pages and letters at the owner's request — see below). v1.10.1 adds an admin editor for the home page
 (**Admin → «صفحه اصلی سایت»**, `/admin/home`, requires the `settings.manage` permission): every text, link, list
 (add / delete / reorder rows), image and section switch of the home page, stored as one JSON value in the existing
 `settings` table (`home.content`), plus “reset to defaults”. Every save is audited.
@@ -15,7 +15,7 @@ No APIs, auth, database schema or other public pages were changed. v1.10.1 adds 
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.12.8.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.13.0.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -104,3 +104,9 @@ Earth textures are from the three.js examples (NASA Blue Marble / Black Marble d
 ## v1.12.8
 
 - Fewer globe cards: TZ, ZA, GB and NL removed from `$routeCountries`; default market KZ has `globe` false (still a market card). Routes are unchanged.
+
+## v1.13.0 — contact only inside the platform
+
+- Business pages no longer collect or show off-platform contacts: the contact fields are gone from `pages/form.php`, `PageService::encodeContent` no longer stores `contacts`, and `PublicPageController` drops any stored `contacts` (cache key `pagemodel2:`). Signed-in visitors see an in-platform «ارتباط با این کسب‌وکار» block (letter / proposal).
+- `ContactGuard` (phones, e-mail, links, messenger and social IDs) now runs on save for every page text field, private letters, replies, public letters, proposal messages and profile text (`city`, `company_name`, `business_area`, `bio`). On render it masks old letter bodies, inbox previews, received-proposal notes and all page text.
+- Changed files: `app/Core/Security/ContactGuard.php`, `app/Modules/Pages/{PageController,PageService,PageLabels,PublicPageController}.php`, `app/Modules/Letters/LetterController.php`, `app/Modules/Proposals/ProposalController.php`, `app/Modules/Users/AccountController.php`, `app/Views/pages/form.php`, `app/Views/public/page.php`, `app/Views/letters/{index,show}.php`, `app/Views/proposals/received.php`.
