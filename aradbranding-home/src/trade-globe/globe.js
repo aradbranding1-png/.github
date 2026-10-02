@@ -436,9 +436,17 @@ function init(root) {
   const small = Math.min(window.innerWidth, window.innerHeight) < 700;
   const weak = small || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // data-mode="login": a calmer scene (fewer routes, 2–3 ships, 1–2 planes) for the sign-in page.
+  const lite = root.getAttribute('data-mode') === 'login';
   const Q = weak
     ? { seg: 72, dpr: 1.5, clouds: false, tex: '1k', air: 4, ships: 5, planes: 3, tubeSeg: 220 }
     : { seg: 128, dpr: 2, clouds: true, tex: '2k', air: AIR_ROUTES.length, ships: 7, planes: 6, tubeSeg: 420 };
+  if (lite) {
+    Q.ships = weak ? 2 : 3;
+    Q.planes = weak ? 1 : 2;
+  }
+  const SEA_LIST = lite ? SEA_ROUTES.filter((r) => ['cn-eu', 'cn-me', 'in-me'].includes(r.id)) : SEA_ROUTES;
+  const AIR_LIST = lite ? [['tehran', 'dubai'], ['dubai', 'delhi'], ['istanbul', 'frankfurt']] : AIR_ROUTES.slice(0, Q.air);
 
   let renderer;
   try {
@@ -555,8 +563,8 @@ function init(root) {
     return r;
   }
 
-  const seaRoutes = SEA_ROUTES.map((r) => addRoute(seaCurve(r.pts, 1.0035), 'sea', r));
-  const airRoutes = AIR_ROUTES.slice(0, Q.air).map(([a, b]) => {
+  const seaRoutes = SEA_LIST.map((r) => addRoute(seaCurve(r.pts, 1.0035), 'sea', r));
+  const airRoutes = AIR_LIST.map(([a, b]) => {
     const A = CITIES[a];
     const B = CITIES[b];
     return addRoute(airCurve(A, B), 'air', { name: `${A[2]} ← ${B[2]}`, via: 'مسیر هوایی باری' });
@@ -620,7 +628,7 @@ function init(root) {
     { route: 0, t: 0.7, speed: 1.15, name: 'کشتی کانتینربر' },
     { route: 4, t: 0.35, speed: 1.05, name: 'کشتی کانتینربر' },
     { route: 6, t: 0.5, speed: 0.9, name: 'کشتی کانتینربر' },
-  ].slice(0, Q.ships);
+  ].filter((s) => s.route < seaRoutes.length).slice(0, Q.ships);
   const SHIP_SCALE = weak ? 0.095 : 0.085;
   const ships = SHIP_PLAN.map((s, i) => {
     const m = makeShip(101 + i * 17);
@@ -974,6 +982,15 @@ function init(root) {
     });
   }
 
+  // Sign-in transition: light every route, spin a little faster and zoom in while the form is submitted.
+  let launched = false;
+  window.addEventListener('tg:launch', () => {
+    launched = true;
+    view.zoomTarget = 1.5;
+    routeMeshes.forEach((r) => { r.uniforms.uHi.value = 1; });
+    root.classList.add('tg-launch');
+  });
+
   function frame(now) {
     raf = 0;
     if (!running) return;
@@ -989,7 +1006,7 @@ function init(root) {
       rot.vy *= Math.pow(0.04, dt);
       rot.vx *= Math.pow(0.04, dt);
       if (now > idleUntil) {
-        rot.y += auto * dt;
+        rot.y += (launched ? 0.35 : auto) * dt;
         rot.x += (0.32 - rot.x) * Math.min(1, dt * 0.4);
       }
     }

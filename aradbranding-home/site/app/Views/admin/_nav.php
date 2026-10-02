@@ -16,7 +16,7 @@ $items = [
     'update' => ['/admin/system-update', 'بروزرسانی سامانه', 'route', $has('updates.manage')],
 ];
 ?>
-<aside class="mail-nav" aria-label="بخش‌های مدیریت">
+<aside class="mail-nav admin-subnav" aria-label="بخش‌های مدیریت">
   <nav class="mail-folders">
     <?php foreach ($items as $key => [$href, $label, $icon, $visible]): if (!$visible) { continue; } ?>
       <a href="<?= e($href) ?>"<?= $active === $key ? ' aria-current="page"' : '' ?>><svg class="icon"><use href="#i-<?= e($icon) ?>"/></svg><?= e($label) ?></a>

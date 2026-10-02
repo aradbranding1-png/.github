@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.11.0)
+# aradbranding.app — Home page redesign (v1.12.0)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth, database schema or other public pages were changed. v1.10.1 adds 
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.11.0.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.12.0.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -62,3 +62,10 @@ Earth textures are from the three.js examples (NASA Blue Marble / Black Marble d
 - `layouts/app.php` + `public_html/assets/panel-theme.css` + `panel.js`: the whole signed-in app (dashboard, letters, proposals, admin) restyled like the home page; smaller type; mobile drawer; notifications dropdown (`GET /notifications/peek`).
 - Sidebar: «ارتباطات اختصاصی» (`/letters?type=private`) under «خانه» with an unread badge (`unread_private`, added to the existing user query in `Core/Auth/Auth.php`, indexed); «پیشنهادات».
 - Admin → Settings: «خرید Stars از درگاه پرداخت فعال باشد» (`payments.purchase_enabled`, default **off**). When off the purchase section and every «خرید Stars» button are hidden and `POST /wallet/buy` is refused. Files: `Core/Http/Controller.php`, `Wallet/WalletController.php`, `Pages/PublicPageController.php`, `Admin/SettingsController.php`, `admin/settings.php`, `wallet/index.php`, `public/page.php`, `letters/compose.php`, `letters/campaign.php`, `proposals/send.php`.
+
+## v1.12.0 — admin command center and sign-in
+
+- `layouts/app.php`, `panel-theme.css`, `panel.js`: light workspace (default) + dark navy sidebar holding every admin section (same permission checks as `admin/_nav.php`, whose in-page menu is now hidden); header with title, Jalali date, search, notifications, theme toggle, profile menu (role from `user_roles`, added to the user query in `Core/Auth/Auth.php`). `theme.js` honours `data-default-theme`.
+- `/admin` dashboard (`DashboardAdminController::dashboard`, `admin/dashboard.php`): KPIs with week-over-week growth and sparklines, trend chart, today's checks, composition donut, latest platform events, newest proposals, revenue — all from `daily_metrics` (new `MetricsService::window()`, one query), cached totals, `proposal_feed` and `audit_logs`.
+- `layouts/guest.php`, `auth/login.php`, `auth.css`, `auth.js`: login/register on the WebGL globe (`data-mode="login"` in `src/trade-globe/globe.js`: fewer routes, 3 ships, 2 planes, `tg:launch` zoom on submit). Same form fields and routes (email + password); no password-recovery link because the system has no recovery route.
+- `public_html/assets/app.js`: the searchable select no longer auto-focuses its search box on touch screens (no keyboard pop / page jump).

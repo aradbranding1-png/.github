@@ -1,15 +1,33 @@
 <?php
-/** @var string $content @var array $user @var string $title @var string $path */
+/** @var string $content @var array $user @var string $title @var string $path @var array $perms */
+$perms = $perms ?? [];
 $unreadPrivate = (int) ($user['unread_private'] ?? 0);
 $letterType = isset($_GET['type']) && is_string($_GET['type']) ? $_GET['type'] : '';
 $nav = [
-    ['href' => '/dashboard', 'label' => 'خانه', 'icon' => 'home', 'ready' => true],
-    ['href' => '/letters?type=private', 'label' => 'ارتباطات اختصاصی', 'icon' => 'lock', 'ready' => true, 'badge' => $unreadPrivate, 'key' => 'private', 'side' => true],
-    ['href' => '/discover', 'label' => 'کشف', 'icon' => 'compass', 'ready' => true],
-    ['href' => '/proposals', 'label' => 'پیشنهادات', 'icon' => 'spark', 'ready' => true],
-    ['href' => '/letters', 'label' => 'ارتباطات', 'icon' => 'chat', 'ready' => true, 'badge' => (int) ($user['unread_letters'] ?? 0) + (int) ($user['unread_official'] ?? 0)],
-    ['href' => '/pages', 'label' => 'پیج من', 'icon' => 'page', 'ready' => true],
+    ['href' => '/dashboard', 'label' => 'خانه', 'icon' => 'home'],
+    ['href' => '/letters?type=private', 'label' => 'ارتباطات اختصاصی', 'icon' => 'lock', 'badge' => $unreadPrivate, 'key' => 'private', 'side' => true],
+    ['href' => '/discover', 'label' => 'کشف', 'icon' => 'compass'],
+    ['href' => '/proposals', 'label' => 'پیشنهادات', 'icon' => 'spark'],
+    ['href' => '/letters', 'label' => 'ارتباطات', 'icon' => 'chat', 'badge' => (int) ($user['unread_letters'] ?? 0) + (int) ($user['unread_official'] ?? 0)],
+    ['href' => '/pages', 'label' => 'پیج من', 'icon' => 'page'],
 ];
+// Same items and permissions as admin/_nav.php (the in-page admin menu, now shown here in the sidebar).
+$has = static fn (string ...$codes): bool => array_intersect($codes, array_keys($perms)) !== [];
+$adminNav = array_values(array_filter([
+    ['href' => '/admin', 'label' => 'داشبورد مدیریت', 'icon' => 'home', 'ok' => $has('reports.view', 'settings.manage', 'users.view')],
+    ['href' => '/admin/users', 'label' => 'کاربران', 'icon' => 'user', 'ok' => $has('users.view')],
+    ['href' => '/admin/content', 'label' => 'محتوا و بررسی', 'icon' => 'page', 'ok' => $has('pages.view', 'pages.approve', 'proposals.view', 'proposals.moderate')],
+    ['href' => '/admin/finance', 'label' => 'مالی', 'icon' => 'star', 'ok' => $has('payments.view', 'wallet.view')],
+    ['href' => '/admin/reports', 'label' => 'گزارش‌ها', 'icon' => 'spark', 'ok' => $has('reports.view')],
+    ['href' => '/admin/exports', 'label' => 'خروجی Excel', 'icon' => 'archive', 'ok' => $has('reports.export')],
+    ['href' => '/admin/roles', 'label' => 'نقش‌ها و دسترسی‌ها', 'icon' => 'lock', 'ok' => $has('roles.manage')],
+    ['href' => '/admin/audit', 'label' => 'رویدادهای امنیتی', 'icon' => 'eye', 'ok' => $has('audit.view')],
+    ['href' => '/admin/settings', 'label' => 'تنظیمات', 'icon' => 'gear', 'ok' => $has('settings.manage')],
+    ['href' => '/admin/home', 'label' => 'صفحه اصلی سایت', 'icon' => 'link', 'ok' => $has('settings.manage')],
+    ['href' => '/admin/backups', 'label' => 'نسخه‌های پشتیبان', 'icon' => 'archive', 'ok' => $has('backup.manage')],
+    ['href' => '/admin/system-update', 'label' => 'بروزرسانی سامانه', 'icon' => 'route', 'ok' => $has('updates.manage')],
+], static fn (array $i): bool => $i['ok']));
+
 $isActive = static function (string $href) use ($path, $letterType): bool {
     if ($href === '/letters?type=private') {
         return $path === '/letters' && $letterType === 'private';
@@ -20,32 +38,55 @@ $isActive = static function (string $href) use ($path, $letterType): bool {
     if ($href === '/discover' && $path === '/search') {
         return true;
     }
-    if ($href === '/letters' && (str_starts_with($path, '/connections') || str_starts_with($path, '/admin/letters') || $path === '/updates')) {
+    if ($href === '/letters' && (str_starts_with($path, '/connections') || $path === '/updates')) {
         return true;
     }
-    if ($href === '/admin' && str_starts_with($path, '/admin/letters')) {
-        return false;
+    if ($href === '/admin') {
+        return $path === '/admin';
+    }
+    if ($href === '/admin/settings' || $href === '/admin/system-update') {
+        return $path === $href || ($href === '/admin/system-update' && $path === '/updates');
     }
     return $path === $href || str_starts_with($path, $href . '/');
 };
 $avatarUrl = media($user['avatar_path'] ?? null);
 $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
+$roleName = (string) ($user['role_name'] ?? '') !== '' ? (string) $user['role_name'] : (!empty($isStaff) ? 'کارشناس سامانه' : 'عضو سامانه');
 $unreadNotes = (int) ($user['unread_notifications'] ?? 0);
-$badge = static fn (int $n, string $label = 'خوانده‌نشده'): string => $n > 0
-    ? '<em class="badge" aria-label="' . e(fa_num($n)) . ' ' . e($label) . '">' . e(fa_num(min(99, $n))) . ($n > 99 ? '+' : '') . '</em>' : '';
-$renderNav = static function () use ($nav, $isActive, $badge): string {
-    $html = '';
-    foreach ($nav as $item) {
-        $current = $isActive($item['href']) ? ' aria-current="page"' : '';
-        $html .= '<a href="' . e($item['href']) . '"' . $current . (isset($item['key']) ? ' class="nav-' . e($item['key']) . '"' : '') . '>'
-            . '<svg class="icon"><use href="#i-' . e($item['icon']) . '"/></svg><span class="nav-label">' . e($item['label']) . '</span>'
-            . $badge((int) ($item['badge'] ?? 0)) . '</a>';
+$today = '';
+if (class_exists(\IntlDateFormatter::class)) {
+    $tz = new \DateTimeZone((string) \App\Core\Env::get('DISPLAY_TIMEZONE', 'Asia/Tehran'));
+    $fmt = new \IntlDateFormatter('fa_IR@calendar=persian', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, $tz, \IntlDateFormatter::TRADITIONAL, 'EEEE d MMMM y');
+    $today = (string) $fmt->format(new \DateTimeImmutable('now', $tz));
+}
+$badge = static fn (int $n): string => $n > 0
+    ? '<em class="badge" aria-label="' . e(fa_num($n)) . ' خوانده‌نشده">' . e(fa_num(min(99, $n))) . ($n > 99 ? '+' : '') . '</em>' : '';
+$link = static function (array $item) use ($isActive, $badge): string {
+    $current = $isActive($item['href']) ? ' aria-current="page"' : '';
+    return '<a href="' . e($item['href']) . '"' . $current . (isset($item['key']) ? ' class="nav-' . e($item['key']) . '"' : '') . '>'
+        . '<svg class="icon"><use href="#i-' . e($item['icon']) . '"/></svg><span class="nav-label">' . e($item['label']) . '</span>'
+        . $badge((int) ($item['badge'] ?? 0)) . '</a>';
+};
+$renderNav = static function () use ($nav, $adminNav, $link): string {
+    $html = '<nav class="side-nav" aria-label="منوی اصلی">' . implode('', array_map($link, $nav)) . '</nav>';
+    if ($adminNav !== []) {
+        $html .= '<p class="side-group">مدیریت سامانه</p><nav class="side-nav" aria-label="مدیریت سامانه">' . implode('', array_map($link, $adminNav)) . '</nav>';
     }
     return $html;
 };
+$renderFoot = static function () use ($isActive): string {
+    return '<a href="/" target="_blank" rel="noopener"><svg class="icon"><use href="#i-link"/></svg><span class="nav-label">مشاهده سایت</span></a>'
+        . '<a href="/wallet"' . ($isActive('/wallet') ? ' aria-current="page"' : '') . '><svg class="icon"><use href="#i-star"/></svg><span class="nav-label">کیف پول Stars</span></a>'
+        . '<form method="post" action="/logout">' . csrf_field() . '<button class="side-logout" type="submit"><svg class="icon"><use href="#i-logout"/></svg><span class="nav-label">خروج</span></button></form>';
+};
+$avatar = static function (string $cls) use ($avatarUrl, $user): string {
+    return $avatarUrl
+        ? '<img class="' . e($cls) . '" src="' . e($avatarUrl) . '" alt="">'
+        : '<span class="' . e($cls) . '">' . e(initials($user['first_name'] ?? '', $user['last_name'] ?? '')) . '</span>';
+};
 ?>
 <!doctype html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" data-default-theme="light">
 <head>
 <?= $this->partial('partials/head') ?>
 <link rel="stylesheet" href="<?= e(asset('panel-theme.css')) ?>">
@@ -60,21 +101,10 @@ $renderNav = static function () use ($nav, $isActive, $badge): string {
   <aside class="sidebar" aria-label="منوی اصلی">
     <a class="brand" href="/dashboard">
       <span class="brand-mark"><svg class="icon"><use href="#i-mark"/></svg></span>
-      <span class="brand-name">سامانه توسعه تجارت<small>Arad Branding · شبکه بین‌المللی تجار</small></span>
+      <span class="brand-name">آراد برندینگ<small>سامانه توسعه تجارت</small></span>
     </a>
-    <nav class="side-nav"><?= $renderNav() ?></nav>
-    <a class="side-user" href="/account">
-      <?php if ($avatarUrl): ?><img class="avatar" src="<?= e($avatarUrl) ?>" alt=""><?php else: ?><span class="avatar"><?= e(initials($user['first_name'] ?? '', $user['last_name'] ?? '')) ?></span><?php endif; ?>
-      <span class="side-user-text"><b><?= e($fullName) ?></b><small><?= flag($user['country_code'] ?? '') ?> <?= $user['handle'] ? '<bdi>/p/' . e($user['handle']) . '</bdi>' : 'حساب کاربری' ?></small></span>
-    </a>
-    <div class="side-foot side-nav">
-      <?php if (!empty($isStaff)): ?><a href="/admin"<?= $isActive('/admin') ? ' aria-current="page"' : '' ?>><svg class="icon"><use href="#i-gear"/></svg><span class="nav-label">مدیریت سامانه</span></a><?php endif; ?>
-      <a href="/wallet"<?= $isActive('/wallet') ? ' aria-current="page"' : '' ?>><svg class="icon"><use href="#i-star"/></svg><span class="nav-label">کیف پول Stars</span></a>
-      <form method="post" action="/logout">
-        <?= csrf_field() ?>
-        <button class="btn btn-quiet btn-block btn-start" type="submit"><svg class="icon"><use href="#i-logout"/></svg>خروج</button>
-      </form>
-    </div>
+    <div class="side-scroll"><?= $renderNav() ?></div>
+    <div class="side-foot side-nav"><?= $renderFoot() ?></div>
   </aside>
 
   <div class="main-col">
@@ -84,33 +114,42 @@ $renderNav = static function () use ($nav, $isActive, $badge): string {
         <div class="drawer-panel">
           <div class="drawer-head">
             <span class="brand-mark"><svg class="icon"><use href="#i-mark"/></svg></span>
-            <span class="brand-name">سامانه توسعه تجارت<small><?= e($fullName) ?></small></span>
+            <span class="brand-name">آراد برندینگ<small><?= e($fullName) ?></small></span>
           </div>
-          <nav class="side-nav"><?= $renderNav() ?></nav>
-          <div class="side-nav drawer-foot">
-            <?php if (!empty($isStaff)): ?><a href="/admin"<?= $isActive('/admin') ? ' aria-current="page"' : '' ?>><svg class="icon"><use href="#i-gear"/></svg><span class="nav-label">مدیریت سامانه</span></a><?php endif; ?>
-            <a href="/wallet"<?= $isActive('/wallet') ? ' aria-current="page"' : '' ?>><svg class="icon"><use href="#i-star"/></svg><span class="nav-label">کیف پول Stars</span></a>
-            <a href="/account"<?= $isActive('/account') ? ' aria-current="page"' : '' ?>><svg class="icon"><use href="#i-user"/></svg><span class="nav-label">حساب کاربری</span></a>
-            <form method="post" action="/logout"><?= csrf_field() ?><button class="btn btn-quiet btn-block btn-start" type="submit"><svg class="icon"><use href="#i-logout"/></svg>خروج</button></form>
-          </div>
+          <div class="side-scroll"><?= $renderNav() ?></div>
+          <div class="side-nav drawer-foot"><?= $renderFoot() ?></div>
         </div>
       </details>
-      <span class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#i-mark"/></svg></span>
-      <h1><?= e($title ?? '') ?></h1>
-      <form class="search-bar topbar-search" method="get" action="/search" role="search"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><input class="input" type="search" name="q" placeholder="جستجوی تاجر، کالا یا فرصت…" aria-label="جستجو" enterkeyhint="search"></form>
-      <details class="notif" data-peek="/notifications/peek">
-        <summary class="icon-btn bell" aria-label="اعلان‌ها<?= $unreadNotes > 0 ? ' (' . e(fa_num($unreadNotes)) . ' جدید)' : '' ?>"><svg class="icon"><use href="#i-bell"/></svg><?php if ($unreadNotes > 0): ?><em class="badge"><?= e(fa_num(min(99, $unreadNotes))) ?></em><?php endif; ?></summary>
-        <div class="notif-panel" role="dialog" aria-label="اعلان‌ها">
-          <div class="notif-head"><b>اعلان‌ها</b><a href="/notifications">مشاهده همه</a></div>
-          <div class="notif-body" data-peek-body><div class="np-empty"><span class="np-spin" aria-hidden="true"></span><p>در حال دریافت…</p></div></div>
-          <a class="notif-all" href="/notifications">همه اعلان‌ها</a>
-        </div>
-      </details>
-      <a class="icon-btn wallet-btn" href="/wallet" aria-label="کیف پول Stars"><svg class="icon"><use href="#i-star"/></svg></a>
-      <button class="icon-btn theme-btn" type="button" data-theme-toggle aria-label="تغییر حالت روشن و تاریک"><svg class="icon"><use href="#i-theme"/></svg></button>
-      <a class="avatar" href="/account" aria-label="حساب کاربری">
-        <?php if ($avatarUrl): ?><img class="avatar" src="<?= e($avatarUrl) ?>" alt=""><?php else: ?><?= e(initials($user['first_name'] ?? '', $user['last_name'] ?? '')) ?><?php endif; ?>
-      </a>
+      <div class="topbar-title">
+        <h1><?= e($title ?? '') ?></h1>
+        <?php if ($today !== ''): ?><span class="topbar-date"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="3"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></svg><?= e($today) ?></span><?php endif; ?>
+      </div>
+      <form class="search-bar topbar-search" method="get" action="/search" role="search"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><input class="input" type="search" name="q" placeholder="جستجوی تاجر، کشور، محصول یا فرصت…" aria-label="جستجو" enterkeyhint="search"></form>
+      <div class="topbar-tools">
+        <details class="notif" data-peek="/notifications/peek">
+          <summary class="icon-btn bell" aria-label="اعلان‌ها<?= $unreadNotes > 0 ? ' (' . e(fa_num($unreadNotes)) . ' جدید)' : '' ?>"><svg class="icon"><use href="#i-bell"/></svg><?php if ($unreadNotes > 0): ?><em class="badge"><?= e(fa_num(min(99, $unreadNotes))) ?></em><?php endif; ?></summary>
+          <div class="notif-panel" role="dialog" aria-label="اعلان‌ها">
+            <div class="notif-head"><b>اعلان‌ها</b><a href="/notifications">مشاهده همه</a></div>
+            <div class="notif-body" data-peek-body><div class="np-empty"><span class="np-spin" aria-hidden="true"></span><p>در حال دریافت…</p></div></div>
+            <a class="notif-all" href="/notifications">همه اعلان‌ها</a>
+          </div>
+        </details>
+        <button class="icon-btn theme-btn" type="button" data-theme-toggle aria-label="تغییر حالت روشن و تاریک"><svg class="icon"><use href="#i-theme"/></svg></button>
+        <details class="profile">
+          <summary aria-label="منوی حساب کاربری">
+            <?= $avatar('avatar') ?>
+            <span class="profile-text"><b><?= e($fullName) ?></b><small><?= e($roleName) ?></small></span>
+            <svg class="profile-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+          <div class="profile-panel" role="menu">
+            <div class="profile-card"><?= $avatar('avatar avatar-lg') ?><span><b><?= e($fullName) ?></b><small><?= $user['handle'] ? '<bdi>/p/' . e($user['handle']) . '</bdi>' : e($roleName) ?></small></span></div>
+            <a href="/account" role="menuitem"><svg class="icon"><use href="#i-user"/></svg>حساب کاربری</a>
+            <a href="/wallet" role="menuitem"><svg class="icon"><use href="#i-star"/></svg>کیف پول Stars</a>
+            <?php if (!empty($isStaff)): ?><a href="/admin" role="menuitem"><svg class="icon"><use href="#i-gear"/></svg>مدیریت سامانه</a><?php endif; ?>
+            <form method="post" action="/logout"><?= csrf_field() ?><button type="submit" role="menuitem"><svg class="icon"><use href="#i-logout"/></svg>خروج</button></form>
+          </div>
+        </details>
+      </div>
     </header>
     <main id="main" class="content">
       <?php if (!empty($impersonating)): ?>

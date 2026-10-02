@@ -233,14 +233,14 @@ $h = $home['hero'];
       </div>
       <form class="th-finder-f" method="get" action="/search">
         <label class="th-field"><span>محصول یا کالا</span><input type="search" name="q" placeholder="مثلاً زعفران، خرما، فولاد…" enterkeyhint="search"></label>
-        <label class="th-field"><span>کشور</span>
+        <div class="th-field"><span aria-hidden="true">کشور</span>
           <select name="country" aria-label="کشور">
             <option value="0">همه کشورها</option>
             <?php foreach ($finderCodes as $code): if (!isset($countryIds[$code])) { continue; } ?>
             <option value="<?= (int) $countryIds[$code] ?>"><?= e($nameOf($code)) ?></option>
             <?php endforeach; ?>
           </select>
-        </label>
+        </div>
         <fieldset class="th-field th-seg">
           <legend>نوع نتیجه</legend>
           <div class="th-seg-in">

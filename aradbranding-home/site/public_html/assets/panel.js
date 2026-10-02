@@ -1,7 +1,7 @@
 /* Panel shell: notifications dropdown and the mobile drawer. Both are <details>, so they open without JS too. */
 (function () {
   'use strict';
-  var pops = Array.prototype.slice.call(document.querySelectorAll('.notif, .nav-drawer, .fab'));
+  var pops = Array.prototype.slice.call(document.querySelectorAll('.notif, .nav-drawer, .fab, .profile'));
 
   function closeOthers(keep) {
     pops.forEach(function (d) { if (d !== keep) d.open = false; });
@@ -49,6 +49,30 @@
           loadedAt = 0;
           body.innerHTML = '<div class="np-empty"><p>دریافت اعلان‌ها ممکن نشد.</p></div>';
         });
+    });
+  }
+
+  // Dashboard: progress bars and a short count-up on KPI numbers.
+  requestAnimationFrame(function () {
+    document.querySelectorAll('.ad-bar i[data-w]').forEach(function (bar) {
+      bar.style.width = Math.max(4, Math.min(100, parseInt(bar.getAttribute('data-w'), 10) || 0)) + '%';
+    });
+  });
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var digits = '۰۱۲۳۴۵۶۷۸۹';
+  var fa = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '٬').replace(/\d/g, function (d) { return digits[d]; }); };
+  if (!reduced) {
+    document.querySelectorAll('.ad-kpi [data-count]').forEach(function (el) {
+      var target = parseInt(el.getAttribute('data-count'), 10) || 0;
+      if (target < 2) return;
+      var t0 = null;
+      var step = function (t) {
+        if (t0 === null) t0 = t;
+        var k = Math.min(1, (t - t0) / 900);
+        el.textContent = fa(Math.round(target * (1 - Math.pow(1 - k, 3))));
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
     });
   }
 })();
