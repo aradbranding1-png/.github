@@ -59,6 +59,20 @@
     update();
   }
 
+  // «کاربران منتخب»: one trader per line; show how many are listed.
+  document.querySelectorAll('.handles-box').forEach(function (box) {
+    var out = box.parentNode.querySelector('.handles-count');
+    if (!out) return;
+    var count = function () {
+      var seen = {};
+      box.value.split(/[\s,،]+/).forEach(function (h) { h = h.replace(/^.*\/p\/([^\/?#]+).*$/i, '$1').replace(/^@/, '').toLowerCase(); if (h) seen[h] = 1; });
+      var n = Object.keys(seen).length;
+      out.textContent = n ? n.toLocaleString('fa-IR') + ' نفر' + (n > 200 ? ' (بیش از ۲۰۰ نفر؛ فقط ۲۰۰ نفر اول در نظر گرفته می‌شوند)' : '') : '';
+    };
+    box.addEventListener('input', count);
+    count();
+  });
+
   // Report bars: widths come from data-w (CSP: no inline styles in the markup).
   document.querySelectorAll('.rp-track i[data-w]').forEach(function (i) {
     i.style.width = Math.max(0, Math.min(100, parseInt(i.getAttribute('data-w'), 10) || 0)) + '%';

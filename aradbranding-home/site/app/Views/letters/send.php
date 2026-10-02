@@ -35,8 +35,8 @@ $hints = [
         <?php foreach ($categories as $c): ?><option value="<?= e($c['id']) ?>" data-search="<?= e($c['name_en']) ?>"<?= $sel('category', $c['id']) ?>><?= e($c['name_fa']) ?></option><?php endforeach; ?>
       </select></div>
     <div class="field"><label for="f-handles">کاربران منتخب <span class="muted">(اختیاری)</span></label>
-      <textarea class="textarea" id="f-handles" name="handles" rows="2" dir="ltr" placeholder="aradtrade, examplecorp"><?= e($old['handles'] ?? '') ?></textarea>
-      <div class="hint">نشانی صفحه تجار را با ویرگول جدا کنید (حداکثر ۲۰۰). برای ارسال به یک نفر هم همین‌جا نشانی او را بنویسید.</div></div>
+      <textarea class="textarea handles-box" id="f-handles" name="handles" rows="5" dir="ltr" spellcheck="false" autocapitalize="off" placeholder="aradtrade&#10;examplecorp&#10;…"><?= e($old['handles'] ?? '') ?></textarea>
+      <div class="hint">نشانی صفحه هر تاجر را در یک خط بنویسید و برای نفر بعدی Enter بزنید (حداکثر ۲۰۰ نفر). نشانی کامل صفحه مثل aradbranding.app/p/aradtrade هم پذیرفته می‌شود. برای ارسال به یک نفر، فقط نشانی همان یک نفر را بنویسید. <b class="handles-count" aria-live="polite"></b></div></div>
   </section>
 
   <section class="panel form">

@@ -23,8 +23,8 @@ $sel = static fn (string $k, int $id): string => (int) ($old[$k] ?? 0) === $id ?
         <?php foreach ($categories as $c): ?><option value="<?= e($c['id']) ?>" data-search="<?= e($c['name_en']) ?>"<?= $sel('category', $c['id']) ?>><?= e($c['name_fa']) ?></option><?php endforeach; ?>
       </select></div>
     <div class="field"><label for="f-handles">کاربران منتخب <span class="muted">(اختیاری)</span></label>
-      <textarea class="textarea" id="f-handles" name="handles" rows="2" dir="ltr" placeholder="aradtrade, examplecorp"><?= e($old['handles'] ?? '') ?></textarea>
-      <div class="hint">نشانی صفحه تجار را با ویرگول جدا کنید (حداکثر ۲۰۰). اگر پر شود، فقط همین افراد (با سایر فیلترها) دریافت می‌کنند.</div></div>
+      <textarea class="textarea handles-box" id="f-handles" name="handles" rows="5" dir="ltr" spellcheck="false" autocapitalize="off" placeholder="aradtrade&#10;examplecorp&#10;…"><?= e($old['handles'] ?? '') ?></textarea>
+      <div class="hint">نشانی صفحه هر تاجر را در یک خط بنویسید و برای نفر بعدی Enter بزنید (حداکثر ۲۰۰ نفر). اگر پر شود، فقط همین افراد (با سایر فیلترها) دریافت می‌کنند. <b class="handles-count" aria-live="polite"></b></div></div>
   </section>
   <section class="panel form">
     <h2>نامه</h2>

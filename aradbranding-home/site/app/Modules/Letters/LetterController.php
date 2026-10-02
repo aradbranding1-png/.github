@@ -260,7 +260,8 @@ final class LetterController extends Controller
             }
         }
         $handles = array_values(array_unique(array_filter(array_map(
-            static fn (string $h): string => strtolower(trim(ltrim(trim($h), '@'))),
+            // One handle per line (commas still work); a pasted page link …/p/handle/… counts as its handle.
+            static fn (string $h): string => strtolower(trim(ltrim(trim((string) preg_replace('~^.*?/p/([^/?#\s]+).*$~i', '$1', trim($h))), '@'))),
             preg_split('/[\s,،]+/u', (string) $request->input('handles', '')) ?: []
         ))));
         $filter = [

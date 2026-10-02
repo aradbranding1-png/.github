@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.8)
+# aradbranding.app — Home page redesign (v1.15.9)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -197,3 +197,10 @@ Other changes:
 - `dist/aradbranding-1.15.8-update.zip` contains the following; install it on top of 1.15.7.
   - Exact Star amounts in admin wallet changes (`WalletAdminController`, `UserAdminController`): every non-digit is stripped after Persian/Arabic digit normalisation.
   - Quick amounts and a live balance preview (`admin/wallet.php`, `panel.js`, `panel-theme.css`).
+
+## v1.15.9 (incremental package)
+
+`dist/aradbranding-1.15.9-update.zip` changes «کاربران منتخب» to one handle per line and adds a live count. Install it on top of 1.15.8.
+- `letters/send.php` and `letters/public_new.php`: the field is a list with one handle per line.
+- `panel.js` and `panel-theme.css`: the live count and the field's styles.
+- `LetterController`: a pasted page link `…/p/handle/…` is read as its handle.

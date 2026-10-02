@@ -835,3 +835,5 @@ html.drawer-open .bottom-nav, html.drawer-open .fab { display: none; }
 .wa-preview { min-height: 1.6em; font-weight: 700; color: var(--ink); }
 .wa-preview.is-bad { color: var(--c-danger); }
 .panel-ui .wa-amount { font-size: 16px; font-weight: 800; letter-spacing: .02em; }
+.handles-box { min-height: 120px; line-height: 1.9; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
+.handles-count { color: var(--gold-text, var(--gold)); }
