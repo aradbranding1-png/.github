@@ -44,6 +44,11 @@ $routeCountries = [
     ['IQ', 'عراق', 33.0, 43.5, 'مسیر زمینی از ایران'], ['AF', 'افغانستان', 34.0, 66.0, 'مسیر زمینی از ایران'],
     ['KE', 'کنیا', 0.3, 37.9, 'دریایی + زمینی از ایران'], ['NG', 'نیجریه', 9.1, 8.7, 'دریایی + زمینی از ایران'],
     ['US', 'آمریکا', 39.5, -98.0, 'مسیر دریایی از آفریقا'], ['CA', 'کانادا', 56.0, -106.0, 'مسیر دریایی از آفریقا'],
+    ['ES', 'اسپانیا', 40.2, -3.7, 'بازار هدف'], ['FR', 'فرانسه', 46.6, 2.4, 'بازار هدف'],
+    ['MA', 'مراکش', 31.8, -7.1, 'بازار هدف'], ['MR', 'موریتانی', 20.3, -10.3, 'بازار هدف'], ['NE', 'نیجر', 17.6, 8.1, 'بازار هدف'],
+    ['MX', 'مکزیک', 23.6, -102.5, 'بازار هدف'], ['PE', 'پرو', -9.2, -75.0, 'بازار هدف'], ['AR', 'آرژانتین', -34.6, -64.0, 'بازار هدف'],
+    ['OM', 'عمان', 21.0, 57.0, 'بازار هدف'], ['SY', 'سوریه', 35.0, 38.5, 'بازار هدف'], ['PK', 'پاکستان', 30.4, 69.3, 'بازار هدف'], ['KZ', 'قزاقستان', 48.0, 67.0, 'بازار هدف'],
+    ['KR', 'کره جنوبی', 36.4, 127.9, 'بازار هدف'], ['ID', 'اندونزی', -2.5, 117.9, 'بازار هدف'], ['SG', 'سنگاپور', 1.35, 103.8, 'بازار هدف'],
 ];
 $listed = array_column($globeMarkets, 'code');
 $routeCards = array_values(array_filter($routeCountries, static fn (array $c): bool => !in_array($c[0], $listed, true)));
@@ -96,7 +101,7 @@ if ($show['faq'] && $faq !== []) {
 }
 $desc = 'شبکه بین‌المللی تجار و فعالان اقتصادی: صفحه تجاری چندزبانه بسازید، فرصت‌های تجاری را کشف کنید و مستقیم با تجار کشورهای مختلف ارتباط بگیرید. عضویت رایگان است.';
 $flagUse = static fn (string $code): string => '<svg class="th-flag" viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-' . e($code) . '"/></svg>';
-$flagOf = static fn (string $code): string => in_array($code, ['CN', 'IN', 'AE', 'TR', 'DE', 'RU', 'BR', 'IR', 'IQ', 'AF', 'KE', 'TZ', 'ZA', 'NG', 'US', 'CA', 'GB', 'NL', 'ES', 'KZ'], true)
+$flagOf = static fn (string $code): string => in_array($code, ['CN', 'IN', 'AE', 'TR', 'DE', 'RU', 'BR', 'IR', 'IQ', 'AF', 'KE', 'TZ', 'ZA', 'NG', 'US', 'CA', 'GB', 'NL', 'ES', 'KZ', 'NE', 'MR', 'FR', 'AR', 'PE', 'MX', 'MA', 'KR', 'ID', 'SG', 'PK', 'OM', 'SY'], true)
     ? $flagUse($code) : '<span class="th-flag th-flag-emoji" aria-hidden="true">' . flag($code) . '</span>';
 $icon = static fn (string $id, string $cls = 'th-ic'): string => '<svg class="' . e($cls) . '" viewBox="0 0 24 24" aria-hidden="true"><use href="#' . e($id) . '"/></svg>';
 $live = static fn (string $text): string => strtr(e($text), [
