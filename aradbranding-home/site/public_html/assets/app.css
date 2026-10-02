@@ -870,3 +870,27 @@ main.content > * { animation: rise .32s var(--ease) both; }
 /* Brand logo (1.14.0): the image carries its own tile, so the mark drops the gold foil background. */
 .brand-mark.has-logo, .org-avatar.has-logo { background: none !important; border: 0 !important; box-shadow: none !important; padding: 0; overflow: visible; }
 .brand-mark.has-logo > img, .org-avatar.has-logo > img { width: 100%; height: 100%; display: block; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .35)); }
+
+/* 1.15: phones and tablets never zoom into a field on focus (iOS zooms below 16px). Applies to every form on the site. */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea { font-size: 16px !important; }
+}
+
+/* 1.15: searchable selects open as a dropdown anchored to the field on every screen (no bottom sheet), as wide as
+   their longest option, and flip above the field when the space below is short (class set by app.js). */
+.ss.ss-up .ss-panel { top: auto; bottom: calc(100% + 6px); }
+@media (max-width: 640px) {
+  .ss.is-open::before { content: none; }
+  .ss-panel, .panel-ui .ss-panel {
+    position: absolute; top: calc(100% + 6px); bottom: auto; inset-inline-start: 0; inset-inline-end: auto;
+    width: max-content; min-width: min(220px, 100%); max-width: min(340px, calc(100vw - 32px)); max-height: none;
+    border-radius: 16px; padding-bottom: 0; display: block; animation-name: pop;
+  }
+  .ss.ss-up .ss-panel { top: auto; bottom: calc(100% + 6px); }
+  .ss-list { max-height: 300px; }
+  .ss-list li { white-space: nowrap; }
+}
+
+/* 1.15: proposal photos are shown in place only (no link, no new tab). */
+.gallery .gallery-item { display: block; break-inside: avoid; margin-bottom: 10px; }
+.gallery img { pointer-events: none; -webkit-user-drag: none; user-select: none; }

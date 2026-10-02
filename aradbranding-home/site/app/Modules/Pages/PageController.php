@@ -101,11 +101,17 @@ final class PageController extends Controller
         return $this->form($request, $page, $request->all() + $page, $errors, [], 422);
     }
 
-    public function destroy(Request $request): Response
+    /** Owners switch a page on (published) or off (draft); deleting a page is for administrators only. */
+    public function toggle(Request $request): Response
     {
         $page = $this->owned($request);
-        $this->c->get(PageService::class)->delete($page);
-        return $this->redirect('/pages', 'صفحه حذف شد.');
+        $status = (int) $page['status'];
+        if (!in_array($status, [PageRouter::STATUS_DRAFT, PageRouter::STATUS_PUBLISHED], true)) {
+            return $this->redirect('/pages', 'وضعیت این صفحه را مدیر سامانه تعیین کرده است و از اینجا تغییر نمی‌کند.', 'error');
+        }
+        $on = $status !== PageRouter::STATUS_PUBLISHED;
+        $this->c->get(PageService::class)->setPublished($page, $on);
+        return $this->redirect('/pages', $on ? 'صفحه فعال شد و برای تجار نمایش داده می‌شود.' : 'صفحه غیرفعال شد و تا روشن‌کردن دوباره نمایش داده نمی‌شود.');
     }
 
     public function makeDefault(Request $request): Response

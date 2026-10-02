@@ -24,10 +24,10 @@ $generalErrors = array_intersect_key($errors, array_flip(['cover', 'avatar']));
     <?php if (!$editing && $user['handle'] === null): ?>
       <div class="field<?= isset($errors['handle']) ? ' has-error' : '' ?>">
         <label for="f-handle">نشانی صفحه شما</label>
-        <div class="prefix-input">
-          <span>aradbranding.app/p/</span>
-          <input class="input" id="f-handle" name="handle" value="<?= e($old['handle'] ?? '') ?>" required minlength="3" maxlength="32"
-                 pattern="[a-z0-9][a-z0-9\-]{1,30}[a-z0-9]" autocapitalize="off" spellcheck="false" aria-describedby="f-handle-hint">
+        <div class="join-ctl">
+          <span class="jc-pre">aradbranding.app/p/</span>
+          <input class="jc-in" id="f-handle" name="handle" value="<?= e($old['handle'] ?? '') ?>" required minlength="3" maxlength="32"
+                 pattern="[a-z0-9][a-z0-9\-]{1,30}[a-z0-9]" autocapitalize="off" autocomplete="off" spellcheck="false" dir="ltr" aria-describedby="f-handle-hint">
         </div>
         <div class="hint" id="f-handle-hint">فقط یک بار انتخاب می‌شود. حروف کوچک انگلیسی، عدد و خط تیره؛ مثلاً aradtrade</div>
         <?php if (isset($errors['handle'])): ?><div class="error"><?= e($errors['handle']) ?></div><?php endif; ?>
@@ -108,12 +108,4 @@ $generalErrors = array_intersect_key($errors, array_flip(['cover', 'avatar']));
   </section>
 </form>
 
-<?php if ($editing): ?>
-<form class="panel" method="post" action="/pages/<?= e($page['uid']) ?>/delete" data-confirm="این صفحه حذف شود؟ قوانین نمایش مربوط به آن هم حذف می‌شوند.">
-  <?= csrf_field() ?>
-  <div class="panel-head">
-    <div><h3>حذف صفحه</h3><p class="muted">صفحه از دسترس خارج می‌شود و می‌توانید برای همین زبان صفحه جدید بسازید.</p></div>
-    <button class="btn btn-danger" type="submit">حذف این صفحه</button>
-  </div>
-</form>
-<?php endif; ?>
+

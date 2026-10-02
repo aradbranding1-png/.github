@@ -145,6 +145,9 @@ final class PublicPageController extends Controller
         $model = $this->model($pageId, $set['pages'][$pageId]['version'], $set['owner_version']);
         $back = '/p/' . $handle . '/' . $lang;
 
+        if (!$this->c->get(PageViewGate::class)->charging()) {
+            return Response::redirect($back, 303);
+        }
         $token = (string) $request->input('token', '');
         if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
             throw new HttpException(400);

@@ -1,7 +1,7 @@
 /* Panel shell: notifications dropdown and the mobile drawer. Both are <details>, so they open without JS too. */
 (function () {
   'use strict';
-  var pops = Array.prototype.slice.call(document.querySelectorAll('.notif, .nav-drawer, .fab, .profile'));
+  var pops = Array.prototype.slice.call(document.querySelectorAll('.notif, .nav-drawer, .fab, .profile, .theme-pick'));
 
   function closeOthers(keep) {
     pops.forEach(function (d) { if (d !== keep) d.open = false; });
@@ -22,6 +22,20 @@
       if (d.open) { d.open = false; var s = d.querySelector('summary'); if (s) s.focus(); }
     });
   });
+  // Copy buttons (new API key)
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = btn.getAttribute('data-copy');
+      var done = function () { btn.textContent = 'کپی شد'; setTimeout(function () { btn.textContent = 'کپی'; }, 1800); };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+    });
+  });
+
+  // Report bars: widths come from data-w (CSP: no inline styles in the markup).
+  document.querySelectorAll('.rp-track i[data-w]').forEach(function (i) {
+    i.style.width = Math.max(0, Math.min(100, parseInt(i.getAttribute('data-w'), 10) || 0)) + '%';
+  });
+
   document.querySelectorAll('.nav-drawer a').forEach(function (a) {
     a.addEventListener('click', function () { var d = a.closest('details'); if (d) d.open = false; });
   });
@@ -76,26 +90,32 @@
     });
   }
 
-  // Theme button: automatic (device) → light → dark → automatic…
-  var labels = { system: 'خودکار (مطابق دستگاه)', light: 'روشن', dark: 'تیره' };
+  // Theme menu: automatic (light by day, dark at night) / light / dark.
+  var labels = { system: 'خودکار (روز روشن، شب تیره)', light: 'روشن', dark: 'تیره' };
   var root = document.documentElement;
-  var themeBtn = document.querySelector('[data-theme-cycle]');
-  var paintBtn = function () {
-    if (!themeBtn) return;
+  var pick = document.querySelector('.theme-pick');
+  var paint = function () {
+    if (!pick) return;
     var m = root.getAttribute('data-theme-mode') || 'system';
-    themeBtn.setAttribute('aria-label', 'حالت نمایش: ' + labels[m]);
-    themeBtn.setAttribute('title', 'حالت نمایش: ' + labels[m]);
+    var sum = pick.querySelector('summary');
+    sum.setAttribute('aria-label', 'حالت نمایش: ' + labels[m]);
+    sum.setAttribute('title', 'حالت نمایش: ' + labels[m]);
+    pick.querySelectorAll('[data-theme-set]').forEach(function (b) {
+      b.setAttribute('aria-checked', b.getAttribute('data-theme-set') === m ? 'true' : 'false');
+    });
   };
-  if (themeBtn) {
-    paintBtn();
-    themeBtn.addEventListener('click', function () {
-      var order = ['system', 'light', 'dark'];
-      var next = order[(order.indexOf(root.getAttribute('data-theme-mode') || 'system') + 1) % 3];
-      root.setAttribute('data-theme-mode', next);
-      var sys = window.__sadtSystemTheme ? window.__sadtSystemTheme() : 'light';
-      root.setAttribute('data-theme', next === 'system' ? sys : next);
-      try { if (next === 'system') localStorage.removeItem('sadt-theme-mode'); else localStorage.setItem('sadt-theme-mode', next); } catch (e) {}
-      paintBtn();
+  if (pick) {
+    paint();
+    pick.querySelectorAll('[data-theme-set]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var next = b.getAttribute('data-theme-set');
+        root.setAttribute('data-theme-mode', next);
+        var sys = window.__sadtSystemTheme ? window.__sadtSystemTheme() : 'light';
+        root.setAttribute('data-theme', next === 'system' ? sys : next);
+        try { if (next === 'system') localStorage.removeItem('sadt-theme-mode'); else localStorage.setItem('sadt-theme-mode', next); } catch (e) {}
+        paint();
+        pick.open = false;
+      });
     });
   }
 })();

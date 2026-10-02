@@ -42,6 +42,7 @@ final class SettingsController extends Controller
             'uploadKb' => (int) $settings->get('upload.max_kb', 200),
             'showStats' => (bool) $settings->get('landing.show_stats', false),
             'purchaseEnabled' => (bool) $settings->get('payments.purchase_enabled', false),
+            'unlockCharge' => (bool) $settings->get('pages.unlock_charge', false),
             'dailyDigest' => (bool) $settings->get('notifications.daily_digest', true),
             'autoBackup' => (bool) $settings->get('backup.auto_daily', false),
             'retention' => (int) $settings->get('backup.retention_days', 7),
@@ -173,6 +174,7 @@ final class SettingsController extends Controller
         $settings->set('upload.max_kb', $uploadKb, $actor);
         $settings->set('landing.show_stats', (bool) $request->input('show_stats'), $actor);
         $settings->set('payments.purchase_enabled', (bool) $request->input('purchase_enabled'), $actor);
+        $settings->set('pages.unlock_charge', (bool) $request->input('unlock_charge'), $actor);
         $settings->set('notifications.daily_digest', (bool) $request->input('daily_digest'), $actor);
         $settings->set('backup.auto_daily', (bool) $request->input('auto_backup'), $actor);
         $settings->set('backup.retention_days', $retention, $actor);
@@ -185,6 +187,7 @@ final class SettingsController extends Controller
             'toman_per_star' => $toman, 'packages' => $packages, 'new_package' => $newPackage,
             'max_recipients' => $maxRecipients, 'daily' => $daily, 'upload_kb' => $uploadKb,
             'purchase_enabled' => (bool) $request->input('purchase_enabled'),
+            'unlock_charge' => (bool) $request->input('unlock_charge'),
         ]);
         return $this->redirect('/admin/settings', 'تنظیمات ذخیره شد و از همین لحظه اعمال می‌شود.');
     }

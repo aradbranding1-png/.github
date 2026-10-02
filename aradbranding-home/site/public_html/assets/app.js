@@ -15,6 +15,12 @@
   });
 
   // Confirm destructive actions
+  // A single risky button inside a form (e.g. admin "حذف") asks first, too.
+  document.querySelectorAll('button[data-confirm]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      if (!window.confirm(btn.getAttribute('data-confirm'))) e.preventDefault();
+    });
+  });
   document.querySelectorAll('form[data-confirm]').forEach(function (form) {
     form.addEventListener('submit', function (e) {
       if (!window.confirm(form.getAttribute('data-confirm'))) e.preventDefault();
@@ -137,7 +143,7 @@
 
   var uid = 0;
   function enhanceSelect(select) {
-    if (select.multiple || select.options.length <= 10 || select.dataset.enhanced) return;
+    if (select.multiple || (select.options.length <= 10 && !select.hasAttribute('data-ss')) || select.dataset.enhanced) return;
     select.dataset.enhanced = '1';
     uid++;
     var listId = 'ss-list-' + uid;
@@ -222,6 +228,7 @@
       trigger.setAttribute('aria-expanded', 'true');
       input.value = '';
       filter();
+      place();
       var vis = visible();
       var sel = vis.findIndex(function (it) { return it.opt.selected; });
       setActive(sel >= 0 ? sel : 0);
@@ -229,6 +236,20 @@
       if (!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) {
         setTimeout(function () { try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); } }, 0);
       }
+    }
+    // Open right under the field (or above it when there is more room there) and size the list to the visible
+    // space, so the choices are always on screen without scrolling the page.
+    function place() {
+      var r = trigger.getBoundingClientRect();
+      var vh = window.innerHeight || document.documentElement.clientHeight;
+      var floor = vh;
+      var bar = document.querySelector('.bottom-nav');
+      if (bar && getComputedStyle(bar).display !== 'none') floor = Math.min(floor, bar.getBoundingClientRect().top);
+      var below = floor - r.bottom - 16;
+      var above = r.top - 16;
+      var up = below < 240 && above > below;
+      wrap.classList.toggle('ss-up', up);
+      list.style.maxHeight = Math.max(140, Math.min(300, (up ? above : below) - 72)) + 'px';
     }
     function close(focusTrigger) {
       if (panel.hidden) return;

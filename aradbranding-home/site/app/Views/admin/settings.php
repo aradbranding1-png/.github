@@ -74,6 +74,7 @@ $cls = static fn (string $k): string => isset($errors[$k]) ? ' has-error' : '';
 
   <section class="panel form">
     <h2>مشاهده صفحه تجاری</h2>
+    <label class="switch"><input type="checkbox" name="unlock_charge" value="1" role="switch"<?= !empty($unlockCharge) ? ' checked' : '' ?>><span class="switch-track" aria-hidden="true"></span><span>برای مشاهده کامل صفحه تجاری Stars کسر شود <small class="muted">(اگر خاموش باشد، همه تجار واردشده صفحه کامل را رایگان می‌بینند و تنظیمات زیر اعمال نمی‌شود)</small></span></label>
     <div class="settings-grid">
       <div class="field">
         <label class="check"><input type="radio" name="charge_mode" value="every_view"<?= $chargeMode === 'every_view' ? ' checked' : '' ?>> هر مشاهده هزینه دارد</label>

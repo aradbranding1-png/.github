@@ -732,7 +732,7 @@ function init(root) {
     hit.userData = { type: 'country', el };
     world.add(hit);
     hitTargets.push(hit);
-    return { el, local: p, w: 0, h: 0, hover: false, priority: el.dataset.priority !== undefined ? +el.dataset.priority || 0 : el.classList.contains('is-secondary') ? 1 : 0 };
+    return { el, local: p, w: 0, h: 0, hover: false, priority: el.dataset.priority !== undefined ? +el.dataset.priority || 0 : el.classList.contains('is-home') ? 0 : el.classList.contains('is-secondary') ? 0.6 : 0.3, wait: 0, hold: 0 };
   });
   cards.forEach((c) => {
     c.el.addEventListener('pointerenter', () => { c.hover = true; c.el.classList.add('is-hot'); });
@@ -1043,7 +1043,7 @@ function init(root) {
     // Pass 1: anchor and preferred box for every card.
     cards.forEach((c, i) => {
       project(c.local, scr);
-      let o = MathUtils.smoothstep(scr.f, 0.12, 0.42);
+      let o = MathUtils.smoothstep(scr.f, 0.04, 0.28);
       if (allowed && !allowed.has(i)) o = 0;
       let dx = scr.x - cScr.x;
       let dy = scr.y - cScr.y;
@@ -1056,11 +1056,16 @@ function init(root) {
       c.px = MathUtils.clamp(cx - c.w / 2, 6, W - c.w - 6);
       c.py = MathUtils.clamp(cy - c.h / 2, safeTop, H - c.h - 6);
     });
-    // Pass 2: declutter. Primary cards first (then the best-facing); a card that collides slides up or down a
-    // row, and a secondary card with no free row fades out until the globe turns. Offsets and fades are eased.
+    // Pass 2: declutter. A card that collides slides to a free slot nearby; with no free slot it fades out. Cards take
+    // turns: a hidden card gains rank while it waits, and a card that just appeared keeps its place for a few
+    // seconds, so every country (Germany, Kenya…) gets shown instead of the same few staying in front.
+    const now = performance.now();
+    const dt = Math.min(0.25, Math.max(0, (now - (updateOverlays.last || now)) / 1000));
+    updateOverlays.last = now;
+    const rank = (c) => c.priority - Math.min(0.7, c.wait * 0.1) - (now < c.hold ? 1 : 0);
     const placed = obstacles.slice();
     const hit = (x, y, w, h) => placed.some((q) => x < q.x + q.w + 4 && x + w + 4 > q.x && y < q.y + q.h + 4 && y + h + 4 > q.y);
-    cards.map((c) => c).sort((a, b) => (b.hover - a.hover) || (a.priority - b.priority) || (b.f - a.f)).forEach((c) => {
+    cards.map((c) => c).sort((a, b) => (b.hover - a.hover) || (rank(a) - rank(b)) || (b.f - a.f)).forEach((c) => {
       let off = 0, offX = 0, room = true;
       if (c.o > 0.02 && c.w) {
         const stepY = c.h + 6, stepX = c.w + 8;
@@ -1072,6 +1077,11 @@ function init(root) {
         }
         if (!room && !c.priority) room = true;
         if (room) placed.push({ x: c.px + offX, y: c.py + off, w: c.w, h: c.h });
+        if (room && !c.shown) c.hold = now + 7000;
+        c.wait = room ? 0 : c.wait + dt;
+        c.shown = room;
+      } else {
+        c.shown = false;
       }
       c.ox = c.ox === undefined ? offX : c.ox + (offX - c.ox) * 0.18;
       c.oy = c.oy === undefined ? off : c.oy + (off - c.oy) * 0.18;

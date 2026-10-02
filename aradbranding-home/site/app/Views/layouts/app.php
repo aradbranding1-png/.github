@@ -18,12 +18,14 @@ $adminNav = array_values(array_filter([
     ['href' => '/admin/users', 'label' => 'کاربران', 'icon' => 'user', 'ok' => $has('users.view')],
     ['href' => '/admin/content', 'label' => 'محتوا و بررسی', 'icon' => 'page', 'ok' => $has('pages.view', 'pages.approve', 'proposals.view', 'proposals.moderate')],
     ['href' => '/admin/finance', 'label' => 'مالی', 'icon' => 'star', 'ok' => $has('payments.view', 'wallet.view')],
+    ['href' => '/admin/wallet', 'label' => 'کیف پول مشتریان', 'icon' => 'star', 'ok' => $has('wallet.credit', 'wallet.debit')],
     ['href' => '/admin/reports', 'label' => 'گزارش‌ها', 'icon' => 'spark', 'ok' => $has('reports.view')],
     ['href' => '/admin/exports', 'label' => 'خروجی Excel', 'icon' => 'archive', 'ok' => $has('reports.export')],
     ['href' => '/admin/roles', 'label' => 'نقش‌ها و دسترسی‌ها', 'icon' => 'lock', 'ok' => $has('roles.manage')],
     ['href' => '/admin/audit', 'label' => 'رویدادهای امنیتی', 'icon' => 'eye', 'ok' => $has('audit.view')],
     ['href' => '/admin/settings', 'label' => 'تنظیمات', 'icon' => 'gear', 'ok' => $has('settings.manage')],
     ['href' => '/admin/home', 'label' => 'صفحه اصلی سایت', 'icon' => 'link', 'ok' => $has('settings.manage')],
+    ['href' => '/admin/api', 'label' => 'اتصال API', 'icon' => 'route', 'ok' => $has('settings.manage')],
     ['href' => '/admin/backups', 'label' => 'نسخه‌های پشتیبان', 'icon' => 'archive', 'ok' => $has('backup.manage')],
     ['href' => '/admin/system-update', 'label' => 'بروزرسانی سامانه', 'icon' => 'route', 'ok' => $has('updates.manage')],
 ], static fn (array $i): bool => $i['ok']));
@@ -75,7 +77,7 @@ $renderNav = static function () use ($nav, $adminNav, $link): string {
     return $html;
 };
 $renderFoot = static function () use ($isActive): string {
-    return '<a href="/" target="_blank" rel="noopener"><svg class="icon"><use href="#i-link"/></svg><span class="nav-label">مشاهده سایت</span></a>'
+    return '<a href="/reports"' . ($isActive('/reports') ? ' aria-current="page"' : '') . '><svg class="icon"><use href="#i-chart"/></svg><span class="nav-label">گزارش‌های من</span></a>'
         . '<a href="/wallet"' . ($isActive('/wallet') ? ' aria-current="page"' : '') . '><svg class="icon"><use href="#i-star"/></svg><span class="nav-label">کیف پول Stars</span></a>'
         . '<form method="post" action="/logout">' . csrf_field() . '<button class="side-logout" type="submit"><svg class="icon"><use href="#i-logout"/></svg><span class="nav-label">خروج</span></button></form>';
 };
@@ -134,7 +136,15 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
             <a class="notif-all" href="/notifications">همه اعلان‌ها</a>
           </div>
         </details>
-        <button class="icon-btn theme-btn" type="button" data-theme-cycle aria-label="حالت نمایش: خودکار (مطابق دستگاه)" title="حالت نمایش: خودکار (مطابق دستگاه)"><svg class="icon"><use href="#i-theme"/></svg><i class="theme-auto" aria-hidden="true">A</i></button>
+        <details class="theme-pick">
+          <summary class="icon-btn theme-btn" aria-label="حالت نمایش" title="حالت نمایش"><svg class="icon"><use href="#i-theme"/></svg><i class="theme-auto" aria-hidden="true">A</i></summary>
+          <div class="theme-panel" role="menu" aria-label="حالت نمایش">
+            <b class="theme-panel-h">حالت نمایش</b>
+            <button type="button" role="menuitemradio" data-theme-set="system"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z"/></svg><span>خودکار<small>روز روشن، شب تیره</small></span></button>
+            <button type="button" role="menuitemradio" data-theme-set="light"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><span>روشن</span></button>
+            <button type="button" role="menuitemradio" data-theme-set="dark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span>تیره</span></button>
+          </div>
+        </details>
         <details class="profile">
           <summary aria-label="منوی حساب کاربری">
             <?= $avatar('avatar') ?>

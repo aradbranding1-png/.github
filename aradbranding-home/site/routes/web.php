@@ -35,11 +35,10 @@ return static function (Router $r): void {
     $r->group('', ['session', 'auth', 'csrf'], static function (Router $r): void {
         $r->post('/logout', [AuthController::class, 'logout']);
         $r->get('/dashboard', [DashboardController::class, 'index']);
+        $r->get('/reports', [\App\Modules\Dashboard\ReportsController::class, 'index']);
 
         $r->get('/account', [AccountController::class, 'show']);
         $r->post('/account', [AccountController::class, 'updateProfile']);
-        $r->post('/account/socials', [AccountController::class, 'updateSocials']);
-        $r->post('/account/privacy', [AccountController::class, 'updatePrivacy']);
         $r->post('/account/password', [AccountController::class, 'updatePassword'], ['throttle:login']);
 
         $r->get('/pages', [PageController::class, 'index']);
@@ -49,7 +48,7 @@ return static function (Router $r): void {
         $r->post('/pages/routes/{rule:\d+}/delete', [PageController::class, 'deleteRule']);
         $r->get('/pages/{uid:[0-9a-z]{26}}/edit', [PageController::class, 'edit']);
         $r->post('/pages/{uid:[0-9a-z]{26}}', [PageController::class, 'update']);
-        $r->post('/pages/{uid:[0-9a-z]{26}}/delete', [PageController::class, 'destroy']);
+        $r->post('/pages/{uid:[0-9a-z]{26}}/toggle', [PageController::class, 'toggle']);
         $r->post('/pages/{uid:[0-9a-z]{26}}/default', [PageController::class, 'makeDefault']);
 
         $r->get('/wallet', [WalletController::class, 'index']);
@@ -99,6 +98,11 @@ return static function (Router $r): void {
         $r->get('/admin', [\App\Modules\Admin\DashboardAdminController::class, 'dashboard']);
         $r->get('/admin/reports', [\App\Modules\Admin\DashboardAdminController::class, 'reports'], ['can:reports.view']);
         $r->get('/admin/finance', [\App\Modules\Admin\DashboardAdminController::class, 'finance'], ['can:payments.view']);
+        $r->get('/admin/api', [\App\Modules\Admin\ApiAdminController::class, 'index'], ['can:settings.manage']);
+        $r->post('/admin/api', [\App\Modules\Admin\ApiAdminController::class, 'create'], ['can:settings.manage']);
+        $r->post('/admin/api/{id:\d+}/revoke', [\App\Modules\Admin\ApiAdminController::class, 'revoke'], ['can:settings.manage']);
+        $r->get('/admin/wallet', [\App\Modules\Admin\WalletAdminController::class, 'index'], ['can:wallet.view']);
+        $r->post('/admin/wallet/{id:\d+}', [\App\Modules\Admin\WalletAdminController::class, 'adjust'], ['can:wallet.view']);
         $r->get('/admin/users', [\App\Modules\Admin\UserAdminController::class, 'index'], ['can:users.view']);
         $r->get('/admin/users/{id:\d+}', [\App\Modules\Admin\UserAdminController::class, 'show'], ['can:users.view']);
         $r->post('/admin/users/{id:\d+}/status', [\App\Modules\Admin\UserAdminController::class, 'setStatus'], ['can:users.edit']);

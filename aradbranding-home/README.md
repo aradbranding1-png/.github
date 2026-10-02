@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.14.0)
+# aradbranding.app — Home page redesign (v1.15.0)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth or database schema were changed (v1.13.0 changes contact behaviour
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.14.0.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.15.0.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -119,3 +119,29 @@ Earth textures are from the three.js examples (NASA Blue Marble / Black Marble d
 
 - Brand marks use `public_html/assets/brand/logo-192.webp` (`.brand-mark.has-logo` / `.org-avatar.has-logo` in `app.css`) in `layouts/{app,guest,public}.php`, `public/landing.php`, `letters/{index,official}.php`.
 - Regenerated `favicon.ico` (16/32/48), `favicon.png`, `icons/icon-192.png`, `icons/icon-512.png`, `icons/maskable-512.png` (navy safe-zone), `icons/apple-touch-icon.png`; `?v=2` on the head links, manifest icons and OG/schema logo; service-worker cache `sadt-v2`.
+
+## v1.15.0
+
+A broad round on the panel, admin and integrations. It ships one forward-only migration, `database/migrations/2026_10_10_000001_reports_wallet_api.php`, which the built-in updater runs. The migration:
+- adds `activity_events` indexes (`ix_user`, `ix_subject`);
+- creates the `api_clients` and `api_requests` tables;
+- adds the setting `pages.unlock_charge` (default false);
+- grants `wallet.view/credit/debit` to the Admin role.
+
+New:
+- `/reports` («گزارش‌های من»): `Dashboard/ReportsController`, server-side SVG charts.
+- `/admin/wallet` («کیف پول مشتریان»): `Admin/WalletAdminController`, with a notification and the note shown in the customer ledger.
+- `/admin/api` and `/api/v1/{wallet/charge,users/lookup,users/credentials}`: `Integrations/*`, `Admin/ApiAdminController`. Docs: `docs/API-arad-contact.md`.
+- Mobile-number sign-in in `AuthService::attempt`.
+- Multi-filter Discover (`discover/_finder.php`, product and category filters in `MysqlSearchProvider`).
+
+Removed:
+- Account socials and privacy tabs and routes.
+- The owner page-delete route (`PageController::toggle` replaces it; admins delete in `/admin/content`).
+- The public-letter opt-out (`CampaignService`).
+
+Other changes:
+- Time-based auto theme (`theme.js`) and the theme menu (`panel.js`).
+- Turn-taking globe cards (`globe.js`).
+- Anchored, content-width combobox (`app.js`).
+- No focus zoom on touch devices (`app.css`).

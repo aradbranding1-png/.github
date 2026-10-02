@@ -19,27 +19,15 @@ use App\Modules\Reference\ReferenceData;
 
 final class AccountController extends Controller
 {
-    public const NETWORKS = [
-        'whatsapp' => 'واتساپ', 'telegram' => 'تلگرام', 'instagram' => 'اینستاگرام', 'linkedin' => 'لینکدین',
-        'facebook' => 'فیسبوک', 'x' => 'X', 'youtube' => 'یوتیوب', 'website' => 'وب‌سایت', 'other' => 'سایر',
-    ];
-
     public function show(Request $request, array $errors = [], ?string $tab = null, int $status = 200): Response
     {
         $user = $this->user($request);
         $db = $this->c->get(Connection::class);
         $ref = $this->c->get(ReferenceData::class);
         $profile = $db->first('SELECT * FROM user_profiles WHERE user_id = ?', [$user['id']]) ?? [];
-        $socials = array_column(
-            $db->select('SELECT network, value, is_public FROM user_socials WHERE user_id = ?', [$user['id']]),
-            null,
-            'network'
-        );
         return $this->view($request, 'account/show', [
             'title' => 'حساب کاربری',
             'profile' => $profile,
-            'socials' => $socials,
-            'networks' => self::NETWORKS,
             'countries' => $ref->countries(),
             'languages' => $ref->languages(),
             'errors' => $errors,
@@ -125,61 +113,6 @@ final class AccountController extends Controller
         }
         $this->c->get(Cache::class)->bump('owner:' . $user['id']);
         return $this->redirect('/account', 'پروفایل ذخیره شد.');
-    }
-
-    public function updateSocials(Request $request): Response
-    {
-        $user = $this->user($request);
-        $errors = [];
-        $rows = [];
-        foreach (array_keys(self::NETWORKS) as $network) {
-            $value = trim((string) $request->input("social_{$network}", ''));
-            if ($value === '') {
-                continue;
-            }
-            if (mb_strlen($value) > 255) {
-                $errors["social_{$network}"] = 'حداکثر ۲۵۵ نویسه.';
-                continue;
-            }
-            if (in_array($network, ['website', 'linkedin', 'facebook', 'youtube', 'other'], true)
-                && !preg_match('~^https?://[^\s]+$~i', $value)) {
-                $errors["social_{$network}"] = 'آدرس باید با https:// شروع شود.';
-                continue;
-            }
-            $rows[] = [$user['id'], $network, $value, $request->input("public_{$network}") ? 1 : 0];
-        }
-        if ($errors !== []) {
-            return $this->show($request, $errors, 'socials', 422);
-        }
-
-        $this->c->get(Connection::class)->transaction(function (Connection $db) use ($user, $rows): void {
-            $db->exec('DELETE FROM user_socials WHERE user_id = ?', [$user['id']]);
-            if ($rows !== []) {
-                $db->exec(
-                    'INSERT INTO user_socials (user_id, network, value, is_public) VALUES '
-                        . implode(',', array_fill(0, count($rows), '(?, ?, ?, ?)')),
-                    array_merge(...$rows)
-                );
-            }
-        });
-        $this->c->get(Cache::class)->bump('owner:' . $user['id']);
-        return $this->redirect('/account?tab=socials', 'شبکه‌های اجتماعی ذخیره شد.');
-    }
-
-    public function updatePrivacy(Request $request): Response
-    {
-        $user = $this->user($request);
-        $this->c->get(Connection::class)->exec(
-            'UPDATE user_profiles SET show_phone = ?, show_email = ?, accept_public_letters = ?, updated_at = NOW(3) WHERE user_id = ?',
-            [
-                $request->input('show_phone') ? 1 : 0,
-                $request->input('show_email') ? 1 : 0,
-                $request->input('accept_public_letters') ? 1 : 0,
-                $user['id'],
-            ]
-        );
-        $this->c->get(Cache::class)->bump('owner:' . $user['id']);
-        return $this->redirect('/account?tab=privacy', 'تنظیمات حریم خصوصی ذخیره شد.');
     }
 
     public function updatePassword(Request $request): Response

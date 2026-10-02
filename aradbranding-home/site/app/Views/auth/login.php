@@ -8,8 +8,8 @@
   <label class="auth-field<?= $error ? ' has-error' : '' ?>" for="f-email">
     <svg class="auth-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-letter"/></svg>
     <span class="auth-field-body">
-      <span class="auth-label">ایمیل</span>
-      <input id="f-email" name="email" type="email" value="<?= e($old['email'] ?? '') ?>" autocomplete="email" required dir="ltr" autofocus placeholder="name@company.com"<?= $error ? ' aria-invalid="true" aria-describedby="login-error"' : '' ?>>
+      <span class="auth-label">ایمیل یا شماره موبایل</span>
+      <input id="f-email" name="email" type="text" inputmode="email" value="<?= e($old['email'] ?? '') ?>" autocomplete="username" autocapitalize="off" spellcheck="false" required dir="ltr" autofocus placeholder="name@company.com · 0912…"<?= $error ? ' aria-invalid="true" aria-describedby="login-error"' : '' ?>>
     </span>
   </label>
   <label class="auth-field<?= $error ? ' has-error' : '' ?>" for="f-password">

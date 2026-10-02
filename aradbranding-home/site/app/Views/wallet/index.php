@@ -7,7 +7,7 @@ $actionLabels = ['page_view' => 'مشاهده کامل صفحه تجاری', 'pr
 ?>
 <div class="stack">
   <?php if ($need > 0): ?>
-    <div class="alert alert-error" role="status">برای ادامه، <?= fa_int($need) ?> Star دیگر لازم دارید.<?= !empty($buyEnabled) ? ' یکی از بسته‌های زیر را انتخاب کنید.' : '' ?></div>
+    <div class="alert alert-error" role="status">برای ادامه، <?= fa_int($need) ?> Star دیگر لازم دارید. جهت تهیه Star با کارشناسان آراد برندینگ ارتباط بگیرید.<?= !empty($buyEnabled) ? ' همچنین می‌توانید یکی از بسته‌های زیر را انتخاب کنید.' : '' ?></div>
   <?php endif; ?>
 
   <section class="panel wallet-hero gilded">
@@ -94,11 +94,12 @@ $actionLabels = ['page_view' => 'مشاهده کامل صفحه تجاری', 'pr
       <div class="empty"><p>هنوز تراکنشی ندارید.</p></div>
     <?php else: ?>
       <ul class="list">
-        <?php foreach ($history['rows'] as $t): $amount = (int) $t['amount']; ?>
+        <?php foreach ($history['rows'] as $t): $amount = (int) $t['amount']; $byAdmin = in_array((int) $t['type'], [WalletService::T_ADMIN_CREDIT, WalletService::T_ADMIN_DEBIT], true); ?>
           <li class="list-row">
             <div class="grow">
-              <div class="title"><?= e(WalletService::REASON_LABELS[$t['reason']] ?? WalletService::TYPE_LABELS[(int) $t['type']] ?? $t['reason']) ?></div>
-              <div class="meta"><span class="ltr"><?= e(substr((string) $t['created_at'], 0, 16)) ?></span><span>مانده: <?= fa_int((int) $t['balance_after']) ?></span></div>
+              <div class="title"><?= e($byAdmin ? WalletService::TYPE_LABELS[(int) $t['type']] : (WalletService::REASON_LABELS[$t['reason']] ?? WalletService::TYPE_LABELS[(int) $t['type']] ?? $t['reason'])) ?></div>
+              <?php if (($t['note'] ?? '') !== '' && ($byAdmin || $t['reason'] === 'api_charge')): ?><div class="tx-note">توضیح: <?= e((string) $t['note']) ?></div><?php endif; ?>
+              <div class="meta"><span><?= e(fa_date($t['created_at'])) ?></span><span>مانده: <?= fa_int((int) $t['balance_after']) ?></span></div>
             </div>
             <b class="amount <?= $amount >= 0 ? 'plus' : 'minus' ?>" dir="ltr"><?= $amount >= 0 ? '+' : '−' ?><?= fa_int(abs($amount)) ?></b>
           </li>

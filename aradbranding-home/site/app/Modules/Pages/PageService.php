@@ -173,7 +173,19 @@ final class PageService
         $this->cache->bump('owner:' . $page['user_id']);
     }
 
-    /** Soft delete. Rules pointing at the page go; a new default is chosen if needed. */
+    /** On/off switch of the owner: published (2) or draft (0). Moderated states are left to the admin. */
+    public function setPublished(array $page, bool $on): void
+    {
+        $status = $on ? PageRouter::STATUS_PUBLISHED : PageRouter::STATUS_DRAFT;
+        $this->db->exec(
+            'UPDATE pages SET status = ?, published_at = COALESCE(published_at, IF(? = 2, NOW(3), NULL)), version = version + 1, updated_at = NOW(3)
+             WHERE id = ? AND deleted_at IS NULL AND status IN (0, 2)',
+            [$status, $status, $page['id']]
+        );
+        $this->cache->bump('owner:' . $page['user_id']);
+    }
+
+    /** Soft delete (administrators only). Rules pointing at the page go; a new default is chosen if needed. */
     public function delete(array $page): void
     {
         $ownerId = (int) $page['user_id'];

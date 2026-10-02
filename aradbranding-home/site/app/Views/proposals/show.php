@@ -49,7 +49,7 @@ $owner = $p['company_name'] ?: trim($p['first_name'] . ' ' . $p['last_name']);
 
     <?php if ($gallery): ?>
       <section class="gallery" aria-label="تصاویر">
-        <?php foreach ($gallery as $g): ?><a href="<?= e(media($g)) ?>" target="_blank" rel="noopener"><img src="<?= e(media($g)) ?>" alt="" loading="lazy" decoding="async"></a><?php endforeach; ?>
+        <?php foreach ($gallery as $g): ?><span class="gallery-item"><img src="<?= e(media($g)) ?>" alt="" loading="lazy" decoding="async" draggable="false"></span><?php endforeach; ?>
       </section>
     <?php endif; ?>
 
@@ -60,7 +60,7 @@ $owner = $p['company_name'] ?: trim($p['first_name'] . ' ' . $p['last_name']);
         <a class="btn" href="/proposals/<?= e($p['uid']) ?>/edit">ویرایش</a>
         <span class="muted"><svg class="icon inline-icon"><use href="#i-eye"/></svg> <?= fa_int((int) $p['view_count']) ?> بازدید · <?= fa_int((int) $p['send_count']) ?> ارسال</span>
       <?php elseif ($p['handle']): ?>
-        <a class="btn" href="/p/<?= e($p['handle']) ?>">مشاهده صفحه و ارتباط با <?= e(trim($p['first_name'] . ' ' . $p['last_name'])) ?></a>
+        <a class="btn" href="/letters/new?to=<?= e($p['handle']) ?>"><svg class="icon"><use href="#i-letter"/></svg>با من ارتباط بگیرید</a>
       <?php endif; ?>
     </div>
   </div>
