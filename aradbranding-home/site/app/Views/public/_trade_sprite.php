@@ -65,6 +65,7 @@ $palette = ['#C99A3E', '#1E7FC4', '#A8383A', '#D9DEE6', '#2D7A5A', '#D0702E', '#
   <symbol id="flag-CA" viewBox="0 0 30 20"><rect width="30" height="20" fill="#fff"/><rect width="7.5" height="20" fill="#D52B1E"/><rect x="22.5" width="7.5" height="20" fill="#D52B1E"/><path d="M15 4.2l1 2 1.8-.6-.6 3 1.6-.8.4 1-2 .9.4 1.3-2-.4V14h-1.2v-3.4l-2 .4.4-1.3-2-.9.4-1 1.6.8-.6-3 1.8.6z" fill="#D52B1E"/></symbol>
   <symbol id="flag-GB" viewBox="0 0 30 20"><rect width="30" height="20" fill="#012169"/><path d="M0 0l30 20M30 0L0 20" stroke="#fff" stroke-width="4"/><path d="M0 0l30 20M30 0L0 20" stroke="#C8102E" stroke-width="1.6"/><path d="M15 0v20M0 10h30" stroke="#fff" stroke-width="6"/><path d="M15 0v20M0 10h30" stroke="#C8102E" stroke-width="3.4"/></symbol>
   <symbol id="flag-NL" viewBox="0 0 30 20"><rect width="30" height="6.67" fill="#AE1C28"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#21468B"/></symbol>
+  <symbol id="flag-KZ" viewBox="0 0 30 20"><rect width="30" height="20" fill="#00AFCA"/><circle cx="16" cy="9" r="3.2" fill="#FEC50C"/><g stroke="#FEC50C" stroke-width=".6"><path d="M16 4.4v-1.6M16 15.2v-1.6M11.4 9H9.8M22.2 9h-1.6M12.8 5.8l-1.1-1.1M20.3 13.3l-1.1-1.1M12.8 12.2l-1.1 1.1M20.3 4.7l-1.1 1.1"/></g><path d="M11 14.4q5 2.4 10 0" stroke="#FEC50C" stroke-width=".9" fill="none"/><path d="M2.6 1.5v17" stroke="#FEC50C" stroke-width="1.2" stroke-dasharray="1.4 .9"/></symbol>
   <symbol id="flag-ES" viewBox="0 0 30 20"><rect width="30" height="20" fill="#AA151B"/><rect y="5" width="30" height="10" fill="#F1BF00"/><rect x="7" y="7.6" width="3.4" height="4.8" rx=".6" fill="#AA151B"/></symbol>
   <symbol id="flag-IR" viewBox="0 0 30 20"><rect width="30" height="6.67" fill="#239F40"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#DA0000"/><circle cx="15" cy="10" r="1.6" fill="none" stroke="#DA0000" stroke-width=".6"/></symbol>
 
@@ -206,6 +207,14 @@ $palette = ['#C99A3E', '#1E7FC4', '#A8383A', '#D9DEE6', '#2D7A5A', '#D0702E', '#
     <g fill="url(#tgs-bld)"><rect x="10" y="80" width="20" height="40"/><rect x="32" y="62" width="18" height="58"/><rect x="52" y="88" width="24" height="32"/><rect x="78" y="50" width="20" height="70"/><rect x="100" y="72" width="16" height="48"/><rect x="118" y="84" width="26" height="36"/><rect x="146" y="66" width="18" height="54"/></g>
     <path d="M150 118q40-18 90-14" stroke="#c9d3e0" stroke-width="2" fill="none"/><g stroke="#c9d3e0" stroke-width="1" opacity=".7"><path d="M170 112v-12M190 108v-14M210 106v-12M170 100l20-6 20 0"/></g>
     <g fill="#FFD978" opacity=".85"><?= $windows(12, 28, 84, 116) . $windows(34, 48, 66, 116) . $windows(80, 96, 54, 116) . $windows(148, 162, 70, 116) ?></g>
+    <rect y="120" width="240" height="30" fill="url(#tgs-water)"/>
+  </symbol>
+  <symbol id="sky-KZ" viewBox="0 0 240 150">
+    <rect width="240" height="150" fill="url(#tgs-sky)"/><circle cx="60" cy="96" r="30" fill="url(#tgs-sun)"/>
+    <g fill="url(#tgs-bld)"><rect x="6" y="84" width="22" height="36"/><rect x="30" y="72" width="16" height="48"/><rect x="160" y="70" width="18" height="50"/><rect x="180" y="58" width="16" height="62"/><path d="M180 58l8-12 8 12z"/><rect x="198" y="80" width="22" height="40"/><rect x="222" y="74" width="18" height="46"/><path d="M76 120v-22l14-12 14 12v22z"/></g>
+    <g fill="#e6e1d2"><path d="M122 120l2-62h2l-3-20 3 4 1 0 3-4-3 20h2l2 62z"/><path d="M118 58q7-6 12-6t12 6z" opacity=".8"/></g>
+    <circle cx="125" cy="36" r="9" fill="#F5C65D"/><circle cx="122" cy="33" r="3" fill="#fff6d8" opacity=".8"/>
+    <g fill="#FFD978" opacity=".85"><?= $windows(8, 26, 88, 116) . $windows(32, 44, 76, 116) . $windows(162, 176, 74, 116) . $windows(182, 194, 62, 116) . $windows(224, 238, 78, 116) ?></g>
     <rect y="120" width="240" height="30" fill="url(#tgs-water)"/>
   </symbol>
   <symbol id="sky-GEN" viewBox="0 0 240 150">

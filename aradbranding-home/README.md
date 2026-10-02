@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.12.6)
+# aradbranding.app — Home page redesign (v1.12.7)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth, database schema or other public pages were changed. v1.10.1 adds 
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.12.6.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.12.7.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -96,3 +96,7 @@ Earth textures are from the three.js examples (NASA Blue Marble / Black Marble d
 ## v1.12.6
 
 - Default opportunity «زعفران» now targets Spain (`flag-ES`). New default market cards ZA, KE, NG, US, CA and BR with skylines `sky-ZA`, `sky-KE`, `sky-NG`, `sky-US`, `sky-CA`, `sky-BR`; `LISTS['markets']` raised to 16. Saved admin content keeps its own lists (edit them in `/admin/home`).
+
+## v1.12.7
+
+- Market carousel arrows vertically centred. Default market KZ (`flag-KZ`, `sky-KZ`) replaces ZA; South Africa stays on the globe as a route card.

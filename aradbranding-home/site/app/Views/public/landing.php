@@ -22,7 +22,7 @@ $paid = $publishFee > 0
 $fill = static fn (string $t): string => HomeContent::fill($t, $paid);
 $faq = array_map(static fn (array $f): array => [$f['q'], $fill($f['a'])], $home['faq']);
 
-$hasSky = ['CN' => true, 'IN' => true, 'AE' => true, 'TR' => true, 'DE' => true, 'RU' => true, 'IQ' => true, 'ZA' => true, 'KE' => true, 'NG' => true, 'US' => true, 'CA' => true, 'BR' => true];
+$hasSky = ['CN' => true, 'IN' => true, 'AE' => true, 'TR' => true, 'DE' => true, 'RU' => true, 'IQ' => true, 'ZA' => true, 'KE' => true, 'NG' => true, 'US' => true, 'CA' => true, 'BR' => true, 'KZ' => true];
 $markets = array_values(array_filter($home['markets'], static fn (array $m): bool => $m['code'] !== ''));
 $marketHref = static fn (string $code): string => isset($countryIds[$code]) ? '/discover/country/' . $countryIds[$code] : '/discover';
 $marketStat = static function (string $code) use ($countryIds, $countryStats): ?array {
@@ -98,7 +98,7 @@ if ($show['faq'] && $faq !== []) {
 }
 $desc = 'شبکه بین‌المللی تجار و فعالان اقتصادی: صفحه تجاری چندزبانه بسازید، فرصت‌های تجاری را کشف کنید و مستقیم با تجار کشورهای مختلف ارتباط بگیرید. عضویت رایگان است.';
 $flagUse = static fn (string $code): string => '<svg class="th-flag" viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-' . e($code) . '"/></svg>';
-$flagOf = static fn (string $code): string => in_array($code, ['CN', 'IN', 'AE', 'TR', 'DE', 'RU', 'BR', 'IR', 'IQ', 'AF', 'KE', 'TZ', 'ZA', 'NG', 'US', 'CA', 'GB', 'NL', 'ES'], true)
+$flagOf = static fn (string $code): string => in_array($code, ['CN', 'IN', 'AE', 'TR', 'DE', 'RU', 'BR', 'IR', 'IQ', 'AF', 'KE', 'TZ', 'ZA', 'NG', 'US', 'CA', 'GB', 'NL', 'ES', 'KZ'], true)
     ? $flagUse($code) : '<span class="th-flag th-flag-emoji" aria-hidden="true">' . flag($code) . '</span>';
 $icon = static fn (string $id, string $cls = 'th-ic'): string => '<svg class="' . e($cls) . '" viewBox="0 0 24 24" aria-hidden="true"><use href="#' . e($id) . '"/></svg>';
 $live = static fn (string $text): string => strtr(e($text), [
