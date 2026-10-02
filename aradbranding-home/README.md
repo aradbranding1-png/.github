@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.13.1)
+# aradbranding.app — Home page redesign (v1.14.0)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth or database schema were changed (v1.13.0 changes contact behaviour
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.13.1.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.14.0.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -114,3 +114,8 @@ Earth textures are from the three.js examples (NASA Blue Marble / Black Marble d
 ## v1.13.1
 
 - Letters are not filtered any more (private letters, replies, public letters and the note sent with a proposal): `LetterController`, `ProposalController`, `letters/{index,show}.php` and `proposals/received.php` are back to their original code and ship in the package so 1.13.0 is overwritten. Public text stays guarded: pages, proposals (now also masked on render in `proposals/show.php` and `card.php`) and profile text.
+
+## v1.14.0 — new logo
+
+- Brand marks use `public_html/assets/brand/logo-192.webp` (`.brand-mark.has-logo` / `.org-avatar.has-logo` in `app.css`) in `layouts/{app,guest,public}.php`, `public/landing.php`, `letters/{index,official}.php`.
+- Regenerated `favicon.ico` (16/32/48), `favicon.png`, `icons/icon-192.png`, `icons/icon-512.png`, `icons/maskable-512.png` (navy safe-zone), `icons/apple-touch-icon.png`; `?v=2` on the head links, manifest icons and OG/schema logo; service-worker cache `sadt-v2`.
