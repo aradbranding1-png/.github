@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.10.1)
+# aradbranding.app — Home page redesign (v1.11.0)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -15,7 +15,7 @@ No APIs, auth, database schema or other public pages were changed. v1.10.1 adds 
 ## Install
 
 **Option A — built-in updater (recommended):** Admin → «بروزرسانی سامانه» → upload
-`dist/aradbranding-1.10.1-home.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
+`dist/aradbranding-1.11.0.zip`. It contains only the files below plus `VERSION`, `CHANGELOG.md`
 and an unchanged `bootstrap/app.php` (the updater requires it to recognise the package). No migrations.
 
 **Option B — File Manager:** copy the contents of `site/` over the site root.
@@ -56,3 +56,9 @@ cd src/trade-globe && npm install && npm run build   # writes site/public_html/a
 ```
 
 Earth textures are from the three.js examples (NASA Blue Marble / Black Marble derived), converted to WebP.
+
+## v1.11.0 — signed-in panel
+
+- `layouts/app.php` + `public_html/assets/panel-theme.css` + `panel.js`: the whole signed-in app (dashboard, letters, proposals, admin) restyled like the home page; smaller type; mobile drawer; notifications dropdown (`GET /notifications/peek`).
+- Sidebar: «ارتباطات اختصاصی» (`/letters?type=private`) under «خانه» with an unread badge (`unread_private`, added to the existing user query in `Core/Auth/Auth.php`, indexed); «پیشنهادات».
+- Admin → Settings: «خرید Stars از درگاه پرداخت فعال باشد» (`payments.purchase_enabled`, default **off**). When off the purchase section and every «خرید Stars» button are hidden and `POST /wallet/buy` is refused. Files: `Core/Http/Controller.php`, `Wallet/WalletController.php`, `Pages/PublicPageController.php`, `Admin/SettingsController.php`, `admin/settings.php`, `wallet/index.php`, `public/page.php`, `letters/compose.php`, `letters/campaign.php`, `proposals/send.php`.

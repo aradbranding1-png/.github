@@ -91,6 +91,7 @@ return static function (Router $r): void {
         $r->post('/letters/{uid:[0-9a-z]{26}}/reply', [LetterController::class, 'reply'], ['throttle:letter']);
         $r->post('/letters/{uid:[0-9a-z]{26}}/archive', [LetterController::class, 'archive']);
         $r->get('/notifications', [NotificationController::class, 'index']);
+        $r->get('/notifications/peek', [NotificationController::class, 'peek']);
         $r->post('/notifications/read', [NotificationController::class, 'readAll']);
         $r->get('/connections', [ConnectionController::class, 'index']);
 

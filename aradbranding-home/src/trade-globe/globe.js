@@ -131,11 +131,11 @@ void main() {
   float water = texture2D(uWater, vUv).r;
   dayC = mix(dayC, vec3(0.01, 0.075, 0.2), water * 0.6);
   vec3 h = normalize(uSun + v);
-  float spec = pow(max(dot(n, h), 0.0), 38.0) * water;
+  float spec = pow(max(dot(n, h), 0.0), 90.0) * water;
   vec3 nightC = texture2D(uNight, vUv).rgb;
   nightC = pow(nightC, vec3(1.35)) * vec3(3.6, 2.4, 0.95);
   vec3 col = dayC * (0.1 + 0.85 * max(ndl, 0.0)) * mix(0.3, 1.0, day);
-  col += spec * vec3(0.45, 0.75, 1.0) * day * 0.7;
+  col += spec * vec3(0.35, 0.6, 0.9) * day * 0.28;
   col += nightC * mix(1.0, 0.4, day);
   float fr = pow(1.0 - max(dot(n, v), 0.0), 2.6);
   col += vec3(0.05, 0.45, 1.0) * fr * (0.4 + 0.45 * day);

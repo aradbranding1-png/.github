@@ -241,13 +241,14 @@ $h = $home['hero'];
             <?php endforeach; ?>
           </select>
         </label>
-        <label class="th-field"><span>نوع نتیجه</span>
-          <select name="type" aria-label="نوع نتیجه">
-            <option value="proposals">فرصت‌های تجاری</option>
-            <option value="traders">تجار</option>
-            <option value="pages">صفحه‌های تجاری</option>
-          </select>
-        </label>
+        <fieldset class="th-field th-seg">
+          <legend>نوع نتیجه</legend>
+          <div class="th-seg-in">
+            <label><input type="radio" name="type" value="proposals" checked><span><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-chart"/></svg>فرصت‌ها</span></label>
+            <label><input type="radio" name="type" value="traders"><span><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-people"/></svg>تجار</span></label>
+            <label><input type="radio" name="type" value="pages"><span><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-page"/></svg>صفحه‌ها</span></label>
+          </div>
+        </fieldset>
         <button class="th-btn th-btn-gold th-btn-block" type="submit"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><?= e($f['button']) ?></button>
       </form>
     </div>

@@ -272,7 +272,7 @@
 .th-finder h2 { font-size: clamp(21px, 1.8vw, 27px); font-weight: 900; margin-bottom: 8px; }
 .th-finder p { color: var(--th-muted); font-size: 13.5px; line-height: 1.95; }
 .th-finder-f { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.th-finder-f .th-field:first-child { grid-column: 1 / -1; }
+.th-finder-f .th-seg { grid-column: 1 / -1; }
 .th-finder-f .th-btn { grid-column: 1 / -1; min-height: 54px; font-size: 16px; border-radius: 14px; }
 .th-finder-f .th-btn .icon { width: 19px; height: 19px; }
 .th-field { display: grid; gap: 6px; min-width: 0; }
@@ -488,7 +488,7 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
   .th-stat-t small { font-size: 12px; }
   .th-finder { padding: 18px; }
   .th-finder-f { grid-template-columns: 1fr 1fr; }
-  .th-finder-f .th-field:first-child { grid-column: 1 / -1; }
+  .th-finder-f .th-seg { grid-column: 1 / -1; }
   .th-markets { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding: 10px; gap: 10px; scrollbar-width: none; }
   .th-markets::-webkit-scrollbar { display: none; }
   .th-market { flex: 0 0 44%; scroll-snap-align: start; }
@@ -550,3 +550,18 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
 @media (max-width: 860px) {
   .th-discover[class] { grid-template-columns: 1fr; grid-template-areas: "finder" "markets" "opps"; }
 }
+
+/* Result type: segmented pills instead of a native select */
+.th-seg { border: 0; margin: 0; padding: 0; min-width: 0; }
+.th-seg legend { font-size: 12px; color: var(--th-muted); font-weight: 600; padding: 0; margin-bottom: 6px; float: inline-start; width: 100%; }
+.th-seg-in { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 12px; background: rgba(2, 9, 20, .55); border: 1px solid var(--th-line); clear: both; }
+.th-seg label { position: relative; cursor: pointer; min-width: 0; }
+.th-seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.th-seg label span {
+  display: flex; align-items: center; justify-content: center; gap: 5px; height: 34px; padding: 0 6px; border-radius: 9px; border: 1px solid transparent;
+  font-size: 12.5px; font-weight: 700; color: var(--th-muted); white-space: nowrap; transition: background .2s var(--th-ease), color .2s, border-color .2s, box-shadow .2s;
+}
+.th-seg label span .th-ic { width: 15px; height: 15px; }
+.th-seg label:hover span { color: var(--th-ink); background: rgba(255, 255, 255, .04); }
+.th-seg input:checked + span { color: var(--th-gold-ink); background: var(--th-foil); box-shadow: 0 6px 18px -6px rgba(245, 198, 93, .55), inset 0 1px 0 rgba(255, 255, 255, .55); }
+.th-seg input:focus-visible + span { outline: 2px solid var(--th-gold); outline-offset: 2px; }
