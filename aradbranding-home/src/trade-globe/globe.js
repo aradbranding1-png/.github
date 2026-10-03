@@ -465,8 +465,10 @@ function mulberry(a) {
 
 function webglAvailable() {
   try {
+    // three.js r163+ renders with WebGL 2 only. Many TV / set-top-box GPUs (and their browsers) expose WebGL 1
+    // alone; they get the static poster globe instead of a black stage.
     const c = document.createElement('canvas');
-    return !!(window.WebGL2RenderingContext && c.getContext('webgl2')) || !!c.getContext('webgl');
+    return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
   } catch (e) {
     return false;
   }
@@ -503,6 +505,18 @@ function init(root) {
     root.classList.add('tg-fallback');
     return;
   }
+  // Any failure after this point (shader that does not compile on this GPU, a first frame that draws nothing,
+  // a lost context) drops back to the poster globe — never a black hero.
+  let dead = false;
+  const fail = (why) => {
+    if (dead) return;
+    dead = true;
+    root.classList.remove('tg-ready');
+    root.classList.add('tg-fallback');
+    try { renderer.domElement.remove(); renderer.dispose(); } catch (e) { /* ignore */ }
+    if (window.console) console.warn('trade-globe: falling back to the poster:', why);
+  };
+  renderer.debug.onShaderError = () => fail('shader compile error');
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.dpr));
   PX = renderer.getPixelRatio();
   renderer.outputColorSpace = SRGBColorSpace;
@@ -1206,6 +1220,7 @@ function init(root) {
       p.group.scale.setScalar((weak ? 0.055 : 0.048) * (0.3 + 0.7 * f));
     });
 
+    if (dead) return;
     world.updateMatrixWorld();
     if (++hoverFrame % 2 === 0) updateHover();
     renderer.render(scene, camera);
@@ -1213,9 +1228,33 @@ function init(root) {
 
     if (firstFrame) {
       firstFrame = false;
+      if (!drewGlobe()) {
+        fail('first frame is empty');
+        return;
+      }
       root.classList.add('tg-ready');
     }
     schedule();
+  }
+
+  /** Reads a few pixels around the globe's centre right after the first render: all transparent = nothing drawn. */
+  function drewGlobe() {
+    try {
+      const gl = renderer.getContext();
+      const cs = getComputedStyle(stage);
+      const gx = parseFloat(cs.getPropertyValue('--gx')) || 0.6;
+      const gy = parseFloat(cs.getPropertyValue('--gy')) || 0.45;
+      const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+      const px = new Uint8Array(4);
+      let seen = 0;
+      for (const [dx, dy] of [[0, 0], [-0.03, 0], [0.03, 0], [0, -0.03], [0, 0.03]]) {
+        gl.readPixels(Math.round(w * (gx + dx)), Math.round(h * (1 - gy - dy)), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        if (px[3] > 0) seen++;
+      }
+      return seen > 0 || gl.getError() === gl.CONTEXT_LOST_WEBGL;
+    } catch (e) {
+      return true; // cannot tell: keep the globe
+    }
   }
 
   function schedule() {
@@ -1241,6 +1280,7 @@ function init(root) {
     root.classList.add('tg-fallback');
   });
   canvas.addEventListener('webglcontextrestored', () => {
+    if (dead) return;
     root.classList.remove('tg-fallback');
     firstFrame = true;
     setRunning(true);

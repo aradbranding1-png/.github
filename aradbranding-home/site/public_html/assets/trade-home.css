@@ -141,8 +141,13 @@
 /* Poster: shown while loading and kept as the no-WebGL fallback (a textured, shaded disc with slow drift). */
 .tg-poster {
   position: absolute; left: calc(var(--gx) * 100%); top: calc(var(--gy) * 100%);
-  width: min(calc(var(--grh) * 200cqh), calc(var(--grw) * 200cqw)); aspect-ratio: 1; translate: -50% -50%;
+  /* Old TV / set-top-box browsers know neither cqh/cqw nor the translate property: give them a vmin size and a
+     transform first; modern browsers override it below. */
+  width: 56vmin; height: 56vmin; transform: translate(-50%, -50%);
   transition: opacity 1.2s var(--th-ease); pointer-events: none;
+}
+@supports (width: 1cqh) {
+  .tg-poster { width: min(calc(var(--grh) * 200cqh), calc(var(--grw) * 200cqw)); height: auto; aspect-ratio: 1; }
 }
 .tg-poster::before { content: ""; position: absolute; inset: -9%; border-radius: 50%; background: radial-gradient(closest-side, transparent 86%, rgba(30, 155, 255, .45) 91%, transparent 100%); }
 .tg-poster-globe {
@@ -199,7 +204,7 @@
 .tg-tip-m { color: var(--th-gold-3); font-size: 11px; }
 
 /* Static card layout when WebGL is unavailable (or scripts are off): cards orbit the poster at fixed spots. */
-.tg-fallback .tg-card, html:not(.js) .tg-card { opacity: 1; visibility: visible; translate: -50% -50%; }
+.tg-fallback .tg-card, html:not(.js) .tg-card { opacity: 1; visibility: visible; translate: none; transform: translate(-50%, -50%); }
 .tg-fallback .tg-card:nth-child(1), html:not(.js) .tg-card:nth-child(1) { left: 74%; top: 26%; }
 .tg-fallback .tg-card:nth-child(2), html:not(.js) .tg-card:nth-child(2) { left: 70%; top: 66%; }
 .tg-fallback .tg-card:nth-child(3), html:not(.js) .tg-card:nth-child(3) { left: 58%; top: 52%; }

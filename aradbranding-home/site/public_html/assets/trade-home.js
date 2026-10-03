@@ -7,6 +7,16 @@
     return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '٬').replace(/\d/g, function (d) { return digits[d]; });
   }
 
+  // Globe safety net: if the 3D globe has not started after 9 s (browser without ES-module support, a script that
+  // failed to load or parse, a stuck GPU), show the poster globe and the static country cards.
+  var globeRoot = document.querySelector('[data-trade-globe]');
+  if (globeRoot) {
+    setTimeout(function () {
+      var c = globeRoot.classList;
+      if (!c.contains('tg-ready') && !c.contains('tg-fallback')) c.add('tg-fallback');
+    }, 9000);
+  }
+
   // Sticky glass header gets denser once the page scrolls.
   var head = document.querySelector('[data-th-head]');
   if (head) {

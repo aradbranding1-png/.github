@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.18.0)
+# aradbranding.app — Home page redesign (v1.18.1)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -296,3 +296,15 @@ It touches `panel.js`, `panel-theme.css` and `layouts/app.php`.
 - adds the `users.create` scope
 
 Endpoints are documented in `docs/API-arad-contact-internal.md`.
+
+
+## v1.18.1 (incremental package)
+
+`dist/aradbranding-1.18.1-update.zip` fixes the black hero on Android TV and old browsers:
+- The 3D globe now runs only when WebGL 2 is available.
+- It falls back to the poster on a shader error, an empty first frame or a lost context.
+- The bundle is built for Chrome 61+ and Safari 11+.
+- The poster has vmin/transform fallbacks for browsers without `cqh` or `translate`.
+- A 9-second watchdog in `trade-home.js` shows the poster if the globe has not started.
+
+The source is in `src/trade-globe`.
