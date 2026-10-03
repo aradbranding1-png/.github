@@ -72,6 +72,10 @@ final class PublicPageController extends Controller
             'unlock' => $unlock,
             'viewer' => $viewer,
             'isOwner' => $viewer !== null && (int) $viewer['id'] === $owner['id'],
+            'pageId' => (int) $pageId,
+            'ownerId' => (int) $owner['id'],
+            'blockedByMe' => $viewer !== null && (int) $viewer['id'] !== (int) $owner['id']
+                && $this->c->get(\App\Modules\Trust\TrustService::class)->hasBlocked((int) $viewer['id'], (int) $owner['id']),
             'alternates' => $alternates,
             'handle' => strtolower((string) $request->param('handle')),
             'labels' => PageLabels::for($model['lang_code']),

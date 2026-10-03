@@ -292,6 +292,8 @@ final class ProposalController extends Controller
         } catch (InsufficientStars $e) {
             return $this->redirect('/wallet?need=' . $e->missing() . '&next=' . rawurlencode('/proposals/mine'),
                 'پیشنهاد به‌صورت پیش‌نویس ذخیره شد. برای انتشار ' . fa_num($e->required) . ' Star لازم است.', 'error');
+        } catch (ValidationFailed $e) {
+            return $this->redirect('/proposals/mine', (string) reset($e->errors), 'error');
         }
         return $this->redirect('/proposals/' . $p['uid'], $ok);
     }

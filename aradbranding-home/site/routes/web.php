@@ -58,6 +58,15 @@ return static function (Router $r): void {
         $r->post('/p/{handle:[a-z0-9-]{3,32}}/{lang:[a-z]{2,3}}/unlock', [PublicPageController::class, 'unlock']);
         $r->post('/account/interests', [AccountController::class, 'updateInterests']);
 
+        // Trust & Safety (member side) and personal API keys
+        $r->get('/account/safety', [\App\Modules\Trust\SafetyController::class, 'index']);
+        $r->post('/reports', [\App\Modules\Trust\SafetyController::class, 'report'], ['throttle:letter']);
+        $r->post('/blocks/{id:\d+}', [\App\Modules\Trust\SafetyController::class, 'block']);
+        $r->post('/blocks/{id:\d+}/delete', [\App\Modules\Trust\SafetyController::class, 'unblock']);
+        $r->get('/account/api', [\App\Modules\Integrations\ApiKeyController::class, 'index']);
+        $r->post('/account/api', [\App\Modules\Integrations\ApiKeyController::class, 'create'], ['throttle:login']);
+        $r->post('/account/api/{id:\d+}/revoke', [\App\Modules\Integrations\ApiKeyController::class, 'revoke']);
+
         $r->get('/proposals', [ProposalController::class, 'feed']);
         $r->get('/proposals/more', [ProposalController::class, 'feedMore']);
         $r->get('/proposals/mine', [ProposalController::class, 'mine']);
@@ -101,6 +110,11 @@ return static function (Router $r): void {
         $r->get('/admin/api', [\App\Modules\Admin\ApiAdminController::class, 'index'], ['can:settings.manage']);
         $r->post('/admin/api', [\App\Modules\Admin\ApiAdminController::class, 'create'], ['can:settings.manage']);
         $r->post('/admin/api/{id:\d+}/revoke', [\App\Modules\Admin\ApiAdminController::class, 'revoke'], ['can:settings.manage']);
+        $r->get('/admin/trust', [\App\Modules\Admin\TrustAdminController::class, 'index']);
+        $r->post('/admin/trust/{id:\d+}', [\App\Modules\Admin\TrustAdminController::class, 'resolve']);
+        $r->post('/admin/wallet/{id:\d+}/refund/{tx:\d+}', [\App\Modules\Admin\WalletAdminController::class, 'refund'], ['can:payments.refund']);
+        $r->post('/admin/api/settings', [\App\Modules\Admin\ApiAdminController::class, 'settings'], ['can:settings.manage']);
+        $r->post('/admin/api/keys/{id:\d+}/revoke', [\App\Modules\Admin\ApiAdminController::class, 'revokeKey'], ['can:settings.manage']);
         $r->get('/admin/wallet', [\App\Modules\Admin\WalletAdminController::class, 'index'], ['can:wallet.view']);
         $r->post('/admin/wallet/{id:\d+}', [\App\Modules\Admin\WalletAdminController::class, 'adjust'], ['can:wallet.view']);
         $r->get('/admin/users', [\App\Modules\Admin\UserAdminController::class, 'index'], ['can:users.view']);

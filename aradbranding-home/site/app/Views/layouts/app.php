@@ -17,6 +17,7 @@ $adminNav = array_values(array_filter([
     ['href' => '/admin', 'label' => 'داشبورد مدیریت', 'icon' => 'home', 'ok' => $has('reports.view', 'settings.manage', 'users.view')],
     ['href' => '/admin/users', 'label' => 'کاربران', 'icon' => 'user', 'ok' => $has('users.view')],
     ['href' => '/admin/content', 'label' => 'محتوا و بررسی', 'icon' => 'page', 'ok' => $has('pages.view', 'pages.approve', 'proposals.view', 'proposals.moderate')],
+    ['href' => '/admin/trust', 'label' => 'گزارش‌های تخلف', 'icon' => 'lock', 'ok' => $has('letters.moderate', 'proposals.moderate', 'pages.approve', 'users.edit')],
     ['href' => '/admin/finance', 'label' => 'مالی', 'icon' => 'star', 'ok' => $has('payments.view', 'wallet.view')],
     ['href' => '/admin/wallet', 'label' => 'کیف پول مشتریان', 'icon' => 'star', 'ok' => $has('wallet.credit', 'wallet.debit')],
     ['href' => '/admin/reports', 'label' => 'گزارش‌ها', 'icon' => 'spark', 'ok' => $has('reports.view')],
@@ -155,6 +156,8 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
             <div class="profile-card"><?= $avatar('avatar avatar-lg') ?><span><b><?= e($fullName) ?></b><small><?= $user['handle'] ? '<bdi>/p/' . e($user['handle']) . '</bdi>' : e($roleName) ?></small></span></div>
             <a href="/account" role="menuitem"><svg class="icon"><use href="#i-user"/></svg>حساب کاربری</a>
             <a href="/wallet" role="menuitem"><svg class="icon"><use href="#i-star"/></svg>کیف پول Stars</a>
+            <a href="/account/safety" role="menuitem"><svg class="icon"><use href="#i-lock"/></svg>حریم و امنیت</a>
+            <a href="/account/api" role="menuitem"><svg class="icon"><use href="#i-route"/></svg>API و کلید دسترسی</a>
             <?php if (!empty($isStaff)): ?><a href="/admin" role="menuitem"><svg class="icon"><use href="#i-gear"/></svg>مدیریت سامانه</a><?php endif; ?>
             <form method="post" action="/logout"><?= csrf_field() ?><button type="submit" role="menuitem"><svg class="icon"><use href="#i-logout"/></svg>خروج</button></form>
           </div>

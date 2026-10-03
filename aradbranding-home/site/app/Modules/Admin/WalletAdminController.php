@@ -63,11 +63,17 @@ final class WalletAdminController extends AdminController
             }
             if ($customer !== null) {
                 $ledger = $db->select(
-                    'SELECT t.id, t.type, t.amount, t.balance_after, t.reason, t.note, t.created_at, a.first_name AS actor_first, a.last_name AS actor_last
+                    'SELECT t.id, t.type, t.amount, t.balance_after, t.reason, t.ref_type, t.ref_id, t.note, t.created_at, a.first_name AS actor_first, a.last_name AS actor_last
                        FROM wallet_transactions t LEFT JOIN users a ON a.id = t.actor_id
                       WHERE t.user_id = ? ORDER BY t.id DESC LIMIT 15',
                     [$userId]
                 );
+                $wallet = $this->c->get(WalletService::class);
+                foreach ($ledger as &$t) {
+                    $t['refund'] = in_array((int) $t['type'], [WalletService::T_SPEND, WalletService::T_RESERVE], true)
+                        ? $wallet->refundable($userId, (int) $t['id']) : null;
+                }
+                unset($t);
             }
         }
 
@@ -79,6 +85,7 @@ final class WalletAdminController extends AdminController
             'ledger' => $ledger,
             'canCredit' => $this->allows($request, 'wallet.credit'),
             'canDebit' => $this->allows($request, 'wallet.debit'),
+            'canRefund' => $this->allows($request, 'payments.refund'),
             'token' => Idempotency::token(),
             'errors' => $errors,
             'old' => $status === 422 ? $request->all() : [],
@@ -136,6 +143,45 @@ final class WalletAdminController extends AdminController
         return $this->redirect('/admin/wallet?user=' . $u['id'],
             fa_int($stars) . ' Star ' . ($direction === 'credit' ? 'به کیف پول ' : 'از کیف پول ') . trim($u['first_name'] . ' ' . $u['last_name'])
             . ($direction === 'credit' ? ' اضافه شد.' : ' کسر شد.') . ' مشتری اعلان دریافت کرد.');
+    }
+
+    /** POST /admin/wallet/{id}/refund/{tx} — return Stars of one spend (Finance / Super Admin: payments.refund). */
+    public function refund(Request $request): Response
+    {
+        $db = $this->c->get(Connection::class);
+        $u = $db->first('SELECT id, first_name, last_name, country_id FROM users WHERE id = ? AND deleted_at IS NULL', [(int) $request->param('id')]);
+        if ($u === null || !$this->inScope($request, 'payments.refund', (int) $u['country_id'])) {
+            throw new HttpException(404);
+        }
+        $txId = (int) $request->param('tx');
+        $stars = (int) (preg_replace('/\D+/', '', Str::latinDigits((string) $request->input('stars', '0'))) ?: '0');
+        $note = mb_substr(trim((string) $request->input('note', '')), 0, 255);
+        $token = (string) $request->input('token', '');
+        $fail = fn (string $msg): Response => $this->index($request, ['refund' . $txId => $msg], 400, (int) $u['id']); // 400: keeps the adjust form empty
+        if (mb_strlen($note) < 3) {
+            return $fail('دلیل بازپرداخت را بنویسید؛ مشتری آن را در گردش حساب می‌بیند.');
+        }
+        if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
+            return $fail('فرم منقضی شده است؛ دوباره ارسال کنید.');
+        }
+        if (!$this->reauth($request)) {
+            return $fail('رمز عبور شما درست نیست.');
+        }
+        $admin = (int) $this->user($request)['id'];
+        $wallet = $this->c->get(WalletService::class);
+        try {
+            $refundId = $wallet->refund((int) $u['id'], $txId, $stars, $admin, $note, 'refund:' . $admin . ':' . $token);
+        } catch (\DomainException $e) {
+            return $fail($e->getMessage());
+        }
+        $orig = $db->first('SELECT reason FROM wallet_transactions WHERE id = ?', [$txId]);
+        $this->c->get(NotificationService::class)->notify([(int) $u['id']], 'wallet_refund', $admin, '/wallet', [
+            'n' => $stars, 'subject' => WalletService::REASON_LABELS[$orig['reason'] ?? ''] ?? 'تراکنش',
+        ]);
+        $this->c->get(Audit::class)->log('payments.refund', $admin, 'user', (int) $u['id'], 'success', $request,
+            ['stars' => $stars, 'of_tx' => $txId, 'tx' => $refundId, 'note' => $note], $request->attribute('impersonator_id'));
+        return $this->redirect('/admin/wallet?user=' . $u['id'] . '#tx' . $txId,
+            fa_int($stars) . ' Star به ' . trim($u['first_name'] . ' ' . $u['last_name']) . ' بازپرداخت شد. مشتری اعلان دریافت کرد.');
     }
 
     /** @return array{0: string, 1: list<mixed>} name, handle, e-mail or mobile number */

@@ -936,3 +936,77 @@ main.content > * { animation: rise .32s var(--ease) both; }
 .stars-short span { display: block; font-size: 13px; opacity: .9; }
 .stars-short .btn { margin-top: 8px; }
 .btn[disabled] { opacity: .45; cursor: not-allowed; filter: grayscale(.35); box-shadow: none; }
+
+/* ---------- 1.16 Trust & Safety + API ---------- */
+.report-pop { position: relative; display: inline-block; }
+.report-trigger { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line-strong); border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; list-style: none; }
+.report-trigger::-webkit-details-marker { display: none; }
+.report-trigger .icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.report-trigger:hover, .report-pop[open] > .report-trigger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.report-pop.is-compact .report-trigger { padding: 3px; border-color: transparent; }
+.report-form { position: absolute; z-index: 40; inset-inline-end: 0; top: calc(100% + 8px); width: min(340px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); text-align: start; color: var(--ink); font-size: 13.5px; white-space: normal; }
+.report-form p { margin: 0; font-size: 12.5px; }
+.report-title { font-size: 15px; }
+.report-reasons { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.report-reason { cursor: pointer; }
+.report-reason input { position: absolute; opacity: 0; pointer-events: none; }
+.report-reason span { display: inline-block; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-strong); font-size: 12.5px; color: var(--muted); }
+.report-reason input:checked + span { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.report-reason input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.report-block { font-size: 12.5px; color: var(--muted); }
+.report-form .form-actions { margin: 0; }
+.pub-safety { display: flex; justify-content: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.pub-safety form { margin: 0; }
+.pdetail-actions .report-pop { margin-inline-start: auto; }
+.msg-meta { align-items: center; }
+.msg-meta .report-pop { margin-inline-start: auto; }
+.msg-hidden { color: var(--muted); font-style: italic; }
+.reply-closed { text-align: center; color: var(--muted); }
+.trust-reason { margin: 0 0 8px; padding: 8px 12px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--danger) 9%, transparent); font-size: 13px; }
+.trust-status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.trust-status .select, .trust-status .input { width: auto; flex: 1 1 160px; }
+.trust-reason-input { flex: 2 1 240px !important; }
+.chip-danger { border-color: color-mix(in srgb, var(--danger) 45%, transparent); color: var(--danger); }
+.seg-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--surface-2); width: fit-content; max-width: 100%; overflow-x: auto; margin-top: 4px; }
+.seg-tabs a { padding: 6px 14px; border-radius: 999px; color: var(--muted); text-decoration: none; font-size: 13px; white-space: nowrap; }
+.seg-tabs a b { font-weight: 700; margin-inline-start: 4px; }
+.seg-tabs a[aria-current] { background: var(--gold); color: var(--gold-ink); }
+.chip-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.chip-tabs .chip { text-decoration: none; }
+.chip-tabs .chip.is-on { border-color: var(--gold); color: var(--gold); }
+.trust-filter { margin: 0; }
+.trust-empty { text-align: center; padding: 18px 0; margin: 0; }
+.trust-card { display: grid; gap: 12px; }
+.trust-card-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.trust-card-head .grow { flex: 1; }
+.trust-who { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.trust-who > div { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.trust-who small, .trust-details small { display: block; width: 100%; color: var(--muted); font-size: 11.5px; }
+.trust-content { position: relative; margin: 0; padding: 12px 14px; border-inline-start: 3px solid var(--danger); border-radius: var(--radius-sm); background: var(--surface-2); display: grid; gap: 6px; font-size: 13.5px; line-height: 1.9; text-align: justify; }
+.trust-content.is-hidden { opacity: .7; border-inline-start-color: var(--muted); }
+.trust-open { font-size: 12.5px; width: fit-content; }
+.trust-details { margin: 0; font-size: 13.5px; }
+.trust-done { margin: 0; font-size: 13.5px; }
+.trust-decide > summary { list-style: none; width: fit-content; }
+.trust-decide > summary::-webkit-details-marker { display: none; }
+.trust-form { margin-top: 12px; display: grid; gap: 12px; }
+.trust-actions { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.trust-actions legend { width: 100%; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
+.trust-actions label { cursor: pointer; }
+.trust-actions input { position: absolute; opacity: 0; pointer-events: none; }
+.trust-actions span { display: inline-block; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line-strong); font-size: 13px; }
+.trust-actions input:checked + span { border-color: var(--gold); background: var(--gold-soft); color: var(--gold); }
+.trust-actions input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.wa-ledger .wa-tx { flex-wrap: wrap; }
+.wa-refund { flex-basis: 100%; }
+.wa-refund > summary { list-style: none; width: fit-content; margin-inline-start: auto; }
+.wa-refund > summary::-webkit-details-marker { display: none; }
+.wa-refund .form { margin-top: 10px; padding: 12px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.tx-refunded { color: var(--ok); }
+.api-sample { margin: 12px 0 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--bg-deep); overflow-x: auto; font-size: 12.5px; text-align: left; }
+.api-state { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; }
+.safety .list-row form { margin: 0; }
+@media (max-width: 640px) {
+  .report-form { position: fixed; inset-inline: 16px; top: auto; bottom: 16px; width: auto; }
+  .trust-status .select, .trust-status .input { flex-basis: 100%; }
+}

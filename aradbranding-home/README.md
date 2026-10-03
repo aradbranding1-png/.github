@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.15.12)
+# aradbranding.app — Home page redesign (v1.16.0)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -226,3 +226,19 @@ Other changes:
 
 `dist/aradbranding-1.15.12-update.zip` replaces the logo with the gold logo (source: `brand-src/logo-gold.png`) and makes the sidebar brand name gold. Install it on top of 1.15.11.
 - Cache-busting bumps: `logo-192.webp?v=3`, the icons/manifest `?v=4`, and service-worker cache `sadt-v4`.
+
+## v1.16.0 — Trust & Safety + official API (incremental package)
+
+`dist/aradbranding-1.16.0-update.zip` must be installed on top of 1.15.12. It runs migration `2026_10_12_000001_trust_safety`, which adds:
+- tables: `abuse_reports`, `user_blocks`, `api_keys`
+- columns: `users.suspended_until` / `status_reason`, `letter_messages.hidden_at` / `hidden_by`
+- settings: `api.enabled`, `trust.daily_reports`
+
+New code:
+- `app/Modules/Trust/*`
+- `Admin/TrustAdminController`
+- `Integrations/{ApiKeys,ApiKeyController,PublicApiController}`
+- refunds in `WalletService`
+- services registered in `bootstrap/services.php`
+
+API reference: `docs/API-v1.md`.

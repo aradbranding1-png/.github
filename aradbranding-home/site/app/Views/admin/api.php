@@ -2,6 +2,7 @@
 /**
  * اتصال API — keys for Arad Contact and other partner systems.
  * @var array $clients @var array $recent @var array $scopes @var array|null $newKey @var string $baseUrl @var array $errors @var array $old @var array $perms
+ * @var array $memberKeys @var bool $apiEnabled
  */
 $err = static fn (string $k): string => isset($errors[$k]) ? '<div class="error">' . e($errors[$k]) . '</div>' : '';
 $cls = static fn (string $k): string => isset($errors[$k]) ? ' has-error' : '';
@@ -88,6 +89,41 @@ $names = ['wallet.charge' => 'شارژ کیف پول', 'users.lookup' => 'است
       <div class="field<?= $cls('password') ?>"><label for="api-pw">رمز عبور شما</label><input class="input narrow" id="api-pw" name="password" type="password" autocomplete="current-password" dir="ltr" required><?= $err('password') ?></div>
       <div class="form-actions"><button class="btn" type="submit">ساخت کلید</button></div>
     </form>
+
+    <section class="panel" id="member-keys">
+      <div class="panel-head">
+        <div>
+          <h2>API رسمی اعضا</h2>
+          <p class="muted">اعضا از «API و کلید دسترسی» برای خودشان کلید شخصی (<code dir="ltr">ark_…</code>) می‌سازند؛ هر کلید فقط به داده‌های همان عضو و در محدوده دسترسی‌های انتخاب‌شده کار می‌کند. کلید حساب معلق یا مسدود خودبه‌خود کار نمی‌کند. راهنما: <code dir="ltr">docs/API-v1.md</code>.</p>
+        </div>
+        <form method="post" action="/admin/api/settings"><?= csrf_field() ?>
+          <input type="hidden" name="enabled" value="<?= $apiEnabled ? '0' : '1' ?>">
+          <button class="btn btn-sm<?= $apiEnabled ? ' btn-ghost' : '' ?>" type="submit"><?= $apiEnabled ? 'غیرفعال‌کردن API اعضا' : 'فعال‌کردن API اعضا' ?></button>
+        </form>
+      </div>
+      <p class="api-state"><span class="api-dot<?= $apiEnabled ? ' on' : '' ?>" aria-hidden="true"></span><?= $apiEnabled ? 'فعال' : 'غیرفعال' ?></p>
+      <?php if ($memberKeys === []): ?><p class="muted">هنوز عضوی کلید نساخته است.</p><?php else: ?>
+        <ul class="list">
+          <?php foreach ($memberKeys as $k): $live = $k['revoked_at'] === null && (int) $k['is_expired'] === 0; ?>
+            <li class="list-row api-row<?= $live ? '' : ' is-off' ?>">
+              <span class="api-dot<?= $live ? ' on' : '' ?>" aria-hidden="true"></span>
+              <div class="grow">
+                <div class="title"><a href="/admin/users/<?= (int) $k['user_id'] ?>"><?= e(trim($k['first_name'] . ' ' . $k['last_name'])) ?></a> · <?= e($k['name']) ?> <code dir="ltr">ark_<?= e($k['prefix']) ?>_…</code></div>
+                <div class="meta">
+                  <span dir="ltr"><?= e(str_replace(',', ', ', (string) $k['scopes'])) ?></span>
+                  <span><?= fa_int((int) $k['requests']) ?> درخواست</span>
+                  <span><?= $k['last_used_at'] ? 'آخرین استفاده: ' . e(fa_date($k['last_used_at'])) : 'هنوز استفاده نشده' ?></span>
+                  <?php if ($k['revoked_at'] !== null): ?><span class="chip">باطل‌شده</span><?php elseif ((int) $k['is_expired'] === 1): ?><span class="chip">منقضی</span><?php endif; ?>
+                </div>
+              </div>
+              <?php if ($k['revoked_at'] === null): ?>
+                <form method="post" action="/admin/api/keys/<?= (int) $k['id'] ?>/revoke"><?= csrf_field() ?><button class="btn btn-quiet btn-sm" type="submit">باطل‌کردن</button></form>
+              <?php endif; ?>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+    </section>
 
     <section class="panel">
       <h2>آخرین درخواست‌ها</h2>

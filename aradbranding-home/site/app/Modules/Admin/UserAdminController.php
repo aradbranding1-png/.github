@@ -21,6 +21,8 @@ use App\Modules\Wallet\WalletService;
 final class UserAdminController extends AdminController
 {
     public const STATUS = [1 => 'فعال', 2 => 'محدود', 3 => 'معلق', 4 => 'مسدود', 9 => 'حذف‌شده'];
+    /** Timed suspension lengths (days); 0 = until lifted by hand. */
+    public const SUSPEND_DAYS = [1, 3, 7, 30];
 
     public function index(Request $request): Response
     {
@@ -100,6 +102,7 @@ final class UserAdminController extends AdminController
             'assigned' => array_map('intval', array_column($db->select('SELECT country_id FROM staff_assignments WHERE user_id = ?', [$id]), 'country_id')),
             'countries' => $this->c->get(ReferenceData::class)->countries(),
             'logins' => $db->select('SELECT result, created_at FROM login_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 5', [$id]),
+            'reportCount' => (int) $db->scalar('SELECT COUNT(*) FROM abuse_reports WHERE target_user_id = ?', [$id]),
             'errors' => $errors,
         ], 'layouts/app', $httpStatus);
     }
@@ -108,8 +111,13 @@ final class UserAdminController extends AdminController
     {
         $u = $this->target($request, 'users.edit');
         $status = (int) $request->input('status', 0);
+        $reason = mb_substr(trim((string) $request->input('reason', '')), 0, 255);
+        $days = (int) $request->input('days', 0);
         if (!isset(self::STATUS[$status]) || $status === 9) {
             return $this->show($request, ['status' => 'وضعیت معتبر نیست.'], 422);
+        }
+        if ($status !== 1 && mb_strlen($reason) < 3) {
+            return $this->show($request, ['status' => 'دلیل را بنویسید؛ کاربر آن را هنگام ورود یا در اعلان می‌بیند.'], 422);
         }
         if (in_array($status, [3, 4], true) && !$this->reauth($request)) {
             return $this->show($request, ['status' => 'برای تعلیق یا مسدودکردن، رمز عبور خود را درست وارد کنید.'], 422);
@@ -117,26 +125,15 @@ final class UserAdminController extends AdminController
         if ($this->c->get(\App\Core\Auth\Gate::class)->hasRole((int) $u['id'], 'super_admin') && $status !== 1) {
             return $this->show($request, ['status' => 'حساب مدیر کل را نمی‌توان مسدود کرد.'], 422);
         }
-        $db = $this->c->get(Connection::class);
-        $db->exec('UPDATE users SET status = ?, updated_at = NOW(3) WHERE id = ?', [$status, $u['id']]);
-        if (in_array($status, [3, 4], true)) {
-            $db->exec('DELETE FROM sessions WHERE user_id = ?', [$u['id']]); // sign out everywhere
-            // Hide from the feed while blocked.
-            $db->exec('DELETE f FROM proposal_feed f WHERE f.user_id = ?', [$u['id']]);
+        $until = $status === 3 && in_array($days, self::SUSPEND_DAYS, true) ? gmdate('Y-m-d H:i:s', time() + $days * 86400) : null;
+        $this->c->get(\App\Modules\Trust\TrustService::class)->setStatus($u, $status, $until, $status === 1 ? null : $reason);
+        if ($status === 2 || ($status === 1 && (int) $u['status'] !== 1)) {
+            $this->c->get(\App\Modules\Notifications\NotificationService::class)->notify([(int) $u['id']],
+                $status === 2 ? 'trust_restricted' : 'trust_restored', null, '/account/safety', ['subject' => $reason]);
         }
-        if ($status === 1 && in_array((int) $u['status'], [3, 4], true)) {
-            // Back to active: put published proposals back into the feed.
-            $proposals = $this->c->get(\App\Modules\Proposals\ProposalService::class);
-            foreach ($db->select('SELECT id FROM proposals WHERE user_id = ? AND status = 2 AND deleted_at IS NULL', [$u['id']]) as $p) {
-                $proposals->syncFeed((int) $p['id']);
-            }
-        }
-        $this->c->get(Cache::class)->bump('owner:' . $u['id']);
-        if ($u['handle']) {
-            $this->c->get(Cache::class)->forget('handle:' . $u['handle']);
-        }
-        $this->audit($request, 'users.status', (int) $u['id'], ['status' => $status]);
-        return $this->redirect('/admin/users/' . $u['id'], 'وضعیت کاربر به «' . self::STATUS[$status] . '» تغییر کرد.');
+        $this->audit($request, 'users.status', (int) $u['id'], ['status' => $status, 'reason' => $reason, 'until' => $until]);
+        return $this->redirect('/admin/users/' . $u['id'], 'وضعیت کاربر به «' . self::STATUS[$status] . '» تغییر کرد.'
+            . ($until !== null ? ' تعلیق تا ' . fa_date($until) . ' (خودکار برداشته می‌شود).' : ''));
     }
 
     public function verify(Request $request): Response

@@ -21,6 +21,11 @@ $count = count($messages['rows']);
     <form method="post" action="/letters/<?= e($thread['uid']) ?>/archive"><?= csrf_field() ?>
       <button class="btn btn-ghost btn-sm" type="submit"><svg class="icon"><use href="#i-archive"/></svg><?= $archived ? 'خروج از بایگانی' : 'بایگانی' ?></button>
     </form>
+    <?php if (!$officialThread && $peer): ?>
+      <form method="post" action="/blocks/<?= (int) $peer['id'] ?><?= $blockedByMe ? '/delete' : '' ?>"><?= csrf_field() ?><input type="hidden" name="back" value="/letters/<?= e($thread['uid']) ?>">
+        <button class="btn btn-quiet btn-sm" type="submit"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg><?= $blockedByMe ? 'رفع مسدودی' : 'مسدودکردن' ?></button>
+      </form>
+    <?php endif; ?>
   </header>
 
   <?php if ($proposal): ?>
@@ -35,18 +40,28 @@ $count = count($messages['rows']);
   <ol class="messages">
     <?php foreach ($messages['rows'] as $i => $m): $mine = (int) $m['sender_id'] === (int) $user['id']; $author = $cards[(int) $m['sender_id']] ?? null; ?>
       <li class="msg<?= $mine ? ' mine' : '' ?>"<?= $i === $count - 1 ? ' id="last"' : '' ?>>
-        <div class="msg-meta"><b><?= $mine ? 'شما' : e($name($author)) ?></b><span><?= e(fa_date($m['created_at'])) ?></span></div>
-        <div class="msg-body"><?= nl2br(e((string) $m['body']), false) ?></div>
+        <div class="msg-meta"><b><?= $mine ? 'شما' : e($name($author)) ?></b><span><?= e(fa_date($m['created_at'])) ?></span>
+          <?php if (!$mine && !$officialThread && $m['hidden_at'] === null): ?><?= $this->partial('partials/report', ['type' => 'message', 'id' => (int) $m['id'], 'back' => '/letters/' . $thread['uid'], 'blockUser' => $blockedByMe ? null : (int) $m['sender_id'], 'label' => 'گزارش این نامه', 'compact' => true]) ?><?php endif; ?>
+        </div>
+        <?php if ($m['hidden_at'] !== null): ?>
+          <div class="msg-body msg-hidden">این پیام به دلیل نقض قوانین آراد برندینگ توسط تیم بررسی پنهان شد.</div>
+        <?php else: ?>
+          <div class="msg-body"><?= nl2br(e((string) $m['body']), false) ?></div>
+        <?php endif; ?>
       </li>
     <?php endforeach; ?>
   </ol>
 
+  <?php if ($blocked): ?>
+  <div class="panel reply-closed" id="reply"><?= $blockedByMe ? 'این تاجر را مسدود کرده‌اید؛ برای پاسخ، ابتدا رفع مسدودی کنید.' : 'امکان پاسخ در این گفتگو وجود ندارد.' ?></div>
+  <?php else: ?>
   <form class="panel form reply" method="post" action="/letters/<?= e($thread['uid']) ?>/reply" id="reply">
     <?= csrf_field() ?>
     <label for="f-body">پاسخ <span class="muted">(رایگان)</span></label>
     <textarea class="textarea" id="f-body" name="body" rows="4" maxlength="10000" required></textarea>
     <div class="form-actions"><button class="btn" type="submit"><svg class="icon"><use href="#i-send"/></svg>ارسال پاسخ</button></div>
   </form>
+  <?php endif; ?>
 </div>
 
   </div>

@@ -96,6 +96,7 @@ final class LetterController extends Controller
                 $proposal['uid'] = strtolower(Ulid::toString($proposal['public_id']));
             }
         }
+        $trust = $this->c->get(\App\Modules\Trust\TrustService::class);
         return $this->view($request, 'letters/show', [
             'title' => $thread['subject'],
             'thread' => $thread,
@@ -104,6 +105,8 @@ final class LetterController extends Controller
             'peer' => $cards[(int) $thread['peer_id']] ?? null,
             'proposal' => $proposal,
             'orgName' => (string) $this->c->get(\App\Core\Settings\Settings::class)->get('org.name', 'آراد برندینگ'),
+            'blockedByMe' => $trust->hasBlocked((int) $user['id'], (int) $thread['peer_id']),
+            'blocked' => (int) $thread['type'] !== LetterService::T_OFFICIAL && $trust->blockedBetween((int) $user['id'], (int) $thread['peer_id']),
             'errors' => [],
         ]);
     }
@@ -232,6 +235,11 @@ final class LetterController extends Controller
     public function sendQuote(Request $request): Response
     {
         $user = $this->user($request);
+        try {
+            $this->c->get(\App\Modules\Trust\TrustService::class)->assertCanAct($user);
+        } catch (ValidationFailed $e) {
+            return $this->sendNew($request, ['filter' => reset($e->errors)], 403);
+        }
         $kind = (int) $request->input('kind', LetterService::T_PUBLIC);
         $subject = trim((string) $request->input('subject', ''));
         $body = trim((string) $request->input('body', ''));

@@ -25,6 +25,8 @@ final class ApiAdminController extends AdminController
             'recent' => $clients->recent(20),
             'scopes' => ApiClients::SCOPES,
             'newKey' => is_array($newKey) ? $newKey : null,
+            'memberKeys' => $this->c->get(\App\Modules\Integrations\ApiKeys::class)->all(50),
+            'apiEnabled' => (bool) $this->c->get(\App\Core\Settings\Settings::class)->get('api.enabled', true),
             'baseUrl' => rtrim((string) \App\Core\Env::get('APP_URL', ''), '/'),
             'errors' => $errors,
             'old' => $status === 422 ? $request->all() : [],
@@ -76,5 +78,26 @@ final class ApiAdminController extends AdminController
     private function clients(): ApiClients
     {
         return new ApiClients($this->c->get(Connection::class));
+    }
+
+    /** POST /admin/api/settings — turn the members' official API on or off. */
+    public function settings(Request $request): Response
+    {
+        $on = (string) $request->input('enabled', '0') === '1';
+        $actor = (int) $this->user($request)['id'];
+        $this->c->get(\App\Core\Settings\Settings::class)->set('api.enabled', $on, $actor);
+        $this->c->get(\App\Core\Security\Audit::class)->log('api.settings', $actor, 'setting', null, 'success', $request, ['enabled' => $on]);
+        return $this->redirect('/admin/api#member-keys', $on ? 'API اعضا فعال شد.' : 'API اعضا غیرفعال شد؛ همه کلیدهای شخصی تا فعال‌شدن دوباره پاسخ ۵۰۳ می‌گیرند.');
+    }
+
+    /** POST /admin/api/keys/{id}/revoke — revoke a member's personal key (e.g. leaked or abused). */
+    public function revokeKey(Request $request): Response
+    {
+        $id = (int) $request->param('id');
+        $actor = (int) $this->user($request)['id'];
+        if ($this->c->get(\App\Modules\Integrations\ApiKeys::class)->revoke($id)) {
+            $this->c->get(\App\Core\Security\Audit::class)->log('api_key.revoke', $actor, 'api_key', $id, 'success', $request, ['by' => 'admin']);
+        }
+        return $this->redirect('/admin/api#member-keys', 'کلید باطل شد.');
     }
 }

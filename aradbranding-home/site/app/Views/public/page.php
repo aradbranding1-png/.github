@@ -24,6 +24,12 @@ $countryName = $page['lang_code'] === 'fa' ? $page['country_fa'] : $page['countr
         <a class="btn btn-sm" href="/letters/new?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-letter"/></svg>ارسال نامه</a>
         <a class="btn btn-ghost btn-sm" href="/proposals/send?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-send"/></svg>ارسال پیشنهاد تجاری</a>
       </div>
+      <div class="pub-safety" lang="fa" dir="rtl">
+        <?= $this->partial('partials/report', ['type' => 'page', 'id' => $pageId, 'back' => '/p/' . $handle, 'blockUser' => $blockedByMe ? null : $ownerId]) ?>
+        <form method="post" action="/blocks/<?= (int) $ownerId ?><?= $blockedByMe ? '/delete' : '' ?>"><?= csrf_field() ?><input type="hidden" name="back" value="/p/<?= e($handle) ?>">
+          <button class="report-trigger" type="submit"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg><span><?= $blockedByMe ? 'رفع مسدودی' : 'مسدودکردن' ?></span></button>
+        </form>
+      </div>
     <?php endif; ?>
     <p class="pub-teaser"><?= rich_text($page['teaser']) ?></p>
 

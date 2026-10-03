@@ -22,6 +22,12 @@ final class NotificationService
         'digest_page' => 'صفحه تجاری شما امروز :n بار به‌طور کامل مشاهده شد.',
         'wallet_credit' => ':n Star به کیف پول شما اضافه شد. :subject',
         'wallet_debit' => ':n Star از کیف پول شما کسر شد. :subject',
+        'wallet_refund' => ':n Star بابت «:subject» به کیف پول شما برگشت داده شد.',
+        'report_resolved' => 'گزارش شما درباره :name بررسی شد: :subject',
+        'trust_warning' => 'اخطار تیم آراد برندینگ: :subject',
+        'trust_hidden' => 'یکی از محتواهای شما به دلیل نقض قوانین پنهان شد: :subject',
+        'trust_restricted' => 'حساب شما محدود شد و فعلاً امکان ارسال یا انتشار ندارید. دلیل: :subject',
+        'trust_restored' => 'محدودیت حساب شما برداشته شد. خوش برگشتید!',
     ];
 
     public function __construct(private Connection $db)

@@ -92,7 +92,7 @@ final class AuthService
     public function attempt(string $email, string $password, string $ip): array
     {
         $email = mb_strtolower(trim($email));
-        $cols = 'id, password_hash, status, locked_until, locked_until > NOW(3) AS is_locked';
+        $cols = 'id, password_hash, status, suspended_until, suspended_until <= NOW(3) AS suspension_over, status_reason, locked_until, locked_until > NOW(3) AS is_locked';
         if (str_contains($email, '@')) {
             $row = $this->db->first("SELECT {$cols} FROM users WHERE email = ? AND deleted_at IS NULL", [$email]);
         } else {
@@ -136,9 +136,24 @@ final class AuthService
             return ['ok' => false, 'error' => $generic];
         }
 
+        // A timed suspension lifts itself at the first sign-in after it ends.
+        if ((int) $row['status'] === Auth::STATUS_SUSPENDED && (int) ($row['suspension_over'] ?? 0) === 1) {
+            $this->db->exec('UPDATE users SET status = ?, suspended_until = NULL, status_reason = NULL, updated_at = NOW(3) WHERE id = ? AND status = ?',
+                [Auth::STATUS_ACTIVE, $userId, Auth::STATUS_SUSPENDED]);
+            $row['status'] = Auth::STATUS_ACTIVE;
+            try {
+                $this->restoreFeed($userId);
+            } catch (\Throwable) {
+                // The feed is rebuilt on the next publish; signing in must not fail because of it.
+            }
+        }
         if (in_array((int) $row['status'], [Auth::STATUS_SUSPENDED, Auth::STATUS_BANNED, Auth::STATUS_DELETED], true)) {
             $this->log($userId, $email, $ip, 'blocked');
-            return ['ok' => false, 'error' => 'این حساب غیرفعال شده است. با پشتیبانی تماس بگیرید.'];
+            $why = trim((string) ($row['status_reason'] ?? ''));
+            $msg = (int) $row['status'] === Auth::STATUS_SUSPENDED
+                ? 'این حساب' . ($row['suspended_until'] ? ' تا ' . fa_date((string) $row['suspended_until']) : '') . ' معلق شده است.'
+                : 'این حساب مسدود شده است.';
+            return ['ok' => false, 'error' => $msg . ($why !== '' ? ' دلیل: ' . $why . '.' : '') . ' برای پیگیری با پشتیبانی آراد برندینگ تماس بگیرید.'];
         }
 
         $rehash = Password::needsRehash((string) $row['password_hash']) ? Password::hash($password) : null;
@@ -168,6 +183,19 @@ final class AuthService
     public static function normalizePhone(string $phone): string
     {
         return ltrim(preg_replace('/\D+/', '', Str::latinDigits($phone)) ?? '', '0');
+    }
+
+    /** Published proposals return to the feed when an account becomes active again. */
+    private function restoreFeed(int $userId): void
+    {
+        $container = \App\Core\Container::instance();
+        if ($container === null) {
+            return;
+        }
+        $proposals = $container->get(\App\Modules\Proposals\ProposalService::class);
+        foreach ($this->db->select('SELECT id FROM proposals WHERE user_id = ? AND status = 2 AND published_at IS NOT NULL AND deleted_at IS NULL', [$userId]) as $p) {
+            $proposals->syncFeed((int) $p['id']);
+        }
     }
 
     private function log(?int $userId, string $email, string $ip, string $result): void

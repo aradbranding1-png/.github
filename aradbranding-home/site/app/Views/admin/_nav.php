@@ -5,6 +5,7 @@ $items = [
     'dashboard' => ['/admin', 'داشبورد', 'home', $has('reports.view', 'settings.manage', 'users.view')],
     'users' => ['/admin/users', 'کاربران', 'user', $has('users.view')],
     'content' => ['/admin/content', 'محتوا و بررسی', 'page', $has('pages.view', 'pages.approve', 'proposals.view', 'proposals.moderate')],
+    'trust' => ['/admin/trust', 'گزارش‌های تخلف', 'lock', $has('letters.moderate', 'proposals.moderate', 'pages.approve', 'users.edit')],
     'finance' => ['/admin/finance', 'مالی', 'star', $has('payments.view', 'wallet.view')],
     'wallet' => ['/admin/wallet', 'کیف پول مشتریان', 'star', $has('wallet.credit', 'wallet.debit')],
     'reports' => ['/admin/reports', 'گزارش‌ها', 'spark', $has('reports.view')],

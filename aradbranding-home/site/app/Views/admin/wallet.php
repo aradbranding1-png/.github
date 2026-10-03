@@ -74,15 +74,32 @@ $dir = ($old['direction'] ?? '') === 'debit' ? 'debit' : ($canCredit ? 'credit' 
 
         <h3 class="wa-sub">آخرین تراکنش‌ها</h3>
         <?php if ($ledger === []): ?><p class="muted">تراکنشی ندارد.</p><?php else: ?>
-          <ul class="list">
-            <?php foreach ($ledger as $t): $a = (int) $t['amount']; $byAdmin = in_array((int) $t['type'], [WalletService::T_ADMIN_CREDIT, WalletService::T_ADMIN_DEBIT], true); ?>
-              <li class="list-row">
+          <ul class="list wa-ledger">
+            <?php foreach ($ledger as $t): $a = (int) $t['amount']; $byAdmin = in_array((int) $t['type'], [WalletService::T_ADMIN_CREDIT, WalletService::T_ADMIN_DEBIT], true); $rf = $t['refund'] ?? null; ?>
+              <li class="list-row wa-tx" id="tx<?= (int) $t['id'] ?>">
                 <div class="grow">
                   <div class="title"><?= e($byAdmin ? WalletService::TYPE_LABELS[(int) $t['type']] : (WalletService::REASON_LABELS[$t['reason']] ?? $t['reason'])) ?></div>
                   <?php if (($t['note'] ?? '') !== ''): ?><div class="tx-note">توضیح: <?= e((string) $t['note']) ?></div><?php endif; ?>
+                  <?php if ($rf !== null && $rf['refunded'] > 0): ?><div class="tx-note tx-refunded">↩ <?= fa_int($rf['refunded']) ?> Star بازپرداخت شده</div><?php endif; ?>
                   <div class="meta"><span><?= e(fa_date($t['created_at'])) ?></span><span>مانده <?= fa_int((int) $t['balance_after']) ?></span><?php if ($t['actor_first'] !== null): ?><span>ثبت: <?= e(trim($t['actor_first'] . ' ' . $t['actor_last'])) ?></span><?php endif; ?></div>
                 </div>
                 <b class="amount <?= $a >= 0 ? 'plus' : 'minus' ?>" dir="ltr"><?= $a >= 0 ? '+' : '−' ?><?= fa_int(abs($a)) ?></b>
+                <?php if ($canRefund && $rf !== null && $rf['refundable'] > 0): ?>
+                  <details class="wa-refund"<?= isset($errors['refund' . $t['id']]) ? ' open' : '' ?>>
+                    <summary class="btn btn-quiet btn-sm">بازپرداخت</summary>
+                    <form class="form" method="post" action="/admin/wallet/<?= e($customer['id']) ?>/refund/<?= (int) $t['id'] ?>" novalidate>
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="token" value="<?= e(\App\Core\Security\Idempotency::token()) ?>">
+                      <?php if (isset($errors['refund' . $t['id']])): ?><div class="alert alert-error" role="alert"><?= e($errors['refund' . $t['id']]) ?></div><?php endif; ?>
+                      <div class="row row-2">
+                        <div class="field"><label>تعداد Star <span class="muted">(حداکثر <?= fa_int($rf['refundable']) ?>)</span></label><input class="input" name="stars" inputmode="numeric" dir="ltr" value="<?= (int) $rf['refundable'] ?>" required></div>
+                        <div class="field"><label>رمز عبور شما</label><input class="input" name="password" type="password" autocomplete="current-password" dir="ltr" required></div>
+                      </div>
+                      <div class="field"><label>دلیل</label><input class="input" name="note" maxlength="255" required placeholder="مثلاً: نامه به دلیل تخلف گیرنده تحویل نشد"></div>
+                      <div class="form-actions"><button class="btn btn-sm" type="submit">بازپرداخت به کیف پول مشتری</button></div>
+                    </form>
+                  </details>
+                <?php endif; ?>
               </li>
             <?php endforeach; ?>
           </ul>

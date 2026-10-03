@@ -62,6 +62,7 @@ $owner = $p['company_name'] ?: trim($p['first_name'] . ' ' . $p['last_name']);
       <?php elseif ($p['handle']): ?>
         <a class="btn" href="/letters/new?to=<?= e($p['handle']) ?>"><svg class="icon"><use href="#i-letter"/></svg>با من ارتباط بگیرید</a>
       <?php endif; ?>
+      <?php if (!$isOwner): ?><?= $this->partial('partials/report', ['type' => 'proposal', 'id' => (int) $p['id'], 'back' => '/proposals/' . $p['uid'], 'blockUser' => (int) $p['user_id']]) ?><?php endif; ?>
     </div>
   </div>
 </article>

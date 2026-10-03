@@ -273,8 +273,9 @@ final class CampaignService
     private function where(array $sender, array $filter): array
     {
         // Public letters reach every active trader: receiving them is no longer optional.
-        $where = ['u.status = 1', 'u.deleted_at IS NULL', 'u.id <> ?'];
-        $bind = [(int) $sender['id']];
+        // Members who blocked the sender, or whom the sender blocked, are skipped.
+        $where = ['u.status = 1', 'u.deleted_at IS NULL', 'u.id <> ?', \App\Modules\Trust\TrustService::notBlockedSql()];
+        $bind = [(int) $sender['id'], (int) $sender['id'], (int) $sender['id']];
         if (!empty($filter['country'])) {
             $where[] = 'u.country_id = ?';
             $bind[] = (int) $filter['country'];

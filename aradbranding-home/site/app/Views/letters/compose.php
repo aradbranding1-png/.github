@@ -23,6 +23,7 @@ $err = static fn (string $k): string => isset($errors[$k]) ? '<div class="error"
       <?php if ($ra): ?><img class="avatar" src="<?= e($ra) ?>" alt=""><?php else: ?><span class="avatar"><?= e(initials($recipient['first_name'], $recipient['last_name'])) ?></span><?php endif; ?>
       <span class="grow"><b><?= e($recipient['first_name'] . ' ' . $recipient['last_name']) ?></b><span class="muted"><?= flag($recipient['country_code']) ?> <?= e($recipient['country_fa']) ?></span></span>
     </div>
+    <?php if (isset($errors['to'])): ?><div class="alert alert-error" role="alert"><?= e($errors['to']) ?></div><?php endif; ?>
     <form class="form" method="post" action="/letters/new">
       <?= csrf_field() ?>
       <input type="hidden" name="to" value="<?= e($recipient['handle']) ?>">
