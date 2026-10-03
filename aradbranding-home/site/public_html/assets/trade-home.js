@@ -17,6 +17,34 @@
     }, 9000);
   }
 
+  // Diagnostics for TVs and other odd browsers: open the home page with ?globe=debug.
+  if (globeRoot && /[?&]globe=debug\b/.test(location.search)) {
+    setTimeout(function () {
+      var info = ['نسخه کره: 1.18.2'];
+      var gl2 = null, gl1 = null, vendor = '';
+      try { gl2 = document.createElement('canvas').getContext('webgl2'); } catch (e) { /* ignore */ }
+      try { gl1 = document.createElement('canvas').getContext('webgl') || document.createElement('canvas').getContext('experimental-webgl'); } catch (e) { /* ignore */ }
+      var g = gl2 || gl1;
+      if (g) {
+        var ext = g.getExtension('WEBGL_debug_renderer_info');
+        vendor = ext ? g.getParameter(ext.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER);
+      }
+      var poster = document.querySelector('.tg-poster');
+      var pr = poster ? poster.getBoundingClientRect() : { width: 0 };
+      info.push('WebGL 2: ' + (gl2 ? 'دارد' : 'ندارد') + ' · WebGL 1: ' + (gl1 ? 'دارد' : 'ندارد'));
+      info.push('کارت گرافیک: ' + (vendor || '—'));
+      info.push('وضعیت: ' + (globeRoot.className || '—') + (window.__tgFail ? ' · علت: ' + window.__tgFail : ''));
+      if (window.__tgProbe) info.push('نمونه پیکسل: ' + window.__tgProbe.drawn + ' رسم‌شده، ' + window.__tgProbe.bright + ' روشن');
+      info.push('ماژول ES: ' + ('noModule' in document.createElement('script') ? 'پشتیبانی' : 'بدون پشتیبانی') + ' · cqh: ' + (window.CSS && CSS.supports && CSS.supports('width', '1cqh') ? 'دارد' : 'ندارد'));
+      info.push('تصویر جایگزین: ' + Math.round(pr.width) + 'px · صفحه: ' + window.innerWidth + '×' + window.innerHeight + ' @' + (window.devicePixelRatio || 1));
+      info.push(navigator.userAgent);
+      var box = document.createElement('pre');
+      box.className = 'tg-debug';
+      box.textContent = info.join('\n');
+      document.body.appendChild(box);
+    }, 10000);
+  }
+
   // Sticky glass header gets denser once the page scrolls.
   var head = document.querySelector('[data-th-head]');
   if (head) {

@@ -615,3 +615,6 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
   .th-mk-prev { inset-inline-start: -4px; } .th-mk-next { inset-inline-end: -4px; }
 }
 @media (max-width: 600px) { .th-mk.is-carousel .th-market { flex-basis: 62%; } .th-mk-nav { top: calc(50% - 15px); width: 30px; height: 30px; } }
+
+/* ?globe=debug */
+.tg-debug { position: fixed; z-index: 9999; inset-inline: 12px; bottom: 12px; max-height: 50vh; overflow: auto; margin: 0; padding: 12px 14px; border-radius: 12px; background: rgba(0, 0, 0, .88); color: #9FE3FF; font: 12px/1.7 ui-monospace, monospace; white-space: pre-wrap; direction: rtl; text-align: right; border: 1px solid #1E9BFF; }

@@ -514,6 +514,7 @@ function init(root) {
     root.classList.remove('tg-ready');
     root.classList.add('tg-fallback');
     try { renderer.domElement.remove(); renderer.dispose(); } catch (e) { /* ignore */ }
+    window.__tgFail = why;
     if (window.console) console.warn('trade-globe: falling back to the poster:', why);
   };
   renderer.debug.onShaderError = () => fail('shader compile error');
@@ -1228,17 +1229,22 @@ function init(root) {
 
     if (firstFrame) {
       firstFrame = false;
-      if (!drewGlobe()) {
+      if (!drewGlobe(false)) {
         fail('first frame is empty');
         return;
       }
       root.classList.add('tg-ready');
     }
+    // The launch animation starts dark, so "is it visibly lit?" is asked once the globe has settled (~90 frames).
+    if (++litCheck === 90 && !drewGlobe(true)) {
+      fail('globe renders black on this GPU');
+      return;
+    }
     schedule();
   }
 
   /** Reads a few pixels around the globe's centre right after the first render: all transparent = nothing drawn. */
-  function drewGlobe() {
+  function drewGlobe(needBright) {
     try {
       const gl = renderer.getContext();
       const cs = getComputedStyle(stage);
@@ -1246,17 +1252,26 @@ function init(root) {
       const gy = parseFloat(cs.getPropertyValue('--gy')) || 0.45;
       const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
       const px = new Uint8Array(4);
-      let seen = 0;
-      for (const [dx, dy] of [[0, 0], [-0.03, 0], [0.03, 0], [0, -0.03], [0, 0.03]]) {
-        gl.readPixels(Math.round(w * (gx + dx)), Math.round(h * (1 - gy - dy)), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-        if (px[3] > 0) seen++;
+      // Sample a grid over the globe's disc. Something must be drawn (alpha) AND visibly lit: some TV GPUs run the
+      // shaders but output pure black, which would leave an invisible globe on the dark hero.
+      let drawn = 0, bright = 0;
+      const r = Math.min(w, h) * 0.18;
+      for (let i = -2; i <= 2; i++) {
+        for (let j = -2; j <= 2; j++) {
+          gl.readPixels(Math.round(w * gx + i * r / 2), Math.round(h * (1 - gy) + j * r / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          if (px[3] > 0) drawn++;
+          if (px[0] + px[1] + px[2] > 60) bright++;
+        }
       }
-      return seen > 0 || gl.getError() === gl.CONTEXT_LOST_WEBGL;
+      window.__tgProbe = { drawn, bright };
+      if (gl.getError() === gl.CONTEXT_LOST_WEBGL) return true;
+      return needBright ? bright > 0 : drawn > 0;
     } catch (e) {
       return true; // cannot tell: keep the globe
     }
   }
 
+  let litCheck = 0;
   function schedule() {
     if (running && !raf) raf = requestAnimationFrame(frame);
   }

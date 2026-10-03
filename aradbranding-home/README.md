@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.18.1)
+# aradbranding.app — Home page redesign (v1.18.2)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -308,3 +308,7 @@ Endpoints are documented in `docs/API-arad-contact-internal.md`.
 - A 9-second watchdog in `trade-home.js` shows the poster if the globe has not started.
 
 The source is in `src/trade-globe`.
+
+## v1.18.2 (incremental package)
+
+`dist/aradbranding-1.18.2-update.zip` adds a lit-pixel probe after about 90 frames: a globe that renders black falls back to the poster. It also adds a `?globe=debug` diagnostics overlay on the home page.
