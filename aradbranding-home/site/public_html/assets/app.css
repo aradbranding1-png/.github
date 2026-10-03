@@ -1029,3 +1029,31 @@ main.content > * { animation: rise .32s var(--ease) both; }
   .page-row-actions { flex-basis: 100%; justify-content: space-between; padding-top: 10px; border-top: 1px dashed var(--line); }
   .page-row-end { min-width: 0; }
 }
+
+/* 1.17: finance — gifts, audience breakdown, delete; tables become cards on phones */
+.fin-period { padding-block: 12px; }
+.fin-period .seg-tabs { margin: 0; }
+.stat-gift b { color: var(--gold); }
+.fin-gift { color: var(--gold); font-weight: 700; white-space: nowrap; }
+.fin-share { display: inline-block; width: 64px; height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; vertical-align: middle; }
+.fin-share i { display: block; height: 100%; width: 0; background: var(--gold); border-radius: inherit; }
+.fin-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fin-filter .select { width: auto; min-width: 150px; }
+.fin-actions { white-space: nowrap; }
+.fin-del > summary { list-style: none; }
+.fin-del > summary::-webkit-details-marker { display: none; }
+.fin-del .form { margin-top: 8px; display: grid; gap: 8px; min-width: 240px; white-space: normal; padding: 12px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.fin-del .form p { margin: 0; font-size: 12.5px; }
+.btn.btn-danger-fill, .panel-ui .btn.btn-danger-fill { background: var(--danger); color: #fff; box-shadow: none; border-color: transparent; }
+@media (max-width: 640px) {
+  .fin-table thead { display: none; }
+  .fin-table, .fin-table tbody, .fin-table tr, .fin-table td { display: block; width: 100%; }
+  .fin-table tr { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .fin-table td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; border: 0; text-align: start; }
+  .fin-table td::before { content: attr(data-label); color: var(--muted); font-size: 12.5px; font-weight: 500; }
+  .fin-table td.fin-actions { display: block; }
+  .fin-table td.fin-actions::before { content: none; }
+  .fin-del > summary { margin-inline-start: auto; width: fit-content; }
+  .fin-del .form { min-width: 0; }
+  .fin-filter, .fin-filter .select { width: 100%; }
+}

@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.16.4)
+# aradbranding.app — Home page redesign (v1.17.0)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -264,3 +264,12 @@ API reference: `docs/API-v1.md`.
 ## v1.16.4 (incremental package)
 
 `dist/aradbranding-1.16.4-update.zip` fixes the mobile layout of the page list. It touches `pages/index.php` and `app.css`.
+
+## v1.17.0 — finance reports (incremental package)
+
+`dist/aradbranding-1.17.0-update.zip` must be installed on top of 1.16.4. Migration `2026_10_14_000001_payment_delete` adds:
+- the `payments.deleted_at`, `deleted_by` and `delete_reason` columns
+- the `payments.delete` permission, granted to super_admin, admin and finance_manager
+- the `payments.view` permission, newly granted to admin
+
+The finance page now shows live period figures, a breakdown by audience (staff vs. trade role) and separate bonus Stars, and supports soft delete with an optional Stars reversal.

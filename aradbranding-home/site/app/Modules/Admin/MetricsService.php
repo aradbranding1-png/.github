@@ -48,7 +48,7 @@ final class MetricsService
         $m['replies'] = max(0, $messages - $threads);
         $m['connections'] = intdiv((int) $this->db->scalar('SELECT COUNT(*) FROM user_connections WHERE created_at >= ? AND created_at < ?', $r), 2);
 
-        $pay = $this->db->first('SELECT COUNT(*) AS n, COALESCE(SUM(amount_minor), 0) AS s FROM payments WHERE status = 4 AND updated_at >= ? AND updated_at < ?', $r);
+        $pay = $this->db->first('SELECT COUNT(*) AS n, COALESCE(SUM(amount_minor), 0) AS s FROM payments WHERE status = 4 AND deleted_at IS NULL AND updated_at >= ? AND updated_at < ?', $r);
         $m['payments'] = (int) $pay['n'];
         $m['revenue_rial'] = (int) $pay['s'];
 

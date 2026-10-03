@@ -74,7 +74,7 @@
   });
 
   // Report bars: widths come from data-w (CSP: no inline styles in the markup).
-  document.querySelectorAll('.rp-track i[data-w]').forEach(function (i) {
+  document.querySelectorAll('.rp-track i[data-w], .fin-share i[data-w]').forEach(function (i) {
     i.style.width = Math.max(0, Math.min(100, parseInt(i.getAttribute('data-w'), 10) || 0)) + '%';
   });
 

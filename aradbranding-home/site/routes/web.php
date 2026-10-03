@@ -107,6 +107,7 @@ return static function (Router $r): void {
         $r->get('/admin', [\App\Modules\Admin\DashboardAdminController::class, 'dashboard']);
         $r->get('/admin/reports', [\App\Modules\Admin\DashboardAdminController::class, 'reports'], ['can:reports.view']);
         $r->get('/admin/finance', [\App\Modules\Admin\DashboardAdminController::class, 'finance'], ['can:payments.view']);
+        $r->post('/admin/finance/payments/{id:\d+}/delete', [\App\Modules\Admin\DashboardAdminController::class, 'deletePayment'], ['can:payments.delete']);
         $r->get('/admin/api', [\App\Modules\Admin\ApiAdminController::class, 'index'], ['can:settings.manage']);
         $r->post('/admin/api', [\App\Modules\Admin\ApiAdminController::class, 'create'], ['can:settings.manage']);
         $r->post('/admin/api/{id:\d+}/revoke', [\App\Modules\Admin\ApiAdminController::class, 'revoke'], ['can:settings.manage']);
