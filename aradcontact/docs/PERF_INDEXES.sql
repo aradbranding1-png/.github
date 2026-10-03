@@ -9,3 +9,6 @@ ALTER TABLE customers ADD INDEX idx_cust_owner_scope (owner_user_id, contact_typ
 ALTER TABLE customers ADD INDEX idx_cust_type_sort (contact_type, cl_sort, status, owner_user_id, next_followup_date), ALGORITHM=INPLACE, LOCK=NONE;
 ALTER TABLE customers ADD INDEX idx_cust_type_status (contact_type, status, next_followup_date, created_at), ALGORITHM=INPLACE, LOCK=NONE;
 ALTER TABLE followups ADD INDEX idx_followups_day_calls (followup_date, source, call_duration_seconds, created_by, customer_id), ALGORITHM=INPLACE, LOCK=NONE;
+-- نسخه‌ی ۲ (اولین ارتباطِ هر مشتری برای «لید»):
+ALTER TABLE followups ADD INDEX idx_followups_cust_date (customer_id, followup_date, created_by), ALGORITHM=INPLACE, LOCK=NONE;
+-- بعد از اجرای دستی، فایلِ خالیِ storage/.perf_indexes_v2 را بسازید.

@@ -18,7 +18,7 @@
 require_once __DIR__ . '/perf_cache.php';
 
 const CL_STATUS_PRIORITY = ['در انتظار پرداخت', 'در انتظار تصمیم', 'جلسه برگزار شد', 'در حال پیگیری', 'تعویق', 'جدید', 'عدم پاسخ', 'مشتری قدیمی', 'خرید کرده'];
-const PERF_INDEXES_VERSION = 1;
+const PERF_INDEXES_VERSION = 2;
 
 /** عبارتِ ستونِ مرتب‌سازی (هم‌ارزِ ORDER BY وضعیت، تاریخِ پیگیری با خالی‌ها در آخر، created_at نزولی) */
 function cl_sort_expression(PDO $pdo): string
@@ -104,6 +104,8 @@ function perf_indexes_build(PDO $pdo): bool
         ['customers', 'idx_cust_type_sort', '(contact_type, cl_sort, status, owner_user_id, next_followup_date)'],
         ['customers', 'idx_cust_type_status', '(contact_type, status, next_followup_date, created_at)'],
         ['followups', 'idx_followups_day_calls', '(followup_date, source, call_duration_seconds, created_by, customer_id)'],
+        // اولین ارتباطِ هر مشتری (لیدِ گزارش‌های تیم)
+        ['followups', 'idx_followups_cust_date', '(customer_id, followup_date, created_by)'],
     ];
     foreach ($indexes as [$table, $name, $cols]) {
         if (!perf_has_index($pdo, $table, $name)) perf_alter_online($pdo, "ALTER TABLE `$table` ADD INDEX `$name` $cols");

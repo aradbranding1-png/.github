@@ -45,6 +45,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     };
     if ($act === 'save_metric_values' && $leader) {
         $teamId = (int) $leader['team_id'];
+        // تاریخِ همین فرم (هر تاریخ عددهای خودش را دارد؛ چیزی به تاریخِ دیگر منتقل نمی‌شود)
+        $fd = trim((string) ($_POST['metric_date'] ?? ''));
+        $fdG = $fd !== '' ? to_gregorian(normalize_digits($fd)) : null;
+        if ($fdG && $fdG <= date('Y-m-d')) { $day = $fdG; $dayJ = to_jalali($day); }
         $st = $pdo->prepare('INSERT INTO team_metric_values (team_id, metric_id, report_date, value, entered_by) VALUES (?,?,?,?,?)
             ON DUPLICATE KEY UPDATE value = VALUES(value), entered_by = VALUES(entered_by)');
         $del = $pdo->prepare('DELETE FROM team_metric_values WHERE team_id = ? AND report_date = ? AND metric_id = ?');
@@ -54,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $st->execute([$teamId, (int) $m['id'], $day, $v, (int) $user['id']]);
         }
         flash_set('success', 'شاخص‌های روزِ ' . to_persian_digits($dayJ) . ' ذخیره شد.');
-        redirect($selfUrl() . '#sdr-metrics');
+        redirect('supervisor_daily_report.php?' . http_build_query(['report_date' => $dayJ, 'leader' => $leaderId]) . '#sdr-metrics');
     }
     if ($act === 'save_salaries' && $canSalary && $leader) {
         // مدیر: همه‌ی افرادِ تیم؛ سرپرست: اعضای تیمِ خودش (نه حقوقِ خودش)
@@ -92,6 +96,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (PDOException $e) { $err++; }
         }
         $newName = trim((string) ($_POST['new_name'] ?? ''));
+        if ($newName !== '' && in_array($newName, sd_non_specialized_names(), true)) {
+            flash_set('warning', '«' . $newName . '» شاخصِ تخصصیِ تیم نیست و در C1 اضافه نمی‌شود.');
+            redirect($selfUrl() . '#sdr-mconf');
+        }
         if ($newName !== '') {
             $sv = (string) ($_POST['new_source'] ?? 'manual');
             $next = (int) $pdo->query('SELECT COALESCE(MAX(sort_order), 0) + 10 FROM team_metrics WHERE team_id = ' . $teamId)->fetchColumn();
@@ -202,17 +210,35 @@ $fa = static fn($n): string => to_persian_digits(number_format((int) $n));
         <?php if (!$R['metrics']): ?>
           <div class="small text-muted">برای این تیم هنوز شاخصی تعریف نشده<?= $isAll ? '؛ از کادرِ «تنظیمِ شاخص‌های تیم» اضافه کنید.' : '؛ مدیر باید شاخص‌ها را تعریف کند.' ?></div>
         <?php else: ?>
-        <div class="small text-muted mb-2">خالی = عددِ خودکار (اگر شاخص منبعِ خودکار دارد). عددی که بنویسید جایگزینِ خودکار می‌شود.</div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <label class="small fw-bold text-nowrap">تاریخ گزارش:</label>
+          <input name="metric_date" id="sdrMetricDate" class="form-control form-control-sm jalali-date" style="max-width:130px" autocomplete="off" value="<?= e($dayJ) ?>">
+          <span class="small text-muted">با عوض‌کردنِ تاریخ، عددهای همان تاریخ نشان داده می‌شود.</span>
+        </div>
+        <div class="small text-muted mb-2">خالی = هنوز وارد نشده (در گزارش خالی می‌ماند)؛ ۰ = مقدارِ واقعیِ صفر. سیستم برای شاخصِ دستی هیچ عددی نمی‌گذارد.</div>
         <?php foreach ($R['metrics'] as $m): $mid = (int) $m['id']; $man = $R['mv_manual'][$mid][$day] ?? null; $au = (float) ($R['mv_auto'][$mid][$day] ?? 0); ?>
           <div class="d-flex align-items-center gap-2 mb-1">
             <label class="small flex-grow-1"><?= e($m['metric_name']) ?>
-              <span class="text-muted" style="font-size:11px"><?= $m['source'] === 'manual' ? '(دستی)' : '(خودکار: ' . sd_num($au) . ')' ?></span></label>
-            <input name="val[<?= $mid ?>]" class="form-control form-control-sm text-center" style="width:90px" inputmode="decimal" value="<?= $man !== null ? e(rtrim(rtrim(number_format($man, 2, '.', ''), '0'), '.')) : '' ?>" placeholder="<?= $m['source'] === 'manual' ? '۰' : e(sd_num($au)) ?>">
+              <span class="text-muted" style="font-size:11px"><?= $m['source'] === 'manual' ? '(ورودیِ سرپرست)' : '(از دیتای سیستم: ' . sd_num($au) . ' — عددِ واردشده جایگزین می‌شود)' ?></span></label>
+            <input name="val[<?= $mid ?>]" class="form-control form-control-sm text-center" style="width:90px" inputmode="decimal" value="<?= $man !== null ? e(rtrim(rtrim(number_format($man, 2, '.', ''), '0'), '.')) : '' ?>" placeholder="<?= $m['source'] === 'manual' ? 'وارد نشده' : e(sd_num($au)) ?>">
           </div>
         <?php endforeach; ?>
-        <button class="btn btn-sm btn-success mt-2">ذخیره‌ی شاخص‌های روز</button>
+        <button class="btn btn-sm btn-success mt-2">ذخیره‌ی شاخص‌های همین تاریخ</button>
         <?php endif; ?>
       </form>
+      <script>
+      (function () {
+        var d = document.getElementById('sdrMetricDate');
+        if (!d) return;
+        var cur = d.value;
+        // تاریخ عوض شد ← همان صفحه برای تاریخِ جدید (تا عددهای همان تاریخ پر شوند)
+        var go = function () {
+          if (!d.value || d.value === cur) return;
+          var u = new URL(location.href); u.searchParams.set('report_date', d.value); u.hash = 'sdr-metrics'; location.href = u.toString();
+        };
+        d.addEventListener('change', go); d.addEventListener('blur', go);
+      })();
+      </script>
 
       <?php if ($canSalary): $def = sd_default_salaries($pdo); ?>
       <div class="card p-3 mb-3" id="sdr-salary">

@@ -109,6 +109,14 @@ foreach ($members as &$__m) {
 unset($__m);
 unset($m);
 
+// ─── KPIهای سیستمیِ تیم (لید، مذاکره، جدید، پ ج، قدیم، پ ق، پ کل): همان تابعِ «گزارش A4ِ سرپرست» ───
+require_once __DIR__ . '/../includes/team_kpis.php';
+$kpi = get_team_daily_kpis($pdo, $teamId, $rangeFrom, $rangeTo);
+$kpiNames = [];
+if ($kpi['ids']) {
+    foreach ($pdo->query('SELECT id, full_name, role FROM users WHERE id IN (' . implode(',', $kpi['ids']) . ')')->fetchAll(PDO::FETCH_ASSOC) ?: [] as $__u) $kpiNames[(int) $__u['id']] = $__u;
+}
+
 $teamTotals = [
     'total_duration' => array_sum(array_column(array_column($members, 'stats'), 'total_duration')),
     'total_calls'    => array_sum(array_column(array_column($members, 'stats'), 'total_calls')),
@@ -290,6 +298,32 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <div class="tlr-glance-box"><div class="tlr-glance-num"><?= to_persian_digits((string) (int) $teamTotals['meetings']) ?></div><div class="tlr-glance-label">جلسه برگزارشده</div></div>
     <div class="tlr-glance-box"><div class="tlr-glance-num"><?= to_persian_digits((string) count($referrals)) ?></div><div class="tlr-glance-label">ارجاعِ سرپرست</div></div>
   </div>
+</div>
+
+<?php $__m = static fn(int $v): string => to_persian_digits(number_format($v)); $__kt = $kpi['total']; ?>
+<div class="card p-3 mb-4" id="team-kpi">
+  <h6 class="mb-1"><i class="fa-solid fa-bullseye"></i> عملکردِ تجاریِ کلِ تیم — <?= e($rangeLabel) ?></h6>
+  <div class="small text-muted mb-3">سرپرست + همه‌ی نیروهای تیم (حضوری و غیرحضوری). همان محاسبه‌ی «گزارش A4ِ سرپرست»؛ لید = ارتباطاتِ جدید (اولین ارتباط با هر نتیجه)، مذاکره = موفق‌های جدیدِ همان لیدها.</div>
+  <div class="tlr-glance">
+    <div class="tlr-glance-box"><div class="tlr-glance-num"><?= $__m($__kt['leads']) ?></div><div class="tlr-glance-label">لید</div></div>
+    <div class="tlr-glance-box"><div class="tlr-glance-num"><?= $__m($__kt['nego']) ?></div><div class="tlr-glance-label">مذاکره</div></div>
+    <div class="tlr-glance-box"><div class="tlr-glance-num"><?= $__m($__kt['new_cnt']) ?></div><div class="tlr-glance-label">جدید</div></div>
+    <div class="tlr-glance-box"><div class="tlr-glance-num"><?= $__m($__kt['new_amt']) ?></div><div class="tlr-glance-label">پ ج (تومان)</div></div>
+    <div class="tlr-glance-box"><div class="tlr-glance-num"><?= $__m($__kt['old_cnt']) ?></div><div class="tlr-glance-label">قدیم</div></div>
+    <div class="tlr-glance-box"><div class="tlr-glance-num"><?= $__m($__kt['old_amt']) ?></div><div class="tlr-glance-label">پ ق (تومان)</div></div>
+    <div class="tlr-glance-box"><div class="tlr-glance-num"><?= $__m($__kt['total_amt']) ?></div><div class="tlr-glance-label">پ کل (تومان)</div></div>
+  </div>
+  <?php $__rows = array_filter($kpi['by_user'], static fn($r) => array_sum($r) > 0); if ($__rows): uksort($__rows, static fn($a, $b) => [$__rows[$b]['total_amt'], $__rows[$b]['leads']] <=> [$__rows[$a]['total_amt'], $__rows[$a]['leads']]); ?>
+  <div class="table-responsive mt-3"><table class="table table-sm small align-middle mb-0">
+    <thead class="table-light"><tr><th>نام</th><th>لید</th><th>مذاکره</th><th>جدید</th><th>پ ج</th><th>قدیم</th><th>پ ق</th><th>پ کل</th></tr></thead>
+    <tbody>
+    <?php foreach ($__rows as $__uid => $__r): $__u = $kpiNames[$__uid] ?? ['full_name' => '#' . $__uid, 'role' => '']; ?>
+      <tr><td><?= e((string) $__u['full_name']) ?><?= (int) $__uid === (int) $team['leader_user_id'] ? ' <span class="badge text-bg-dark">سرپرست</span>' : '' ?></td>
+        <td><?= $__m($__r['leads']) ?></td><td><?= $__m($__r['nego']) ?></td><td><?= $__m($__r['new_cnt']) ?></td><td><?= $__m($__r['new_amt']) ?></td>
+        <td><?= $__m($__r['old_cnt']) ?></td><td><?= $__m($__r['old_amt']) ?></td><td class="fw-bold"><?= $__m($__r['total_amt']) ?></td></tr>
+    <?php endforeach; ?>
+    </tbody></table></div>
+  <?php endif; ?>
 </div>
 
 <div class="card p-3 mb-4">

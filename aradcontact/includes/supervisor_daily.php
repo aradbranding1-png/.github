@@ -92,7 +92,7 @@ function sd_default_metrics(): array
                 'جلسه حضوری برای استخدام', 'پاسخ به تیکت', 'تماس با تاجر', 'جلسه حضوری با تاجر', 'ارتباط با شرکت‌های حمل'],
         110 => ['تعداد پیشنهادهای تجاری', 'تعداد درخواست آمده', 'تعداد ارجاع موفق', 'تعداد تجارت انجام شده خارجی', 'ارائه بانک ارتباطات داخلی به تاجر',
                 'میتینگ استخدام', 'میتینگ B', 'ایجاد بانک جدید', 'پاسخ به تیکت', 'مطالبات', 'پیگیری مشتری', 'بارگذاری پیشنهاد روی سایت', 'معوقه'],
-        103 => ['تعداد نیرو', 'گزارش کار', 'پاسخگویی تیکت', 'تماس تلفنی با نیروی دورکار', 'تماس تلفنی با تاجر', 'میتینگ استخدام', 'جلسه حضوری استخدام'],
+        103 => ['پاسخگویی تیکت', 'تماس تلفنی با نیروی دورکار', 'تماس تلفنی با تاجر', 'میتینگ استخدام', 'جلسه حضوری استخدام'],
         119 => ['لوگو', 'کارت ویزیت', 'پاکت نامه', 'سربرگ', 'کاتالوگ', 'کمپانی پروفایل', 'پاسخ تیکت', 'پیگیری مطالبات', 'معوقه'],
         105 => ['تماس‌های پشتیبانی تجاری', 'تماس‌های مشاوره تجاری', 'تماس مشاوره انتخاب محصول', 'تیکت‌های پاسخ داده شده', 'مطالبات پیگیری شده',
                 'تماس‌های مشاوره سیستم‌سازی', 'جلسه B', 'بستن فاکتور و ارسال به مالی'],
@@ -106,10 +106,33 @@ function sd_default_metrics(): array
 /** منبعِ پیش‌فرضِ یک شاخص از روی نامش (فقط موارد بدیهی؛ بقیه دستی) */
 function sd_guess_source(string $name): string
 {
-    if (in_array($name, ['میتینگ B', 'جلسه B'], true)) return 'meeting_b';
-    if (in_array($name, ['جلسه حضوری استخدام', 'جلسه حضوری برای استخدام'], true)) return 'inperson_hire';
-    if ($name === 'مکاتبه رسمی') return 'letters';
+    // شاخص‌های C1 به‌صورتِ پیش‌فرض «ورودیِ دستیِ سرپرست» هستند؛ منبعِ خودکار فقط وقتی مدیر صراحتاً انتخاب کند
     return 'manual';
+}
+
+/** شاخص‌هایی که «تخصصیِ تیم» نیستند و در C1 جایی ندارند */
+function sd_non_specialized_names(): array
+{
+    return ['تعداد نیرو', 'گزارش کار', 'تعداد اعضا'];
+}
+
+/**
+ * یک‌بار (اصلاحیه‌ی گزارش سرپرستان):
+ *   ۱) «تعداد نیرو» / «گزارش کار» / «تعداد اعضا» از C1 همه‌ی تیم‌ها غیرفعال می‌شوند
+ *   ۲) شاخص‌هایی که خودِ سیستم (از روی نام) خودکار کرده بود ← ورودیِ دستیِ سرپرست
+ */
+function sd_c1_cleanup_v3(PDO $pdo): void
+{
+    $flag = __DIR__ . '/../storage/.supervisor_daily_c1_v3';
+    if (is_file($flag)) return;
+    try {
+        $names = sd_non_specialized_names();
+        $pdo->prepare('UPDATE team_metrics SET is_active = 0 WHERE metric_name IN (' . implode(',', array_fill(0, count($names), '?')) . ')')->execute($names);
+        $pdo->exec("UPDATE team_metrics SET source = 'manual' WHERE source IN ('meeting_b', 'inperson_hire', 'letters')");
+        @file_put_contents($flag, date('c'));
+    } catch (Throwable $e) {
+        error_log('sd_c1_cleanup_v3: ' . $e->getMessage());
+    }
 }
 
 function sd_seed_metrics(PDO $pdo): void
@@ -156,6 +179,7 @@ function sd_metric_sources(): array
 function sd_metrics(PDO $pdo, int $teamId, bool $activeOnly = true): array
 {
     if (!sd_ready($pdo) || $teamId <= 0) return [];
+    sd_c1_cleanup_v3($pdo);
     $st = $pdo->prepare('SELECT * FROM team_metrics WHERE team_id = ?' . ($activeOnly ? ' AND is_active = 1' : '') . ' ORDER BY sort_order, id');
     $st->execute([$teamId]);
     return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -320,84 +344,13 @@ function sd_is_first_order(PDO $pdo, int $orderId, int $customerId, string $deci
 
 /**
  * عملکردِ تجاریِ تیم برای هر روز: [day => leads, nego, new_cnt, new_amt, old_cnt, old_amt, total_amt]
- * همه بر اساسِ داده‌ی خامِ «همه‌ی» اعضای تیم ($ids).
+ * فقط پوسته‌ی سازگاری: محاسبه در includes/team_kpis.php (همان منطقِ «گزارش تیم‌ها»).
  */
 function sd_sales_series(PDO $pdo, array $ids, array $days): array
 {
-    $blank = ['leads' => 0, 'nego' => 0, 'new_cnt' => 0, 'new_amt' => 0, 'old_cnt' => 0, 'old_amt' => 0, 'total_amt' => 0];
-    $out = array_fill_keys($days, $blank);
-    if (!$ids || !$days) return $out;
-    $in = implode(',', array_map('intval', $ids));
-    $from = reset($days);
-    $to = end($days);
-    $minTalk = defined('STAFF_REPORT_CONNECTED_MIN') ? (int) STAFF_REPORT_CONNECTED_MIN : 10;
-    $isCustomer = "COALESCE(c.contact_type, 'customer') = 'customer'";
-    $lead = [];
-    $nego = [];
-    $rows = static function (string $sql, array $params = []) use ($pdo, $from, $to): array {
-        try {
-            $st = $pdo->prepare($sql);
-            $st->execute($params ?: [$from, $to]);
-            return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable $e) {
-            error_log('sd_sales_series: ' . $e->getMessage());
-            return [];
-        }
-    };
-    // ۱) هر پیگیری/تماسِ ثبت‌شده با هر نتیجه‌ای ← لید؛ اگر پاسخ داده و گفت‌وگو ثبت شده ← مذاکره
-    foreach ($rows("SELECT f.followup_date d, f.customer_id cid,
-            MAX(CASE WHEN f.call_duration_seconds > $minTalk THEN 1
-                     WHEN f.source = 'manual' AND COALESCE(f.status_after, '') <> 'عدم پاسخ' THEN 1 ELSE 0 END) talked
-        FROM followups f JOIN customers c ON c.id = f.customer_id
-        WHERE f.created_by IN ($in) AND f.followup_date BETWEEN ? AND ? AND $isCustomer
-        GROUP BY f.followup_date, f.customer_id") as $r) {
-        $lead[$r['d']][(int) $r['cid']] = true;
-        if ((int) $r['talked']) $nego[$r['d']][(int) $r['cid']] = true;
-    }
-    // ۲) فردی که همان روز توسطِ تیم به سامانه اضافه شده ← لید
-    foreach ($rows("SELECT DATE(l.created_at) d, l.customer_id cid FROM customer_activity_logs l JOIN customers c ON c.id = l.customer_id
-        WHERE l.activity_type = 'create' AND l.user_id IN ($in) AND l.created_at BETWEEN ? AND ? AND $isCustomer", [$from . ' 00:00:00', $to . ' 23:59:59']) as $r) {
-        $lead[$r['d']][(int) $r['cid']] = true;
-    }
-    foreach ($rows("SELECT DATE(c.created_at) d, c.id cid FROM customers c
-        WHERE c.owner_user_id IN ($in) AND c.created_at BETWEEN ? AND ? AND $isCustomer", [$from . ' 00:00:00', $to . ' 23:59:59']) as $r) {
-        $lead[$r['d']][(int) $r['cid']] = true;
-    }
-    // ۳) جلسه‌ی برگزارشده ← لید + مذاکره
-    foreach ($rows("SELECT b.meeting_date d, b.customer_id cid FROM meeting_bookings b JOIN customers c ON c.id = b.customer_id
-        WHERE b.status = 'held' AND b.staff_id IN ($in) AND b.meeting_date BETWEEN ? AND ?") as $r) {
-        $lead[$r['d']][(int) $r['cid']] = true;
-        $nego[$r['d']][(int) $r['cid']] = true;
-    }
-    foreach ($lead as $d => $set) if (isset($out[$d])) $out[$d]['leads'] = count($set);
-    foreach ($nego as $d => $set) if (isset($out[$d])) $out[$d]['nego'] = count($set);
-
-    // پول (همان تعریفِ «گزارش فروش»: خالص، هر پرداخت روزِ تأییدش، به نامِ صاحبِ سهم):
-    //   پ ج = اولین پولِ آن مشتری در کلِ سامانه؛ بقیه پ ق. جدید/قدیم = تعدادِ مشتریانِ یکتای هر دسته در آن روز.
-    try {
-        if (!function_exists('sales_user_events_sql')) require_once __DIR__ . '/sales_credit.php';
-        $st = $pdo->prepare("SELECT x.order_id, x.kind, x.payment_id, DATE(x.at) d, SUM(x.net) net, o.customer_id
-            FROM (" . sales_user_events_sql($pdo) . ") x JOIN sales_orders o ON o.id = x.order_id
-            WHERE x.uid IN ($in) GROUP BY x.order_id, x.kind, x.payment_id, DATE(x.at), o.customer_id");
-        $st->execute(sales_user_events_params($pdo, $from, $to));
-        $cust = [];
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $e) {
-            if (!isset($out[$e['d']])) continue;
-            $net = max(0, (int) $e['net']);
-            if ($net <= 0) continue;
-            $first = sd_first_money($pdo, (int) $e['customer_id']);
-            $isNew = $first !== null && (($e['kind'] === 'order' && $first[0] === 'order' && $first[1] === (int) $e['order_id'])
-                || ($e['kind'] === 'payment' && $first[0] === 'payment' && $first[1] === (int) $e['payment_id']));
-            $k = $isNew ? 'new' : 'old';
-            $out[$e['d']][$k . '_amt'] += $net;
-            $out[$e['d']]['total_amt'] += $net;
-            $cust[$e['d']][$k][(int) $e['customer_id']] = true;
-        }
-        foreach ($cust as $d => $kk) foreach ($kk as $k => $set) $out[$d][$k . '_cnt'] = count($set);
-    } catch (Throwable $e) {
-        error_log('sd money: ' . $e->getMessage());
-    }
-    return $out;
+    require_once __DIR__ . '/team_kpis.php';
+    if (!$days) return [];
+    return team_kpis_for_ids($pdo, $ids, reset($days), end($days))['days'];
 }
 
 /**
@@ -496,8 +449,10 @@ function sd_metric_series(PDO $pdo, int $teamId, array $ids, array $days, array 
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) $manual[(int) $r['metric_id']][$r['report_date']] = (float) $r['value'];
     foreach ($metrics as $t) {
         $mid = (int) $t['id'];
+        $isManual = (string) $t['source'] === 'manual';
         foreach ($days as $d) {
-            $a = (float) ($bySource[(string) $t['source']][$d] ?? 0);
+            // شاخصِ دستی: فقط عددی که سرپرست ثبت کرده؛ ثبت‌نشده = null (خالی)، نه صفر
+            $a = $isManual ? null : (float) ($bySource[(string) $t['source']][$d] ?? 0);
             $auto[$mid][$d] = $a;
             $out[$mid][$d] = $manual[$mid][$d] ?? $a;
         }
@@ -514,7 +469,9 @@ function sd_build(PDO $pdo, array $leader, string $reportDate): array
     $ids = sd_team_ids($pdo, $teamId, $lid);
     $metrics = sd_metrics($pdo, $teamId);
     $hc = sd_headcount_series($pdo, $teamId, $lid, $days);
-    $sales = sd_sales_series($pdo, $ids, $days);
+    // KPIهای سیستمی از تابعِ مرکزی (همان عددهای «گزارش تیم‌ها» برای همین تیم و تاریخ)
+    require_once __DIR__ . '/team_kpis.php';
+    $sales = get_team_daily_kpis($pdo, $teamId, reset($days), end($days))['days'];
     $mv = sd_metric_series($pdo, $teamId, $ids, $days, $metrics, $auto, $manual);
     $mtd = array_sum(array_column($sales, 'total_amt'));
     return [
@@ -559,7 +516,7 @@ function sd_line_chart(array $labels, array $series, string $unit, int $w = 430,
     $padL = 34; $padR = 34; $padT = 16; $padB = 22;
     $pw = $w - $padL - $padR; $ph = $h - $padT - $padB;
     $max = 0;
-    foreach ($series as $s) foreach ($s['values'] as $v) $max = max($max, (float) $v);
+    foreach ($series as $s) foreach ($s['values'] as $v) if ($v !== null) $max = max($max, (float) $v);
     $max = sd_nice_max($max);
     $x = static fn(int $i): float => $padL + ($n <= 1 ? $pw / 2 : $pw * $i / ($n - 1));
     $y = static fn(float $v): float => $padT + $ph - ($max > 0 ? $ph * $v / $max : 0);
@@ -586,14 +543,21 @@ function sd_line_chart(array $labels, array $series, string $unit, int $w = 430,
     // خطوط و نقطه‌ها
     $ends = [];
     foreach ($series as $s) {
-        $pts = [];
-        foreach (array_values($s['values']) as $i => $v) $pts[] = round($x($i), 1) . ',' . round($y((float) $v), 1);
-        if ($n > 1) $svg .= '<polyline fill="none" stroke="' . $s['color'] . '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' . implode(' ', $pts) . '"/>';
+        // مقدارِ ثبت‌نشده (null) نقطه ندارد و خط در آن‌جا قطع می‌شود
+        $segs = [[]];
         foreach (array_values($s['values']) as $i => $v) {
+            if ($v === null) { if (end($segs)) $segs[] = []; continue; }
+            $segs[count($segs) - 1][] = round($x($i), 1) . ',' . round($y((float) $v), 1);
+        }
+        foreach ($segs as $pts) if (count($pts) > 1) $svg .= '<polyline fill="none" stroke="' . $s['color'] . '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' . implode(' ', $pts) . '"/>';
+        foreach (array_values($s['values']) as $i => $v) {
+            if ($v === null) continue;
             $svg .= '<circle cx="' . round($x($i), 1) . '" cy="' . round($y((float) $v), 1) . '" r="' . ($n > 16 ? 2.4 : 3.2) . '" fill="' . $s['color'] . '" stroke="#ffffff" stroke-width="1.2"><title>'
                 . e($s['name'] . ' — ' . $labels[$i] . ': ' . $fmt((float) $v) . ' ' . $unit) . '</title></circle>';
         }
-        $last = (float) (array_values($s['values'])[$n - 1] ?? 0);
+        $lastRaw = array_values($s['values'])[$n - 1] ?? null;
+        if ($lastRaw === null) continue;
+        $last = (float) $lastRaw;
         $ends[] = ['y' => $y($last), 'v' => $last, 'color' => $s['color']];
     }
     // برچسبِ مقدارِ روزِ آخر (≤ ۴ سری) — با فاصله تا روی هم نیفتند
@@ -634,18 +598,27 @@ function sd_num($v): string
 function sd_spark(array $labels, array $values, string $color, int $w = 200, int $h = 46): string
 {
     $n = count($values);
-    $vals = array_map('floatval', array_values($values));
-    $max = max(1.0, $vals ? max($vals) : 0);
+    $vals = array_map(static fn($v) => $v === null ? null : (float) $v, array_values($values));
+    $nn = array_filter($vals, static fn($v) => $v !== null);
+    $max = max(1.0, $nn ? max($nn) : 0);
     $padL = 3; $padR = 3; $padT = 4; $padB = 4;
     $x = static fn(int $i): float => $padL + ($n <= 1 ? ($w - $padL - $padR) / 2 : ($w - $padL - $padR) * $i / ($n - 1));
     $y = static fn(float $v): float => $padT + ($h - $padT - $padB) * (1 - $v / $max);
-    $pts = [];
-    foreach ($vals as $i => $v) $pts[] = round($x($i), 1) . ',' . round($y($v), 1);
-    $last = $n ? $vals[$n - 1] : 0;
+    // روزهای ثبت‌نشده (null) نقطه ندارند و خط در آن‌جا قطع می‌شود
+    $segs = [[]];
+    foreach ($vals as $i => $v) {
+        if ($v === null) { if (end($segs)) $segs[] = []; continue; }
+        $segs[count($segs) - 1][] = round($x($i), 1) . ',' . round($y($v), 1);
+    }
+    $lastI = null;
+    foreach ($vals as $i => $v) if ($v !== null) $lastI = $i;
     $svg = '<svg class="sdr-spark" viewBox="0 0 ' . $w . ' ' . $h . '" width="100%" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
         . '<line x1="' . $padL . '" x2="' . ($w - $padR) . '" y1="' . ($h - $padB) . '" y2="' . ($h - $padB) . '" stroke="#d6d5cf" stroke-width="0.8"/>';
-    if ($n > 1) $svg .= '<polyline fill="none" stroke="' . $color . '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" points="' . implode(' ', $pts) . '"/>';
-    if ($n) $svg .= '<circle cx="' . round($x($n - 1), 1) . '" cy="' . round($y($last), 1) . '" r="2.6" fill="' . $color . '" stroke="#fff" stroke-width="1"/>';
+    foreach ($segs as $pts) {
+        if (count($pts) > 1) $svg .= '<polyline fill="none" stroke="' . $color . '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" points="' . implode(' ', $pts) . '"/>';
+        elseif (count($pts) === 1) { [$cx, $cy] = explode(',', $pts[0]); $svg .= '<circle cx="' . $cx . '" cy="' . $cy . '" r="1.6" fill="' . $color . '"/>'; }
+    }
+    if ($lastI !== null) $svg .= '<circle cx="' . round($x($lastI), 1) . '" cy="' . round($y($vals[$lastI]), 1) . '" r="2.6" fill="' . $color . '" stroke="#fff" stroke-width="1"/>';
     return $svg . '</svg>';
 }
 
@@ -701,7 +674,10 @@ function sd_render_sheet(array $R): string
     } else {
         $dense = $cnt > 9 ? ' sdr-dense' : '';
         $c1 = '<h3>شاخص‌های اختصاصی تیم</h3><div class="sdr-list' . $dense . '">';
-        foreach ($metrics as $m) $c1 .= $row((string) $m['metric_name'], sd_num($R['mv'][(int) $m['id']][$R['day']] ?? 0));
+        foreach ($metrics as $m) {
+            $v = $R['mv'][(int) $m['id']][$R['day']] ?? null;
+            $c1 .= $row((string) $m['metric_name'], $v === null ? '<span class="na"></span>' : sd_num($v));
+        }
         $c1 .= '</div>';
         if ($cnt <= 4) {
             $mSeries = [];
@@ -712,7 +688,8 @@ function sd_render_sheet(array $R): string
             $c2 = '<h3>روند شاخص‌های اختصاصی تیم <small>(' . e(reset($labels) . ' تا ' . end($labels)) . ')</small></h3><div class="sdr-multi' . ($cnt > 9 ? ' c3' : '') . '">';
             foreach ($metrics as $m) {
                 $vals = $R['mv'][(int) $m['id']] ?? [];
-                $c2 .= '<div class="sdr-mini"><div class="nm"><span>' . e((string) $m['metric_name']) . '</span><b>' . sd_num($vals ? end($vals) : 0) . '</b></div>'
+                $lastV = $vals ? end($vals) : null;
+                $c2 .= '<div class="sdr-mini"><div class="nm"><span>' . e((string) $m['metric_name']) . '</span><b>' . ($lastV === null ? '' : sd_num($lastV)) . '</b></div>'
                     . sd_spark($labels, $vals, $pal[0]) . '</div>';
             }
             $c2 .= '</div>';
