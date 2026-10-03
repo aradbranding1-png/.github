@@ -1,0 +1,52 @@
+# Arad Edu — public web root rules (Apache / LiteSpeed on DirectAdmin)
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Pass the Authorization header to PHP (needed on CGI/FastCGI for API Bearer tokens)
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Block hidden files (.env, .git, .htaccess ...) — but NOT the ACME challenge used by Let's Encrypt
+    RewriteRule ^\.well-known/ - [L]
+    RewriteRule (^|/)\. - [F,L]
+
+    # Block dumps / archives / backups / logs if they are ever dropped here by mistake
+    RewriteRule \.(sql|gz|zip|rar|tar|bak|old|backup|log|env|ini|sh|md)$ - [F,L,NC]
+
+    # Serve real static files directly (assets, favicon)
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Everything else goes to the front controller
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    <FilesMatch "\.(woff2|css|js|svg|png|jpg|webp|ico)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+    # PWA: service worker and manifest must always be revalidated
+    <FilesMatch "^(sw\.js|manifest\.webmanifest|offline\.html)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>
+
+# Only index.php may execute as PHP in the web root
+<FilesMatch "\.(php|phtml|phar)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>
+<Files "index.php">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+</Files>

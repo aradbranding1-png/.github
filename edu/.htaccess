@@ -1,0 +1,17 @@
+# Safety net: used only if the domain's document root was pointed at the project root by mistake.
+# Everything is served from public_html/ and all private directories are blocked.
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^\.well-known/ - [L]
+    RewriteRule ^(app|storage|database|docs|vendor)(/|$) - [F,L]
+    RewriteRule (^|/)\. - [F,L]
+    RewriteRule ^(cli\.php|cron\.php|VERSION|manifest\.json)$ - [F,L]
+    RewriteCond %{REQUEST_URI} !/public_html/
+    RewriteRule ^(.*)$ public_html/$1 [L]
+</IfModule>
+<IfModule !mod_rewrite.c>
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</IfModule>

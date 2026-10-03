@@ -1,0 +1,10 @@
+<div class="page-head"><div><div class="crumbs"><a href="<?= url('/admin/reports') ?>">گزارش‌ها</a></div><h1>استفاده از محتوا</h1></div><?php if (can('reports.export')): ?><a class="btn btn-outline" href="<?= url('/admin/reports/content', ['export' => 1]) ?>"><?= icon('file-spreadsheet') ?> Excel</a><?php endif; ?></div>
+<div class="grid g-main mb-3">
+    <div class="card flush"><div class="card-head" style="padding:1rem 1.25rem"><h3><?= icon('eye') ?> پربازدیدترین درس‌ها</h3></div><div class="table-wrap" style="max-height:520px"><table class="table"><thead><tr><th>درس</th><th>دوره</th><th>نوع</th><th>بیننده</th><th>تکمیل</th><th>بازدید</th><th>میانگین زمان</th></tr></thead><tbody>
+    <?php foreach ($lessons as $l): ?><tr><td class="fw-b small"><?= e($l['title']) ?></td><td class="small"><?= e($l['course_title']) ?></td><td><span class="badge badge-gray"><?= e(label('content_type', $l['content_type'])) ?></span></td><td class="num"><?= nf($l['viewers']) ?></td><td class="num"><?= nf($l['completers']) ?></td><td class="num"><?= nf($l['views']) ?></td><td class="num small"><?= $l['avg_time'] ? fa(round((float)$l['avg_time'] / 60, 1)) . ' دقیقه' : '—' ?></td></tr><?php endforeach; ?>
+    </tbody></table></div></div>
+    <div class="card"><h3><?= icon('chart-pie') ?> بازدید بر اساس نوع محتوا</h3><div class="donut-wrap"><div class="chart" data-chart='<?= e(json_encode($chart, JSON_UNESCAPED_UNICODE)) ?>'></div><div class="legend" data-for></div></div></div>
+</div>
+<div class="card flush"><div class="card-head" style="padding:1rem 1.25rem"><h3><?= icon('file') ?> فایل‌ها</h3></div><div class="table-wrap"><table class="table"><thead><tr><th>فایل</th><th>نوع</th><th>حجم</th><th>مشاهده</th><th>دانلود</th></tr></thead><tbody>
+<?php foreach ($files as $f): ?><tr><td><?= e($f['title'] ?: $f['original_name']) ?></td><td><?= e($f['kind']) ?></td><td class="num"><?= human_size((int)$f['size']) ?></td><td class="num"><?= nf($f['views']) ?></td><td class="num"><?= nf($f['downloads']) ?></td></tr><?php endforeach; ?>
+</tbody></table></div></div>
