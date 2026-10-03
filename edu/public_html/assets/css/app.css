@@ -389,7 +389,7 @@ table.table{width:100%;border-collapse:separate;border-spacing:0;font-size:.88re
 .chart .ax{stroke:var(--border);stroke-width:1}
 .chart .lbl{fill:var(--muted);font-size:10px;font-family:Vazirmatn,Tahoma}
 .chart .val{fill:var(--text-2);font-size:10px;font-weight:700;font-family:Vazirmatn,Tahoma}
-.chart-tip{position:absolute;pointer-events:none;background:var(--text);color:var(--surface);padding:.25rem .55rem;border-radius:8px;font-size:.75rem;white-space:nowrap;transform:translate(50%,-120%);opacity:0;transition:opacity .15s;z-index:5}
+.chart-tip{position:fixed;left:0;top:0;pointer-events:none;background:var(--text);color:var(--surface);padding:.25rem .55rem;border-radius:8px;font-size:.75rem;white-space:nowrap;max-width:calc(100vw - 16px);overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .15s;z-index:1200}
 .legend{display:flex;flex-wrap:wrap;gap:.35rem 1rem;font-size:.8rem;color:var(--text-2);margin-top:.5rem}
 .legend span{display:flex;align-items:center;gap:.35rem}
 .legend i{width:11px;height:11px;border-radius:3px;display:inline-block}

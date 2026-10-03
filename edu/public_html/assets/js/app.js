@@ -76,12 +76,25 @@
   function svg(tag, attrs) { var el = document.createElementNS('http://www.w3.org/2000/svg', tag); for (var k in attrs) el.setAttribute(k, attrs[k]); return el; }
   function niceMax(v) { if (v <= 0) return 4; var p = Math.pow(10, Math.floor(Math.log10(v))); var n = v / p; var m = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10; return m * p; }
 
+  // one tooltip for all charts, fixed to the viewport and kept inside it (never clipped by cards or hidden under the sidebar)
+  var chartTipEl = null;
+  function chartTip(evt, text) {
+    if (!chartTipEl) { chartTipEl = document.createElement('div'); chartTipEl.className = 'chart-tip'; document.body.appendChild(chartTipEl); }
+    var t = chartTipEl, m = 8;
+    t.textContent = text;
+    var w = t.offsetWidth, h = t.offsetHeight, vw = document.documentElement.clientWidth;
+    var x = Math.min(Math.max(evt.clientX - w / 2, m), vw - w - m);
+    var y = evt.clientY - h - 12;
+    if (y < m) y = evt.clientY + 16;
+    t.style.left = x + 'px'; t.style.top = y + 'px'; t.style.opacity = 1;
+  }
+  window.addEventListener('scroll', function () { if (chartTipEl) chartTipEl.style.opacity = 0; }, { passive: true });
+
   function renderChart(el) {
     var cfg; try { cfg = JSON.parse(el.getAttribute('data-chart')); } catch (x) { return; }
     el.innerHTML = '';
-    var tip = document.createElement('div'); tip.className = 'chart-tip'; el.appendChild(tip);
-    var showTip = function (evt, text) { var r = el.getBoundingClientRect(); tip.textContent = text; tip.style.left = (evt.clientX - r.left) + 'px'; tip.style.top = (evt.clientY - r.top) + 'px'; tip.style.opacity = 1; };
-    var hideTip = function () { tip.style.opacity = 0; };
+    var showTip = function (evt, text) { chartTip(evt, text); };
+    var hideTip = function () { if (chartTipEl) chartTipEl.style.opacity = 0; };
     var type = cfg.type || 'bar';
     var labels = cfg.labels || [];
     var series = cfg.series || [];

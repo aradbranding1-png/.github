@@ -1,6 +1,6 @@
 {
     "app": "aradedu",
-    "version": "1.0.49",
+    "version": "1.0.50",
     "min_version": "1.0.46",
     "requires_php": "8.1.0",
     "requires_extensions": [
@@ -14,13 +14,13 @@
     ],
     "released_at": "2026-10-03T12:48:21+03:30",
     "changelog": [
-        "دایره‌های خط زمانی (مثل آموزش‌های اجباری پیشخوان) دقیقاً روی خط عمودی قرار می‌گیرند؛ در دسکتاپ و موبایل"
+        "راهنمای نمودارها (tooltip) دیگر از کادر بیرون نمی‌زند و زیر منو پنهان نمی‌شود؛ همیشه داخل صفحه نمایش داده می‌شود"
     ],
     "files": {
         ".env.example": "dfe8c1a4e3b0e5e289445032118e3d7dacc80a45e6e30f7f3137727e710ecb7c",
         ".htaccess": "5046d0e13efec286eae49e978081cbbe2906b7849fb0bc7f9d0fb2cf1a36a9ce",
         "README.md": "ab7cca0bd34d9a39aa8b282aec461e3ebe49be8c1d14a7951aa60470bb42abb9",
-        "VERSION": "4775f1699b3f642c29550256e56a278387cdaddd729382c4c479d1429c7295ce",
+        "VERSION": "b3f00324fee996912ae7744390bb04de887dddcc9f10c269b0fd4a0ac99bdc6f",
         "app/.htaccess": "7429f93d7c9109542733e139f8fb401bc4ca52a133e0d75b3b7370e5b5b8707a",
         "app/Config/icons.php": "9344ea773b7a7fb6f03871f67d1626d82ec71f31c6a01dec9f35d3f2c56e9705",
         "app/Config/menu.php": "3350be54ee26115659ab72afce8919cb4236f7478a1c30433aa207ded032cb84",
@@ -261,7 +261,7 @@
         "docs/TROUBLESHOOTING.md": "cea02fadf8cb7d3ee7ffe665dbd4644e1c4ccc790ed4be6d82194ae65e508c0c",
         "docs/UPDATE-BACKUP.md": "85d05fe8783d0200005064e9e2533c6d6ac6db0deeeba97ca20ea1ac6fd016ce",
         "public_html/.htaccess": "60131222c83a88990a7607113ae840c3903170c03f9ce097beb956fab45081a3",
-        "public_html/assets/css/app.css": "39c89c52f0cf72d9ff5a6446dcb164e1339dd16e1be8d5dd4d92a044438c40bf",
+        "public_html/assets/css/app.css": "eae81bda2b47bc10d4336de93cf313d520a230584d205c4fb51d258b75724551",
         "public_html/assets/fonts/OFL.txt": "17e355067c8284f47743a1ee3b1ef7ff684ff0601eda357f9353b10b3016ab31",
         "public_html/assets/fonts/Vazirmatn-Bold.woff2": "836fae7d42d83faa249bc00e0099592be98a1fa260d22d82f269b6091e585627",
         "public_html/assets/fonts/Vazirmatn-ExtraBold.woff2": "cd67558bbca0ad319b89e3b2edb8a914f87f864951d7a9d24e1404cbf3b45b02",
@@ -278,7 +278,7 @@
         "public_html/assets/img/icons/icon-96.png": "657e654a60fa48dfea43ff10537859dca6da2d28d393677b58644f345f039d9e",
         "public_html/assets/img/icons/maskable-192.png": "fd6354e15ce0d822532834575a417c596ad0d465db29b44887555f61c9f49878",
         "public_html/assets/img/icons/maskable-512.png": "b9f42467513cf800f347e546a6df8389f0f461306a3de7ca69d66fe212079163",
-        "public_html/assets/js/app.js": "762c09eeaf6a3caca1ba48b93423a29b2fcc538c0872b489618afcb0bd46eb92",
+        "public_html/assets/js/app.js": "a6af1825c236965f0ddc19f7885148b86ff971605390c0fa983fe21bb97899d3",
         "public_html/favicon.ico": "2a7c5d3a70a3040c7b143c23fb8c9ef3314d8b015e6511ec63c2e9d326779375",
         "public_html/index.php": "19dad60693adc0b356811e4befae198f9c47e66614b1279ba497d498532b6810",
         "public_html/manifest.webmanifest": "7b9723e2bf5397eb98bebcd44be00060562000b0c9011ffa75e9e36f0198d598",
