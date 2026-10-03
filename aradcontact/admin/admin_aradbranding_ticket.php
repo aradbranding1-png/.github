@@ -118,6 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'acc_api_url'        => mb_substr($accUrl, 0, 500),
             'acc_field_mobile'   => $fld('acc_field_mobile'),
             'acc_field_name'     => $fld('acc_field_name'),
+            'acc_field_first_name' => $fld('acc_field_first_name'),
+            'acc_field_last_name'  => $fld('acc_field_last_name'),
+            'acc_field_father'     => $fld('acc_field_father'),
             'acc_field_password' => $fld('acc_field_password'),
             'acc_field_national' => $fld('acc_field_national'),
             'acc_extra_json'     => $accExtra,
@@ -459,7 +462,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <?= csrf_field() ?>
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
       <h6 class="fw-bold mb-0"><i class="fa-solid fa-user-plus" style="color:#7c3aed"></i> مشتری‌ای که در آراد برندینگ حساب ندارد</h6>
-      <span class="badge <?= $__acc['acc_enabled'] === '1' && $__acc['acc_api_url'] !== '' ? 'text-bg-success' : 'text-bg-secondary' ?>"><?= $__acc['acc_enabled'] === '1' && $__acc['acc_api_url'] !== '' ? 'ساختِ خودکار فعال' : 'ساختِ خودکار غیرفعال' ?></span>
+      <?php $__accUrl = abt_account_api_url($__acc); ?><span class="badge <?= $__acc['acc_enabled'] === '1' && $__accUrl !== '' ? 'text-bg-success' : 'text-bg-secondary' ?>"><?= $__acc['acc_enabled'] === '1' && $__accUrl !== '' ? 'ساختِ خودکار فعال' : 'ساختِ خودکار غیرفعال' ?></span>
     </div>
     <div class="small text-muted mb-3">
       وقتی آراد برندینگ «تاجری با این شماره موبایل پیدا نشد» برگرداند: <b>۱)</b> همه‌ی موبایل‌های همین مشتری در پروفایلِ ۳۶۰ (همه‌ی پرونده‌ها، موبایلِ دوم و شماره‌های اضافه) به‌ترتیب امتحان می‌شوند و شماره‌ای که حساب داشت برای تیکت‌های بعدی هم استفاده می‌شود.
@@ -468,9 +471,11 @@ require_once __DIR__ . '/../includes/layout_top.php';
     </div>
     <div class="row g-2">
       <div class="col-md-2 d-flex align-items-end"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="acc_enabled" value="1" id="accOn" <?= $__acc['acc_enabled'] === '1' ? 'checked' : '' ?>><label class="form-check-label small" for="accOn">ساختِ خودکار</label></div></div>
-      <div class="col-md-5"><label class="form-label small mb-1">آدرسِ API ساختِ حسابِ تاجر (POST)</label><input name="acc_api_url" class="form-control form-control-sm" dir="ltr" value="<?= e($__acc['acc_api_url']) ?>" placeholder="https://aradbranding.me/api/…"></div>
+      <div class="col-md-5"><label class="form-label small mb-1">آدرسِ API ساختِ حسابِ تاجر (POST)</label><input name="acc_api_url" class="form-control form-control-sm" dir="ltr" value="<?= e($__acc['acc_api_url']) ?>" placeholder="<?= e($__accUrl !== '' ? $__accUrl . ' (خودکار)' : 'https://…/api/integrations/arad-contact/merchants') ?>">
+        <div class="form-text">خالی = خودکار از روی آدرسِ API تیکت (…/tickets ← …/merchants).</div></div>
       <div class="col-md-5"><label class="form-label small mb-1">آدرسِ ورودِ مشتری (در تیکتِ اطلاعاتِ حساب)</label><input name="acc_login_url" class="form-control form-control-sm" dir="ltr" value="<?= e($__acc['acc_login_url']) ?>"></div>
-      <?php foreach (['acc_field_mobile' => 'فیلدِ موبایل', 'acc_field_name' => 'فیلدِ نام', 'acc_field_password' => 'فیلدِ رمز عبور', 'acc_field_national' => 'فیلدِ کد ملی (اختیاری)'] as $__k => $__l): ?>
+      <?php foreach (['acc_field_mobile' => 'فیلدِ موبایل', 'acc_field_first_name' => 'فیلدِ نام', 'acc_field_last_name' => 'فیلدِ نام خانوادگی', 'acc_field_father' => 'فیلدِ نام پدر',
+          'acc_field_national' => 'فیلدِ کد ملی (اتباع: ارسال نمی‌شود)', 'acc_field_password' => 'فیلدِ رمز عبور', 'acc_field_name' => 'فیلدِ نامِ کامل (اختیاری)'] as $__k => $__l): ?>
         <div class="col-6 col-md-3"><label class="form-label small mb-0"><?= $__l ?></label><input name="<?= $__k ?>" class="form-control form-control-sm" dir="ltr" value="<?= e($__acc[$__k]) ?>"></div>
       <?php endforeach; ?>
       <div class="col-md-6"><label class="form-label small mb-0">فیلدهای ثابتِ ساختِ حساب (JSON، اختیاری)</label><input name="acc_extra_json" class="form-control form-control-sm" dir="ltr" value="<?= e($__acc['acc_extra_json']) ?>" placeholder='{"role": "merchant"}'></div>

@@ -126,6 +126,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_set('warning', 'سفارش تأیید شد، ولی ساخت/ارسالِ تیکتِ آراد برندینگ با خطا روبه‌رو شد.');
             }
         }
+    } elseif ($action === 'ticket_delete_remote' && abt_can_manage($user)) {
+        // حذفِ تیکتِ ارسال‌شده از آراد برندینگ (DELETE …/tickets)
+        $ticket = abt_get_ticket($pdo, (int) ($_POST['ticket_id'] ?? 0));
+        if (!$ticket || (int) $ticket['order_id'] !== $orderId) {
+            flash_set('danger', 'تیکت پیدا نشد.');
+        } else {
+            $r = abt_delete_remote($pdo, $order, $ticket, (int) $user['id'], trim((string) ($_POST['reason'] ?? '')));
+            flash_set($r['ok'] ? 'success' : 'danger', $r['message']);
+        }
+        redirect('order_view.php?id=' . $orderId . '#abt');
     } elseif ($action === 'ts_sync' && abt_can_manage($user)) {
         // سامانه توسعه تجارت: بررسی/شارژِ دوباره‌ی استارز (ناموفق‌ها با همان شناسه، بدونِ شارژِ تکراری)
         require_once __DIR__ . '/includes/trade_stars.php';
@@ -806,7 +816,7 @@ require_once __DIR__ . '/includes/layout_top.php';
 
       <!-- تیکت‌های آراد برندینگ (یکی برای هر خدمت) -->
       <?php if ($abtOk && ($abtCan || $abtTickets)):
-        $abtUnsent = array_values(array_filter($abtTickets, static fn($t) => !in_array($t['status'], ['sent', 'manual', 'bundled'], true))); ?>
+        $abtUnsent = array_values(array_filter($abtTickets, static fn($t) => !in_array($t['status'], ['sent', 'manual', 'bundled', 'deleted'], true))); ?>
       <div class="card p-3 mb-3" id="abt" style="border-color:#bfdbfe">
         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
           <h6 class="fw-bold mb-0"><i class="fa-solid fa-ticket text-primary"></i> تیکت‌های آراد برندینگ</h6>
@@ -869,9 +879,14 @@ require_once __DIR__ . '/includes/layout_top.php';
                 <?php if ($abtCan): ?>
                   <form method="post" class="d-flex flex-wrap gap-1 mt-2"><?= csrf_field() ?><input type="hidden" name="ticket_id" value="<?= $tkId ?>">
                     <button name="action" value="ticket_resend" class="btn btn-sm btn-outline-primary" <?= $abtConn ? '' : 'disabled' ?>
-                      onclick="return confirm('این تیکت دوباره در آراد برندینگ ثبت شود؟ فقط وقتی بزنید که تیکتِ قبلی در سایتِ اصلی حذف شده؛ وگرنه مشتری دو تیکت خواهد داشت.');"><i class="fa-solid fa-rotate-right"></i> ارسالِ مجدد</button>
+                      onclick="return confirm('این تیکت دوباره در آراد برندینگ ثبت شود؟ تیکتِ قبلی حذف نمی‌شود و مشتری دو تیکت خواهد داشت؛ برای جایگزینی اول «حذف از آراد برندینگ» را بزنید.');"><i class="fa-solid fa-rotate-right"></i> ارسالِ مجدد</button>
                     <button name="action" value="ticket_reopen" class="btn btn-sm btn-outline-secondary"
                       onclick="return confirm('تیکت برای ویرایشِ متن/واحد و ارسالِ دوباره بازگشایی شود؟');"><i class="fa-solid fa-pen-to-square"></i> ویرایش و ارسالِ مجدد</button>
+                    <?php if ($tk['status'] === 'sent'): ?>
+                    <button name="action" value="ticket_delete_remote" class="btn btn-sm btn-outline-danger" <?= $abtConn ? '' : 'disabled' ?>
+                      onclick="var r = prompt('این تیکت از آراد برندینگ حذف شود و مشتری دیگر آن را نبیند؟\nدلیل (اختیاری):', ''); if (r === null) return false; this.form.reason.value = r; return true;"><i class="fa-solid fa-trash-can"></i> حذف از آراد برندینگ</button>
+                    <input type="hidden" name="reason" value="">
+                    <?php endif; ?>
                   </form>
                 <?php endif; ?>
               <?php elseif ($abtCan): ?>

@@ -203,6 +203,7 @@ function abt_statuses(): array
         'failed' => ['label' => 'ارسال ناموفق',  'color' => 'danger',    'icon' => 'fa-triangle-exclamation'],
         'skipped' => ['label' => 'ارسال نشود',   'color' => 'secondary', 'icon' => 'fa-ban'],
         'bundled' => ['label' => 'انجام شد (در تیکتِ دیگرِ همین سفارش اعلام شد)', 'color' => 'success', 'icon' => 'fa-check-double'],
+        'deleted' => ['label' => 'حذف‌شده از آراد برندینگ', 'color' => 'dark', 'icon' => 'fa-trash-can'],
     ];
 }
 
@@ -316,9 +317,12 @@ function abt_settings_defaults(): array
         'acc_enabled'        => '0',
         'acc_api_url'        => '',     // POST — آدرسِ API ساختِ حسابِ تاجر (همان احرازِ هویتِ API تیکت)
         'acc_field_mobile'   => 'mobile',
-        'acc_field_name'     => 'name',
+        'acc_field_name'     => '',     // نامِ کامل در یک فیلد (API فعلی: first_name / last_name جدا)
+        'acc_field_first_name' => 'first_name',
+        'acc_field_last_name'  => 'last_name',
+        'acc_field_father'     => 'father_name',
         'acc_field_password' => 'password',
-        'acc_field_national' => '',
+        'acc_field_national' => 'national_id',
         'acc_extra_json'     => '',
         'acc_login_url'      => 'https://my.aradbranding.me',
         'acc_department'     => '',     // واحدِ تیکتِ «اطلاعاتِ حساب» — خالی = واحدِ پیش‌فرض
@@ -994,7 +998,7 @@ function abt_send_unlocked(PDO $pdo, array $order, array $ticket, int $userId): 
 }
 
 /** POST به API آراد برندینگ با همان احرازِ هویتِ تنظیمات. @return array{0:string|false,1:string,2:int} */
-function abt_http_post(array $s, string $url, array $payload): array
+function abt_http_post(array $s, string $url, array $payload, string $method = 'POST'): array
 {
     $headers = ['Accept: application/json'];
     $key = (string) $s['auth_key'];
@@ -1024,8 +1028,9 @@ function abt_http_post(array $s, string $url, array $payload): array
         $headers[] = 'Content-Type: application/json; charset=utf-8';
     }
     $ch = curl_init($url);
+    if ($method !== 'POST') curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method); // مثلاً DELETE با بدنه‌ی JSON
     curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
+        CURLOPT_POST           => $method === 'POST',
         CURLOPT_POSTFIELDS     => $body,
         CURLOPT_HTTPHEADER     => $headers,
         CURLOPT_RETURNTRANSFER => true,
@@ -1167,11 +1172,60 @@ function abt_account_notice(array $account): string
  * (نام کاربری، رمز، آدرسِ ورود و نامِ همه‌ی خدماتِ خریداری‌شده) و یادآوری به مسئولی که «ارسال» را زده.
  * @return array{ok:bool, message:string, account?:array}
  */
+/** آدرسِ API ساختِ حسابِ تاجر: تنظیمات، وگرنه از روی آدرسِ API تیکت (…/tickets ← …/merchants) */
+function abt_account_api_url(array $s): string
+{
+    $url = trim((string) ($s['acc_api_url'] ?? ''));
+    if ($url !== '') return $url;
+    $t = rtrim(trim((string) ($s['api_url'] ?? '')), '/');
+    return preg_match('#/tickets$#', $t) ? preg_replace('#/tickets$#', '/merchants', $t) : '';
+}
+
+/** نام و نام خانوادگی از نامِ کامل (عنوان‌هایی مثلِ «آقای/خانم/دکتر/مهندس» حذف می‌شوند؛ تک‌کلمه‌ای ← نام خانوادگی = همان) */
+function abt_split_name(string $full): array
+{
+    $full = trim(preg_replace('/\s+/u', ' ', str_replace(['ي', 'ك', "\u{200C}"], ['ی', 'ک', ' '], $full)));
+    $full = trim(preg_replace('/^(?:جناب\s+)?(?:آقای|اقای|آقا|خانم|سرکار\s+خانم|دکتر|مهندس|حاج|حاجی)\s+/u', '', $full));
+    if ($full === '') return ['', ''];
+    $parts = explode(' ', $full, 2);
+    return count($parts) === 2 ? [$parts[0], $parts[1]] : [$parts[0], $parts[0]];
+}
+
+/**
+ * حذفِ تیکتِ ارسال‌شده از آراد برندینگ (DELETE …/tickets با ticket_id، وگرنه external_id).
+ * پس از حذف، شناسه‌ی مرجعِ بعدی عوض می‌شود تا «ارسالِ دوباره» با تیکتِ حذف‌شده یکی نشود.
+ */
+function abt_delete_remote(PDO $pdo, array $order, array $ticket, int $userId, string $reason = ''): array
+{
+    if (!in_array($ticket['status'], ['sent', 'manual'], true)) return ['ok' => false, 'message' => 'فقط تیکتِ ارسال‌شده حذف می‌شود.'];
+    $s = abt_settings($pdo);
+    if (!abt_connection_ready($s)) return ['ok' => false, 'message' => 'اتصال به آراد برندینگ تنظیم/فعال نیست.'];
+    $ext = trim((string) ($ticket['external_id'] ?? ''));
+    $body = ctype_digit($ext) ? ['ticket_id' => (int) $ext]
+        : ['external_id' => 'arad-contact-' . (int) $ticket['id'] . ((int) ($ticket['resend_count'] ?? 0) > 0 ? '-r' . (int) $ticket['resend_count'] : '')];
+    [$resp, $err, $code] = abt_http_post($s, trim((string) $s['api_url']), $body, 'DELETE');
+    $text = is_string($resp) ? mb_substr($resp, 0, 4000) : '';
+    $j = json_decode($text, true);
+    $ok = $resp !== false && $err === '' && $code >= 200 && $code < 300 && is_array($j) && ($j['success'] ?? true) !== false
+        && (!empty($j['deleted']) || !empty($j['already_deleted']));
+    if (!$ok) {
+        $why = $err !== '' ? 'خطای اتصال: ' . $err : 'کد ' . $code . (is_array($j) && !empty($j['message']) ? ': ' . $j['message'] : '');
+        return ['ok' => false, 'message' => 'حذف از آراد برندینگ ناموفق — ' . $why];
+    }
+    $pdo->prepare("UPDATE aradbranding_tickets SET status = 'deleted', resend_count = resend_count + 1, external_url = NULL, last_error = ?, updated_at = ? WHERE id = ?")
+        ->execute([mb_substr('حذف از آراد برندینگ' . ($reason !== '' ? ': ' . $reason : ''), 0, 500), date('Y-m-d H:i:s'), (int) $ticket['id']]);
+    if (function_exists('orders_add_history')) {
+        orders_add_history($pdo, (int) $order['id'], $userId, 'note', null, null,
+            'تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» (' . ($ext !== '' ? $ext : '#' . $ticket['id']) . ') از آراد برندینگ حذف شد' . (!empty($j['already_deleted']) ? ' (قبلاً حذف شده بود)' : '') . ($reason !== '' ? ' — ' . $reason : '') . '.');
+    }
+    return ['ok' => true, 'message' => 'تیکت از آراد برندینگ حذف شد' . (!empty($j['already_deleted']) ? ' (قبلاً حذف شده بود)' : '') . '. در صورتِ نیاز متن را اصلاح و دوباره «ارسال» کنید.'];
+}
+
 function abt_create_account(PDO $pdo, array $s, array $order, int $userId): array
 {
     $existing = abt_account_get($pdo, (int) $order['customer_id']);
     if ($existing && $existing['status'] === 'created') return ['ok' => true, 'message' => 'حساب قبلاً ساخته شده.', 'account' => $existing];
-    $url = trim((string) ($s['acc_api_url'] ?? ''));
+    $url = abt_account_api_url($s);
     if (($s['acc_enabled'] ?? '0') !== '1' || !preg_match('#^https?://#i', $url)) {
         return ['ok' => false, 'message' => 'ساختِ خودکارِ حساب در «تنظیمات تیکت ← مشتری‌ای که در آراد برندینگ حساب ندارد» فعال/تنظیم نشده؛ یا شماره‌ی درستِ مشتری را در پرونده‌اش اضافه کنید، یا حساب را دستی بسازید و دوباره «ارسال» بزنید.'];
     }
@@ -1183,11 +1237,16 @@ function abt_create_account(PDO $pdo, array $s, array $order, int $userId): arra
     $password = abt_gen_password();
     $payload = json_decode((string) ($s['acc_extra_json'] ?? ''), true);
     $payload = is_array($payload) ? $payload : [];
+    [$first, $last] = abt_split_name((string) ($order['customer_name'] ?? ''));
     foreach ([
-        'acc_field_mobile'   => $mobile,
-        'acc_field_name'     => (string) ($order['customer_name'] ?? ''),
-        'acc_field_password' => $password,
-        'acc_field_national' => ($kyc['id_type'] ?? 'national') === 'national' ? (string) ($kyc['national_id'] ?? '') : '',
+        'acc_field_mobile'     => $mobile,
+        'acc_field_name'       => (string) ($order['customer_name'] ?? ''),
+        'acc_field_first_name' => $first,
+        'acc_field_last_name'  => $last,
+        'acc_field_father'     => trim((string) ($kyc['father_name'] ?? '')),
+        'acc_field_password'   => $password,
+        // کدِ ملی فقط برای ایرانی‌ها؛ اتباع (بدونِ کدِ ملی) بدونِ این فیلد ساخته می‌شوند
+        'acc_field_national'   => ($kyc['id_type'] ?? 'national') === 'national' ? (string) ($kyc['national_id'] ?? '') : '',
     ] as $cfg => $val) {
         $name = trim((string) ($s[$cfg] ?? ''));
         if ($name !== '' && $val !== '') $payload[$name] = $val;
@@ -1335,7 +1394,7 @@ function abt_on_order_approved(PDO $pdo, int $orderId, int $userId): array
         return ['ok' => null, 'message' => ''];
     }
     $tickets = abt_prepare_items($pdo, $order, $userId, false);
-    $pending = array_values(array_filter($tickets, static fn($t) => !in_array($t['status'], ['sent', 'manual', 'bundled'], true)));
+    $pending = array_values(array_filter($tickets, static fn($t) => !in_array($t['status'], ['sent', 'manual', 'bundled', 'deleted'], true)));
     if (!$pending) {
         return ['ok' => null, 'message' => ''];
     }
@@ -1352,7 +1411,7 @@ function abt_send_all(PDO $pdo, array $order, array $tickets, int $userId): arra
     $ok = 0;
     $fail = [];
     foreach ($tickets as $t) {
-        if (in_array($t['status'], ['sent', 'manual', 'bundled', 'skipped'], true)) continue; // «ارسال نشود» فقط تکی از صفحه‌ی سفارش
+        if (in_array($t['status'], ['sent', 'manual', 'bundled', 'skipped', 'deleted'], true)) continue; // «ارسال نشود» فقط تکی از صفحه‌ی سفارش
         $r = abt_send($pdo, $order, $t, $userId);
         if ($r['ok']) $ok++; else $fail[] = $r['message'];
     }
