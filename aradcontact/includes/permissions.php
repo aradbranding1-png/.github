@@ -206,6 +206,7 @@ if (!function_exists('perm_catalog')) {
                 'items' => [
                     'contracts_view_all'  => ['label' => 'مشاهده و چاپِ همه‌ی قراردادها', 'desc' => 'دیدن و چاپ/ارسالِ قراردادِ هر مشتری (نه فقط مشتریانِ خودش).', 'pages' => ['contract_view.php', 'contract_print.php']],
                     'contracts_manage'    => ['label' => 'تنظیم، ویرایش و صدورِ قرارداد', 'desc' => 'ساختِ قرارداد، تکمیل/ویرایشِ اطلاعات و متن، تأیید، صدور و بازگشایی — بدونِ دسترسی به تأیید/ردِ سفارش‌های مالی.', 'pages' => ['contract_view.php', 'contract_print.php']],
+                    'contracts_dashboard' => ['label' => 'مدیریتِ قراردادها (پیگیریِ ساخت، صدور و ارسال)', 'desc' => 'صفحه‌ی «مدیریت قراردادها»: همه‌ی سفارش‌های تأییدشده با وضعیتِ قرارداد و ارسالِ تیکت؛ ساختن، باز کردن و ارسالِ قراردادهای جامانده.', 'pages' => ['contracts_manage.php']],
                     'contracts_delete' => ['label' => 'حذف قرارداد', 'desc' => 'حذفِ کاملِ قراردادِ ایجادشده (همراه با لینک‌ها و سابقه‌ی ارسالش) از پرونده‌ی مشتری. برگشت‌پذیر نیست.', 'pages' => [], 'sensitive' => true],
                 ],
             ],
@@ -477,12 +478,12 @@ if (!function_exists('perm_role_defaults')) {
             case 'financial_liaison':
                 return array_merge(['dashboard_view', 'help_view', 'chat_view', 'customer_list_view', 'customer_view',
                     'phone_history_view', 'service_requests_view', 'orders_view_own', 'reports_view', 'admin_dashboard',
-                    'finance_orders_view', 'finance_orders_decide', 'finance_settings', 'admin_fix_future_dates'], $auto);
+                    'finance_orders_view', 'finance_orders_decide', 'finance_settings', 'admin_fix_future_dates', 'contracts_dashboard'], $auto);
             case 'contract_unit':
                 // واحد قرارداد: اطلاعاتِ مشتری (فقط خواندنی) + پرداخت‌ها/اقساط (مشاهده) + قراردادها (تنظیم/ویرایش/صدور/چاپ)
                 return ['dashboard_view', 'help_view', 'chat_view', 'customer_list_view', 'customer_view', 'customer_view_all',
                     'customer_profile_view', 'customer_profile_phones_view', 'phone_history_view',
-                    'finance_orders_view', 'contracts_view_all', 'contracts_manage'];
+                    'finance_orders_view', 'contracts_view_all', 'contracts_manage', 'contracts_dashboard'];
             case 'reception_agent':
                 return ['dashboard_view', 'help_view', 'chat_view', 'reception_agent_panel',
                         'letter_view', 'letter_create', 'letter_reply', 'letter_view_attachment', 'letter_download_attachment', 'letter_archive'];
@@ -658,6 +659,8 @@ if (!function_exists('perm_one_time_grants')) {
         return [
             // حذفِ قرارداد: فعلاً فقط ادمین (ادمین کل همیشه همه‌چیز را دارد)
             'contracts_delete' => ['admin'],
+            // مدیریتِ قراردادها: ادمین، واحدِ قرارداد و واحدِ مالی (ادمین کل همیشه دارد)
+            'contracts_dashboard' => ['admin', 'contract_unit', 'financial_liaison'],
             // حذفِ پیش‌فاکتور و حذف/لغوِ فاکتور: فقط ادمین و مالی (بقیه از «نقش‌ها و دسترسی‌ها» قابلِ تنظیم)
             'quotes_delete' => ['admin', 'financial_liaison'],
             'orders_delete' => ['admin', 'financial_liaison'],
