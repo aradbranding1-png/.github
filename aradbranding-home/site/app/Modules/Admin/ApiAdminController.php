@@ -87,7 +87,7 @@ final class ApiAdminController extends AdminController
         $actor = (int) $this->user($request)['id'];
         $this->c->get(\App\Core\Settings\Settings::class)->set('api.enabled', $on, $actor);
         $this->c->get(\App\Core\Security\Audit::class)->log('api.settings', $actor, 'setting', null, 'success', $request, ['enabled' => $on]);
-        return $this->redirect('/admin/api#member-keys', $on ? 'API اعضا فعال شد.' : 'API اعضا غیرفعال شد؛ همه کلیدهای شخصی تا فعال‌شدن دوباره پاسخ ۵۰۳ می‌گیرند.');
+        return $this->redirect('/admin/api#member-keys', $on ? 'API رسمی فعال شد.' : 'API رسمی غیرفعال شد؛ همه کلیدهای شخصی تا فعال‌شدن دوباره پاسخ ۵۰۳ می‌گیرند.');
     }
 
     /** POST /admin/api/keys/{id}/revoke — revoke a member's personal key (e.g. leaked or abused). */

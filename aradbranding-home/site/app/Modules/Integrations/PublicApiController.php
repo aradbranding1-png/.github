@@ -328,8 +328,9 @@ final class PublicApiController extends Controller
                 'revoked' => 'This API key was revoked.',
                 'expired' => 'This API key has expired.',
                 'account' => 'The account that owns this key is not active.',
+                'forbidden' => 'API access is limited to Super Admin accounts.',
             ];
-            return self::error($res['error'] === 'account' ? 403 : 401, 'unauthorized_' . $res['error'], $messages[$res['error']])
+            return self::error(in_array($res['error'], ['account', 'forbidden'], true) ? 403 : 401, 'unauthorized_' . $res['error'], $messages[$res['error']])
                 ->withHeader('WWW-Authenticate', 'Bearer realm="api"');
         }
         $key = $res['key'];

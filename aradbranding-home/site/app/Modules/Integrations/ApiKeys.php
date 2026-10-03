@@ -11,6 +11,7 @@ use App\Core\Db\Connection;
  * Personal API keys (official API v1). A key looks like `ark_<8-hex prefix>_<40-hex secret>`; only the prefix and a
  * SHA-256 of the secret are stored, so a key is shown once and can only be revoked. Each key has scopes and an
  * optional expiry; it acts as its owner and stops working while the owner is suspended or banned.
+ * Only Super Admin accounts may hold and use keys (1.16.3); keys of anyone else are refused.
  */
 final class ApiKeys
 {
@@ -84,9 +85,21 @@ final class ApiKeys
         if ($user === null || in_array((int) $user['status'], [Auth::STATUS_SUSPENDED, Auth::STATUS_BANNED, Auth::STATUS_DELETED], true)) {
             return ['key' => null, 'user' => null, 'error' => 'account'];
         }
+        if (!$this->allowed((int) $user['id'])) {
+            return ['key' => null, 'user' => null, 'error' => 'forbidden'];
+        }
         $this->db->exec('UPDATE api_keys SET last_used_at = NOW(3), last_ip = ?, requests = requests + 1 WHERE id = ?', [@inet_pton($ip) ?: null, $key['id']]);
         $key['scopes'] = array_values(array_filter(explode(',', (string) $key['scopes'])));
         return ['key' => $key, 'user' => $user, 'error' => null];
+    }
+
+    /** Official API access is reserved for Super Admin accounts. */
+    public function allowed(int $userId): bool
+    {
+        return $this->db->scalar(
+            "SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ? AND r.slug = 'super_admin'",
+            [$userId]
+        ) !== null;
     }
 
     public function revoke(int $id, ?int $userId = null): bool

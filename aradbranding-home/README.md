@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.16.2)
+# aradbranding.app — Home page redesign (v1.16.3)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -256,3 +256,7 @@ API reference: `docs/API-v1.md`.
 - `logo-192.webp?v=4`
 - the icons and the manifest to `?v=5`
 - the service-worker cache to `sadt-v5`
+
+## v1.16.3 (incremental package)
+
+`dist/aradbranding-1.16.3-update.zip` restricts the official API to Super Admin accounts. It touches `ApiKeys::allowed`, `ApiKeyController::guard`, and the profile menu link. Migration `2026_10_13_000001_api_superadmin_only` revokes every other account's keys.

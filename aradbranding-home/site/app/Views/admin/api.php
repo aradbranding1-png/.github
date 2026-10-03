@@ -93,12 +93,12 @@ $names = ['wallet.charge' => 'شارژ کیف پول', 'users.lookup' => 'است
     <section class="panel" id="member-keys">
       <div class="panel-head">
         <div>
-          <h2>API رسمی اعضا</h2>
-          <p class="muted">اعضا از «API و کلید دسترسی» برای خودشان کلید شخصی (<code dir="ltr">ark_…</code>) می‌سازند؛ هر کلید فقط به داده‌های همان عضو و در محدوده دسترسی‌های انتخاب‌شده کار می‌کند. کلید حساب معلق یا مسدود خودبه‌خود کار نمی‌کند. راهنما: <code dir="ltr">docs/API-v1.md</code>.</p>
+          <h2>API رسمی (کلیدهای شخصی)</h2>
+          <p class="muted">فقط مدیر کل می‌تواند از «API و کلید دسترسی» کلید شخصی (<code dir="ltr">ark_…</code>) بسازد و از آن استفاده کند؛ اعضای دیگر این بخش را نمی‌بینند و کلیدهای قدیمی آن‌ها کار نمی‌کند. هر کلید فقط در محدوده دسترسی‌های انتخاب‌شده کار می‌کند. راهنما: <code dir="ltr">docs/API-v1.md</code>.</p>
         </div>
         <form method="post" action="/admin/api/settings"><?= csrf_field() ?>
           <input type="hidden" name="enabled" value="<?= $apiEnabled ? '0' : '1' ?>">
-          <button class="btn btn-sm<?= $apiEnabled ? ' btn-ghost' : '' ?>" type="submit"><?= $apiEnabled ? 'غیرفعال‌کردن API اعضا' : 'فعال‌کردن API اعضا' ?></button>
+          <button class="btn btn-sm<?= $apiEnabled ? ' btn-ghost' : '' ?>" type="submit"><?= $apiEnabled ? 'غیرفعال‌کردن API رسمی' : 'فعال‌کردن API رسمی' ?></button>
         </form>
       </div>
       <p class="api-state"><span class="api-dot<?= $apiEnabled ? ' on' : '' ?>" aria-hidden="true"></span><?= $apiEnabled ? 'فعال' : 'غیرفعال' ?></p>

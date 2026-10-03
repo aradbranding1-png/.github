@@ -157,7 +157,7 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
             <a href="/account" role="menuitem"><svg class="icon"><use href="#i-user"/></svg>حساب کاربری</a>
             <a href="/wallet" role="menuitem"><svg class="icon"><use href="#i-star"/></svg>کیف پول Stars</a>
             <a href="/account/safety" role="menuitem"><svg class="icon"><use href="#i-lock"/></svg>حریم و امنیت</a>
-            <a href="/account/api" role="menuitem"><svg class="icon"><use href="#i-route"/></svg>API و کلید دسترسی</a>
+            <?php if (($user['role_slug'] ?? '') === 'super_admin'): ?><a href="/account/api" role="menuitem"><svg class="icon"><use href="#i-route"/></svg>API و کلید دسترسی</a><?php endif; ?>
             <?php if (!empty($isStaff)): ?><a href="/admin" role="menuitem"><svg class="icon"><use href="#i-gear"/></svg>مدیریت سامانه</a><?php endif; ?>
             <form method="post" action="/logout"><?= csrf_field() ?><button type="submit" role="menuitem"><svg class="icon"><use href="#i-logout"/></svg>خروج</button></form>
           </div>

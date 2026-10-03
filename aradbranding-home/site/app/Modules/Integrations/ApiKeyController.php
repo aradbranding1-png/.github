@@ -13,12 +13,12 @@ use App\Core\Security\Audit;
 use App\Core\Session\Session;
 use App\Core\Settings\Settings;
 
-/** «API و کلید دسترسی»: members create, see and revoke their personal API keys (official API v1). */
+/** «API و کلید دسترسی»: the Super Admin creates, sees and revokes personal API keys (official API v1). */
 final class ApiKeyController extends Controller
 {
     public function index(Request $request, array $errors = [], int $status = 200): Response
     {
-        $user = $this->user($request);
+        $user = $this->guard($request);
         $newKey = Session::get('member_new_api_key');
         Session::forget('member_new_api_key');
         return $this->view($request, 'account/api', [
@@ -35,7 +35,7 @@ final class ApiKeyController extends Controller
 
     public function create(Request $request): Response
     {
-        $user = $this->user($request);
+        $user = $this->guard($request);
         if (!(bool) $this->c->get(Settings::class)->get('api.enabled', true)) {
             return $this->redirect('/account/api', 'API فعلاً توسط مدیر سامانه غیرفعال شده است.', 'error');
         }
@@ -71,11 +71,21 @@ final class ApiKeyController extends Controller
 
     public function revoke(Request $request): Response
     {
-        $user = $this->user($request);
+        $user = $this->guard($request);
         $id = (int) $request->param('id');
         if ($this->c->get(ApiKeys::class)->revoke($id, (int) $user['id'])) {
             $this->c->get(Audit::class)->log('api_key.revoke', (int) $user['id'], 'api_key', $id, 'success', $request);
         }
         return $this->redirect('/account/api', 'کلید باطل شد و دیگر کار نمی‌کند.');
+    }
+
+    /** Only the Super Admin may use the official API; everyone else gets 404. @return array<string, mixed> */
+    private function guard(Request $request): array
+    {
+        $user = $this->user($request);
+        if (!$this->c->get(ApiKeys::class)->allowed((int) $user['id'])) {
+            throw new \App\Core\Http\HttpException(404);
+        }
+        return $user;
     }
 }

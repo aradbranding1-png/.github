@@ -1,11 +1,11 @@
 # Arad Branding Trade Platform — Official API v1
 
-Members create personal keys under **Profile menu → API و کلید دسترسی** (`/account/api`).
+Only **Super Admin** accounts can use this API. The Super Admin creates personal keys under **Profile menu → API و کلید دسترسی** (`/account/api`).
 
+- Other members do not see this page.
+- A key held by any other account is refused with `403 unauthorized_forbidden`.
 - A key acts as its owner, and only within the scopes chosen for it.
-- A key is shown once.
-- A member can have up to 5 active keys.
-- Expiry is 30, 90 or 365 days, or none.
+- A key is shown once. Up to 5 active keys are allowed, with an expiry of 30, 90 or 365 days, or none.
 
 Partner integrations such as Arad Contact use separate admin-issued keys (`ab_…`). See `API-arad-contact.md`.
 
@@ -30,6 +30,7 @@ Errors have `ok: false`. The `data.error` field holds a machine code; some error
 |---|---|---|
 | 401 | `unauthorized_invalid` / `_revoked` / `_expired` | The key is missing, wrong, revoked or expired. |
 | 403 | `unauthorized_account` | The owner's account is suspended or banned. |
+| 403 | `unauthorized_forbidden` | The key's owner is not a Super Admin. |
 | 403 | `insufficient_scope` | The key lacks the endpoint's scope. `details.required_scope` names it. |
 | 403 | `account_restricted` | The account is «محدود», so it is read-only and write endpoints refuse. |
 | 402 | `insufficient_stars` | `details.required` and `details.missing` give the Star amounts. |
