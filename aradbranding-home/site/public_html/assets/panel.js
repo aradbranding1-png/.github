@@ -17,6 +17,45 @@
       if (d.open && !d.contains(e.target)) d.open = false;
     });
   });
+
+  // Mobile drawer: close without picking an item — tap the dimmed backdrop, the × button, swipe it away,
+  // press Escape, or use the phone's back button/gesture. (The backdrop is the <details>' own ::before, so a tap
+  // on it is "inside" the details and the generic outside-click rule above never fires.)
+  var drawer = document.querySelector('.nav-drawer');
+  if (drawer) {
+    var panel = drawer.querySelector('.drawer-panel');
+    var viaHistory = false, leaving = false;
+    var close = function () { drawer.open = false; };
+    drawer.addEventListener('click', function (e) {
+      if (drawer.open && !e.target.closest('.drawer-panel') && !e.target.closest('summary')) { e.preventDefault(); close(); }
+    });
+    var x = drawer.querySelector('.drawer-close');
+    if (x) x.addEventListener('click', function (e) { e.preventDefault(); close(); });
+    var sx = null, sy = 0;
+    panel.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+    panel.addEventListener('touchend', function (e) {
+      if (sx === null) return;
+      var dx = e.changedTouches[0].clientX - sx, dy = Math.abs(e.changedTouches[0].clientY - sy);
+      var rtl = getComputedStyle(panel).direction === 'rtl';
+      if ((rtl ? dx > 60 : dx < -60) && dy < 50) close(); // swipe toward the edge the drawer came from
+      sx = null;
+    }, { passive: true });
+    // Back button: opening adds a history entry; going back closes the drawer instead of leaving the page.
+    drawer.addEventListener('toggle', function () {
+      if (drawer.open) {
+        if (!(history.state && history.state.drawer)) history.pushState({ drawer: 1 }, '');
+      } else if (!viaHistory && !leaving && history.state && history.state.drawer) {
+        history.back();
+      }
+      viaHistory = false;
+    });
+    window.addEventListener('popstate', function () {
+      if (drawer.open) { viaHistory = true; close(); }
+    });
+    drawer.querySelectorAll('.drawer-panel a').forEach(function (a) {
+      a.addEventListener('click', function () { leaving = true; if (history.state && history.state.drawer) history.replaceState(null, ''); });
+    });
+  }
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') pops.forEach(function (d) {
       if (d.open) { d.open = false; var s = d.querySelector('summary'); if (s) s.focus(); }

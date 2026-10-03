@@ -839,3 +839,9 @@ html.drawer-open .bottom-nav, html.drawer-open .fab { display: none; }
 .panel-ui .wa-amount { font-size: 16px; font-weight: 800; letter-spacing: .02em; }
 .handles-box { min-height: 120px; line-height: 1.9; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
 .handles-count { color: var(--gold-text, var(--gold)); }
+
+/* 1.17.1: drawer close button (the backdrop, swipe and back button close it too) */
+.drawer-close { margin-inline-start: auto; flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .04); color: #C9D4E3; cursor: pointer; }
+.drawer-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.drawer-close:hover, .drawer-close:focus-visible { color: #fff; border-color: var(--gold-1); }
+.nav-drawer[open]::before { cursor: pointer; }

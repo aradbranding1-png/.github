@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.17.0)
+# aradbranding.app — Home page redesign (v1.17.1)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -273,3 +273,14 @@ API reference: `docs/API-v1.md`.
 - the `payments.view` permission, newly granted to admin
 
 The finance page now shows live period figures, a breakdown by audience (staff vs. trade role) and separate bonus Stars, and supports soft delete with an optional Stars reversal.
+
+## v1.17.1 (incremental package)
+
+`dist/aradbranding-1.17.1-update.zip` lets the mobile drawer close without choosing an item. It closes on:
+- a backdrop tap
+- the × button
+- a swipe
+- the back button (through a history entry)
+- Escape
+
+It touches `panel.js`, `panel-theme.css` and `layouts/app.php`.

@@ -118,6 +118,7 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
           <div class="drawer-head">
             <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
             <span class="brand-name">آراد برندینگ<small><?= e($fullName) ?></small></span>
+            <button class="drawer-close" type="button" aria-label="بستن منو"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           </div>
           <div class="side-scroll"><?= $renderNav() ?></div>
           <div class="side-nav drawer-foot"><?= $renderFoot() ?></div>
