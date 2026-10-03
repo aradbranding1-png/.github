@@ -1655,7 +1655,31 @@ function ctr_send_ticket(PDO $pdo, array $contract, array $docs, array $links, s
                 'message' => 'اسنادِ این قرارداد قبلاً با تیکت' . (!empty($dup['external_id']) ? ' ' . to_persian_digits((string) $dup['external_id']) : '')
                     . ' برای مشتری ارسال شده؛ تیکتِ تکراری فرستاده نشد. اگر واقعاً لازم است (مثلاً تیکت در سایتِ آراد برندینگ حذف شده) در صفحه‌ی سفارش روی همان تیکت «ارسال مجدد» را بزنید.'];
         }
-        return ctr_send_ticket_locked($pdo, $contract, $docs, $links, $message, $department, $userId, $orderLike, $subject, $attachments, $serviceTitle, $now);
+        $prevSent = [];
+        try {
+            $pq = $pdo->prepare("SELECT * FROM aradbranding_tickets WHERE item_id IS NULL AND service_title = ? AND customer_id = ? AND status IN ('sent','manual') ORDER BY id");
+            $pq->execute([$serviceTitle, (int) $contract['customer_id']]);
+            $prevSent = $pq->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $e) {}
+        $res = ctr_send_ticket_locked($pdo, $contract, $docs, $links, $message, $department, $userId, $orderLike, $subject, $attachments, $serviceTitle, $now);
+        // هر قرارداد فقط یک تیکت در آراد برندینگ: بعد از ارسالِ موفقِ تیکتِ تازه (با همه‌ی اسناد)، تیکت‌های قبلیِ همین قرارداد حذف می‌شوند
+        if ($res['ok'] && $prevSent) {
+            $gone = 0;
+            foreach ($prevSent as $old) {
+                if ((int) $old['id'] === (int) $res['ticket_id']) continue;
+                try {
+                    $r = abt_delete_remote($pdo, $orderLike, $old, $userId, 'جایگزین شد با تیکتِ تازه‌ی همین قرارداد');
+                    if ($r['ok']) {
+                        $pdo->prepare('DELETE FROM aradbranding_tickets WHERE id = ?')->execute([(int) $old['id']]);
+                        $gone++;
+                    }
+                } catch (Throwable $e) {
+                    error_log('ctr replace old ticket: ' . $e->getMessage());
+                }
+            }
+            if ($gone) $res['message'] .= ' تیکتِ قبلیِ این قرارداد (' . to_persian_digits((string) $gone) . ' تیکت) از آراد برندینگ حذف شد تا فقط یک تیکت بماند.';
+        }
+        return $res;
     } finally {
         if ($__locked) { try { $pdo->query('SELECT RELEASE_LOCK(' . $pdo->quote($__lock) . ')'); } catch (Throwable $e) {} }
     }

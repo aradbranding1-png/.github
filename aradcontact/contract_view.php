@@ -209,6 +209,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (!$docs) $json(['ok' => false, 'message' => 'سندی برای ارسال انتخاب نشده.']);
         $isTicket = $chKey === 'ticket';
+        if ($isTicket) {
+            // هر قرارداد فقط یک تیکت: اسنادی که قبلاً با تیکت رفته‌اند هم در تیکتِ تازه می‌آیند (تیکتِ قبلی بعد از ارسالِ موفق حذف می‌شود)
+            $__q = $pdo->prepare("SELECT doc_types FROM contract_sends WHERE contract_id = ? AND channel = 'ticket' AND status = 'sent'");
+            $__q->execute([$id]);
+            foreach ($__q->fetchAll(PDO::FETCH_COLUMN) ?: [] as $__dt) foreach (explode(',', (string) $__dt) as $__d) if (in_array(trim($__d), ['contract', 'quote', 'services'], true)) $docs[] = trim($__d);
+            $docs = array_values(array_intersect(['contract', 'quote', 'services'], array_unique($docs)));
+        }
         $channels = ctr_customer_channels($pdo, (int) $contract['customer_id']);
         $ch = null;
         if ($isTicket) {
@@ -253,7 +260,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([$id, (int) $contract['customer_id'], (int) $contract['quote_id'], implode(',', $docs), 'ticket',
                     $tr['ok'] ? 'sent' : ($tr['status'] === 'queued' ? 'sending' : 'failed'),
                     mb_substr('تیکت (دپارتمان: ' . $dept . ') — ' . $tr['message'], 0, 500), implode(',', $linkIds), $uid, date('Y-m-d H:i:s'), date('Y-m-d H:i:s')]);
-            $json(['ok' => true, 'ticket' => true, 'send_id' => (int) $pdo->lastInsertId(), 'message' => (string) ($tr['body'] ?? $msg), 'open_url' => '', 'prefill' => false,
+            $__tk = !empty($tr['ticket_id']) ? abt_get_ticket($pdo, (int) $tr['ticket_id']) : null;
+            $json(['ok' => true, 'ticket' => true, 'send_id' => (int) $pdo->lastInsertId(),
+                   'ticket_url' => $__tk ? (string) (abt_ticket_link($__tk) ?? '') : '', 'ticket_code' => $__tk ? (string) ($__tk['external_id'] ?? '') : '', 'message' => (string) ($tr['body'] ?? $msg), 'open_url' => '', 'prefill' => false,
                    'channel_label' => 'تیکتِ آراد برندینگ (دپارتمان: ' . $dept . ')', 'links' => $links,
                    'ticket_ok' => (bool) $tr['ok'], 'ticket_message' => $tr['message'],
                    'pdf_count' => count(array_filter($links, static fn($l) => !empty($l['pdf_url'])))]);
@@ -632,6 +641,29 @@ require_once __DIR__ . '/includes/layout_top.php';
               <button class="btn btn-sm btn-outline-danger py-0">ابطالِ لینک‌ها</button></form>
           <?php endif; ?>
         </div>
+        <?php
+        // تیکت‌های همین قرارداد در آراد برندینگ (با لینکِ مشاهده)
+        $__ctrTickets = [];
+        try {
+            if (function_exists('abt_ready') && abt_ready($pdo)) {
+                $__q = $pdo->prepare('SELECT * FROM aradbranding_tickets WHERE item_id IS NULL AND customer_id = ? AND service_title = ? ORDER BY id DESC');
+                $__q->execute([(int) $contract['customer_id'], mb_substr('قرارداد ' . to_persian_digits((string) $contract['contract_number']), 0, 250)]);
+                $__ctrTickets = $__q->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            }
+        } catch (Throwable $e) {}
+        if ($__ctrTickets): $__abtSt = abt_statuses(); ?>
+          <div class="small mb-2 p-2 rounded" style="background:#f0fdf4">
+            <b><i class="fa-solid fa-ticket"></i> تیکتِ این قرارداد در آراد برندینگ:</b>
+            <?php foreach ($__ctrTickets as $__t): $__m = $__abtSt[$__t['status']] ?? ['label' => $__t['status'], 'color' => 'secondary']; $__l = abt_ticket_link($__t); ?>
+              <span class="ms-2 d-inline-flex align-items-center gap-1">
+                <span class="badge text-bg-<?= e($__m['color']) ?>"><?= e($__m['label']) ?></span>
+                <?php if ($__l): ?><a href="<?= e($__l) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success py-0"><i class="fa-solid fa-arrow-up-right-from-square"></i> مشاهده‌ی تیکت <?= e((string) $__t['external_id']) ?></a>
+                <?php elseif (!empty($__t['external_id'])): ?><span class="text-muted">شماره: <?= e((string) $__t['external_id']) ?></span><?php endif; ?>
+                <?php if (!empty($__t['order_id'])): ?><a href="order_view.php?id=<?= (int) $__t['order_id'] ?>#abt" class="small">مدیریت در سفارش</a><?php endif; ?>
+              </span>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
         <?php if (!$sends): ?>
           <div class="text-muted small">هنوز چیزی ارسال نشده. (وضعیت: ارسال‌نشده)</div>
         <?php else: ?>
@@ -763,7 +795,9 @@ require_once __DIR__ . '/includes/layout_top.php';
     if (res.open_url && win) { win.location = res.open_url; } else if (win) { win.close(); }
     if (res.ticket) {
       hint.innerHTML = (res.ticket_ok ? '<b class="text-success">تیکت ثبت شد</b> — ' : '<b class="text-danger">تیکت ثبت نشد</b> — ')
-        + (res.ticket_message || '') + '<br>' + res.channel_label
+        + (res.ticket_message || '')
+        + (res.ticket_url ? ' <a href="' + res.ticket_url + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success py-0 ms-1"><i class="fa-solid fa-arrow-up-right-from-square"></i> مشاهده‌ی تیکت' + (res.ticket_code ? ' ' + res.ticket_code : '') + '</a>' : '')
+        + '<br>' + res.channel_label
         + '<br>' + (pdfAttach ? (res.pdf_count ? '📎 ' + res.pdf_count + ' فایلِ PDF ساخته و به‌عنوانِ پیوست فرستاده شد.' : '⚠️ فایلِ PDF ساخته نشد؛ فقط لینکِ اسناد در متن رفت.') : '⚠️ پیوست غیرفعال است («نامِ فیلدِ پیوست‌ها» در تنظیمات تیکت خالی است).');
       box.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
