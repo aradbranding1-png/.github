@@ -3,7 +3,7 @@ $m = $v['manifest'] ?? [];
 $p = $v['plan'] ?? [];
 $tone = ['ok' => 'success', 'warning' => 'warning', 'error' => 'danger'];
 ?>
-<div class="page-head"><div><div class="crumbs"><a href="<?= url('/admin/system/updates') ?>">بروزرسانی سامانه</a></div><h1>بروزرسانی #<?= fa($u['id']) ?>: <span class="ltr"><?= e($u['from_version']) ?> ← <?= e($u['to_version'] ?? '?') ?></span></h1><div class="sub"><?= status_badge($u['status']) ?> <span class="ltr small"><?= e($u['package_name']) ?></span></div></div></div>
+<div class="page-head"><div><div class="crumbs"><a href="<?= url('/admin/system/updates') ?>">بروزرسانی سامانه</a></div><h1>بروزرسانی #<?= fa($u['id']) ?>: <span dir="rtl"><bdi dir="ltr"><?= e($u['from_version']) ?></bdi> ← <bdi dir="ltr"><?= e($u['to_version'] ?? '?') ?></bdi></span></h1><div class="sub"><?= status_badge($u['status']) ?> <span class="ltr small"><?= e($u['package_name']) ?></span></div></div></div>
 
 <?php foreach ($v['errors'] ?? [] as $er): ?><div class="alert alert-danger"><?= icon('circle-x') ?><div><?= e($er) ?></div></div><?php endforeach; ?>
 <?php foreach ($v['warnings'] ?? [] as $w): ?><div class="alert alert-warning"><?= icon('triangle-alert') ?><div><?= e($w) ?></div></div><?php endforeach; ?>

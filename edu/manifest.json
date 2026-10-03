@@ -1,6 +1,6 @@
 {
     "app": "aradedu",
-    "version": "1.0.50",
+    "version": "1.0.51",
     "min_version": "1.0.46",
     "requires_php": "8.1.0",
     "requires_extensions": [
@@ -14,13 +14,13 @@
     ],
     "released_at": "2026-10-03T12:48:21+03:30",
     "changelog": [
-        "راهنمای نمودارها (tooltip) دیگر از کادر بیرون نمی‌زند و زیر منو پنهان نمی‌شود؛ همیشه داخل صفحه نمایش داده می‌شود"
+        "نمایش نسخه‌ها در صفحه بروزرسانی راست‌به‌چپ و درست شد (نسخه قبلی ← نسخه جدید)"
     ],
     "files": {
         ".env.example": "dfe8c1a4e3b0e5e289445032118e3d7dacc80a45e6e30f7f3137727e710ecb7c",
         ".htaccess": "5046d0e13efec286eae49e978081cbbe2906b7849fb0bc7f9d0fb2cf1a36a9ce",
         "README.md": "ab7cca0bd34d9a39aa8b282aec461e3ebe49be8c1d14a7951aa60470bb42abb9",
-        "VERSION": "b3f00324fee996912ae7744390bb04de887dddcc9f10c269b0fd4a0ac99bdc6f",
+        "VERSION": "b03dbf0dd88faee7c78f184823e7c0270208f0465dc8e61fbe354544acb93239",
         "app/.htaccess": "7429f93d7c9109542733e139f8fb401bc4ca52a133e0d75b3b7370e5b5b8707a",
         "app/Config/icons.php": "9344ea773b7a7fb6f03871f67d1626d82ec71f31c6a01dec9f35d3f2c56e9705",
         "app/Config/menu.php": "3350be54ee26115659ab72afce8919cb4236f7478a1c30433aa207ded032cb84",
@@ -175,7 +175,7 @@
         "app/Views/admin/system/settings.php": "e1cc9f0c0e32ab63f53b24d322f03a5f20671cdeb133d08b08ccc1a954b0bead",
         "app/Views/admin/system/sso.php": "faaf499e471e1112ea03773028cb713904bb94e17344b82dc056f400f016e885",
         "app/Views/admin/system/tokens.php": "8188872d7b3f731ed8d296b4b656f616916b532f946e17ed8a5c8723550b38e8",
-        "app/Views/admin/system/update_plan.php": "9d868ebb8ca6f3a48c898ff1a860f453982ab1a78dc44080d4f6c47fa8c47964",
+        "app/Views/admin/system/update_plan.php": "4431901b5734a67dc8d357423192ec595d130af5c78716f8bc547a32c892e181",
         "app/Views/admin/system/updates.php": "338d28597cbf98e30cec720a7db8dcdede25ab8a1cb24212e0edf52a1da87289",
         "app/Views/admin/users/form.php": "9a55d19d941bd50ddc3750e4322897474cf94d9f7779177d596b0692b986ccbb",
         "app/Views/admin/users/index.php": "a338f430cd4d7ba89b7cf7fe9c2bc11cb785695ffeb4c2cbf8eea24220dd5dc0",
