@@ -50,10 +50,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $description = trim((string) ($_POST['description'] ?? '')) ?: null;
         $isDraft = isset($_POST['save_draft']);
         $senderPosId = (int) ($_POST['sender_position_id'] ?? 0);
+        // نمایشِ نامِ فرستنده: با مجوز انتخابی؛ بدونِ مجوز پیش‌فرضِ واحد (مدیران عالی ← پنهان)
+        $canHideSender = automation_user_has_permission($pdo, $user, 'letter_hide_sender');
         $senderPos = automation_sender_position($pdo, (int) $user['id'], $senderPosId ?: null);
         if (count($myPositions) > 1 && $senderPosId > 0 && (int) ($senderPos['id'] ?? 0) !== $senderPosId) {
             $errors[] = 'واحدِ فرستنده‌ی انتخاب‌شده معتبر نیست.';
         }
+        $hideSender = $canHideSender && isset($_POST['show_sender_present'])
+            ? empty($_POST['show_sender_name'])
+            : automation_unit_hides_sender_by_default($senderPos['unit_title'] ?? null);
         $letterNumber = trim((string) ($_POST['letter_number'] ?? ''));
         if ($letterNumber === '') {
             $letterNumber = 'L-' . date('Ymd') . '-' . str_pad((string) random_int(1, 9999), 4, '0', STR_PAD_LEFT);
@@ -94,6 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $deadlineG, $description, $replyToId ?: null, $replyTo['root_letter_id'] ?? ($replyToId ?: null),
                 ]);
                 $letterId = (int) $pdo->lastInsertId();
+                if (automation_hide_sender_ready($pdo)) $pdo->prepare('UPDATE letters SET hide_sender_name = ? WHERE id = ?')->execute([$hideSender ? 1 : 0, $letterId]);
                 if (!$replyToId) {
                     $pdo->prepare('UPDATE letters SET root_letter_id = ? WHERE id = ?')->execute([$letterId, $letterId]);
                 }
@@ -113,6 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'parent_letter_id' => $replyToId ?: null,
                         'root_letter_id' => $replyTo['root_letter_id'] ?? ($replyToId ?: null),
                         'sender_position_id' => (int) ($senderPos['id'] ?? 0) ?: null,
+                        'hide_sender_name' => $hideSender,
                     ], $recipients, (int) $user['id']);
                     if ($replyToId) {
                         automation_log_history($pdo, $replyToId, (int) $user['id'], 'replied', 'به این نامه پاسخ داده شد.');
@@ -253,13 +260,32 @@ require_once __DIR__ . '/includes/layout_top.php';
         $__selPos = (int) ($_POST['sender_position_id'] ?? ($myPositions[0]['id'] ?? 0)); ?>
       <div class="col-12">
         <label class="form-label">ارسال از سوی <span class="text-danger">*</span></label>
-        <select name="sender_position_id" class="form-select" required>
+        <select name="sender_position_id" id="senderPosSel" class="form-select" required>
           <?php foreach ($myPositions as $__p): ?>
-            <option value="<?= (int) $__p['id'] ?>" <?= (int) $__p['id'] === $__selPos ? 'selected' : '' ?>><?= e(trim((string) $__p['unit_title']) . (trim((string) $__p['position_title']) !== '' ? ' — ' . trim((string) $__p['position_title']) : '') . (!empty($__p['is_primary']) ? ' (واحدِ اصلی)' : '')) ?></option>
+            <option value="<?= (int) $__p['id'] ?>" data-hide="<?= automation_unit_hides_sender_by_default((string) $__p['unit_title']) ? '1' : '0' ?>" <?= (int) $__p['id'] === $__selPos ? 'selected' : '' ?>><?= e(trim((string) $__p['unit_title']) . (trim((string) $__p['position_title']) !== '' ? ' — ' . trim((string) $__p['position_title']) : '') . (!empty($__p['is_primary']) ? ' (واحدِ اصلی)' : '')) ?></option>
           <?php endforeach; ?>
         </select>
         <div class="form-text">شما در چند واحد عضو هستید؛ نامه با نام و سمتِ همین واحد ارسال و چاپ می‌شود.</div>
       </div>
+      <?php endif; ?>
+      <?php if (automation_user_has_permission($pdo, $user, 'letter_hide_sender')):
+        $__defHide = automation_unit_hides_sender_by_default((string) (($myPositions[0]['unit_title'] ?? null) ?? ($myPos['unit_title'] ?? '')));
+        $__showChecked = isset($_POST['show_sender_present']) ? !empty($_POST['show_sender_name']) : !$__defHide; ?>
+      <div class="col-12">
+        <input type="hidden" name="show_sender_present" value="1">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="show_sender_name" value="1" id="showSenderName" <?= $__showChecked ? 'checked' : '' ?>>
+          <label class="form-check-label" for="showSenderName">نامِ من (<?= e((string) $user['full_name']) ?>) به‌عنوانِ فرستنده نمایش داده شود</label>
+        </div>
+        <div class="form-text">خاموش = گیرندگان و نسخه‌ی چاپی به‌جای نامِ شما فقط نامِ واحدِ فرستنده را می‌بینند. پیش‌فرض: «مدیران عالی» پنهان، بقیه‌ی واحدها نمایش.</div>
+      </div>
+      <script>
+      (function () {
+        var sel = document.getElementById('senderPosSel'), cb = document.getElementById('showSenderName');
+        if (!sel || !cb) return;
+        sel.addEventListener('change', function () { var o = sel.options[sel.selectedIndex]; if (o) cb.checked = o.getAttribute('data-hide') !== '1'; });
+      })();
+      </script>
       <?php endif; ?>
       <div class="col-md-4">
         <label class="form-label">شماره نامه (خالی=خودکار)</label>

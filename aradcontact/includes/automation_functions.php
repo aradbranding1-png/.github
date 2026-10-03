@@ -123,7 +123,54 @@ function automation_permission_codes(): array
         'automation_users_manage'       => 'مدیریت کاربرانِ اتوماسیون',
         'letter_view_all'               => 'مشاهده همه مکاتبات',
         'audit_log_view'                => 'مشاهده Audit Log',
+        'letter_hide_sender'            => 'انتخابِ نمایش/پنهان‌کردنِ نامِ فرستنده در نامه',
     ];
+}
+
+/**
+ * نامِ فرستنده در نامه پنهان شود؟ (ستونِ letters.hide_sender_name)
+ * یک‌بار: ستون ساخته می‌شود و مجوزِ «letter_hide_sender» به همه‌ی ادمین‌ها داده می‌شود (ادمینِ کل همیشه دارد).
+ */
+function automation_hide_sender_ready(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    $flag = __DIR__ . '/../storage/.automation_hide_sender_v1';
+    if (is_file($flag)) return $ok = true;
+    try {
+        try { $pdo->query('SELECT hide_sender_name FROM letters LIMIT 0'); }
+        catch (Throwable $e) { $pdo->exec('ALTER TABLE letters ADD COLUMN hide_sender_name TINYINT(1) NOT NULL DEFAULT 0'); }
+        $pdo->exec("INSERT IGNORE INTO automation_user_permissions (user_id, permission_code) SELECT id, 'letter_hide_sender' FROM users WHERE role = 'admin'");
+    } catch (Throwable $e) {
+        error_log('automation_hide_sender_ready: ' . $e->getMessage());
+        return $ok = false;
+    }
+    @file_put_contents($flag, (string) time());
+    return $ok = true;
+}
+
+/** پیش‌فرضِ پنهان‌بودنِ نامِ فرستنده برای یک واحد: «مدیران عالی» (و «مدیریت عالی») ← پنهان؛ بقیه ← نمایش */
+function automation_unit_hides_sender_by_default(?string $unitTitle): bool
+{
+    $t = automation_norm_title((string) $unitTitle);
+    return mb_strpos($t, 'مدیرانعالی') !== false || mb_strpos($t, 'مدیریتعالی') !== false; // automation_norm_title فاصله‌ها را حذف می‌کند
+}
+
+/** اگر نامِ فرستنده‌ی این نامه پنهان است: نامِ واحدِ فرستنده (به‌جای نامِ فرد)، وگرنه null */
+function automation_letter_hidden_sender(PDO $pdo, int $letterId): ?array
+{
+    static $cache = [];
+    if (array_key_exists($letterId, $cache)) return $cache[$letterId];
+    if (!automation_hide_sender_ready($pdo)) return $cache[$letterId] = null;
+    try {
+        $st = $pdo->prepare('SELECT l.sender_user_id, l.hide_sender_name, u.title AS unit_title FROM letters l LEFT JOIN automation_org_units u ON u.id = l.sender_unit_id WHERE l.id = ?');
+        $st->execute([$letterId]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $r = null;
+    }
+    if (!$r || (int) $r['hide_sender_name'] !== 1) return $cache[$letterId] = null;
+    return $cache[$letterId] = ['user_id' => (int) $r['sender_user_id'], 'label' => trim((string) $r['unit_title']) !== '' ? trim((string) $r['unit_title']) : 'دبیرخانه'];
 }
 
 /**
@@ -522,6 +569,8 @@ function automation_display_name(PDO $pdo, ?int $userId, ?string $name, array $v
 {
     $name = (string) $name;
     if (!$userId) return $name;
+    // نامه‌ای که فرستنده‌اش نامِ خود را پنهان کرده ← نامِ واحدِ فرستنده
+    if ($letterId !== null && ($hs = automation_letter_hidden_sender($pdo, $letterId)) && $hs['user_id'] === $userId) return $hs['label'];
     // کاربرِ «دبیرخانه ریاست» همیشه با همین نام است؛ نامِ اعضای واحد فقط در نامه‌های مربوط به دبیرخانه پنهان می‌شود
     if ($letterId !== null && !isset(automation_secretariat_user_ids($pdo)[$userId]) && !automation_letter_involves_secretariat($pdo, $letterId)) return $name;
     $map = automation_hidden_member_map($pdo);
@@ -708,6 +757,12 @@ function automation_send_letter(PDO $pdo, array $letter, array $recipients, int 
             $letter['root_letter_id'] ?? ($letter['parent_letter_id'] ?? null),
         ]);
         $letterId = (int) $pdo->lastInsertId();
+        if (automation_hide_sender_ready($pdo)) {
+            // پنهان‌بودنِ نامِ فرستنده: انتخابِ ارسال‌کننده (اگر داده شده)، وگرنه پیش‌فرضِ واحد
+            $hide = array_key_exists('hide_sender_name', $letter) && $letter['hide_sender_name'] !== null
+                ? (bool) $letter['hide_sender_name'] : automation_unit_hides_sender_by_default($senderPos['unit_title'] ?? null);
+            $pdo->prepare('UPDATE letters SET hide_sender_name = ? WHERE id = ?')->execute([$hide ? 1 : 0, $letterId]);
+        }
         if (empty($letter['parent_letter_id'])) {
             $pdo->prepare('UPDATE letters SET root_letter_id = ? WHERE id = ?')->execute([$letterId, $letterId]);
         }
