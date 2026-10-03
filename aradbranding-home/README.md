@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.16.1)
+# aradbranding.app — Home page redesign (v1.16.2)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -249,3 +249,10 @@ API reference: `docs/API-v1.md`.
 - `proposals/show.php`, where each block now has `dir="auto"`
 - `ProposalController::find`, which now also selects the language
 - `app.css`
+
+## v1.16.2 (incremental package)
+
+`dist/aradbranding-1.16.2-update.zip` replaces the logo, the favicon and the PWA icons. The source image is `brand-src/logo-gold-navy.webp`. It bumps the asset versions:
+- `logo-192.webp?v=4`
+- the icons and the manifest to `?v=5`
+- the service-worker cache to `sadt-v5`

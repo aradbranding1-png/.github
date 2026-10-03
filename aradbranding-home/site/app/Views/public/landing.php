@@ -94,7 +94,7 @@ $nameOf = static function (string $code) use ($markets, $countryNames): string {
 $schema = [
     '@context' => 'https://schema.org',
     '@graph' => [
-        ['@type' => 'Organization', 'name' => 'سامانه توسعه تجارت', 'alternateName' => 'Arad Branding', 'url' => $baseUrl . '/', 'logo' => $baseUrl . '/icons/icon-512.png?v=4'],
+        ['@type' => 'Organization', 'name' => 'سامانه توسعه تجارت', 'alternateName' => 'Arad Branding', 'url' => $baseUrl . '/', 'logo' => $baseUrl . '/icons/icon-512.png?v=5'],
         ['@type' => 'WebSite', 'name' => 'سامانه توسعه تجارت', 'url' => $baseUrl . '/', 'inLanguage' => 'fa',
             'potentialAction' => ['@type' => 'SearchAction', 'target' => $baseUrl . '/search?q={q}', 'query-input' => 'required name=q']],
     ],
@@ -130,7 +130,7 @@ $h = $home['hero'];
 <meta property="og:title" content="سامانه توسعه تجارت · شبکه بین‌المللی تجار">
 <meta property="og:description" content="<?= e($desc) ?>">
 <meta property="og:url" content="<?= e($baseUrl) ?>/">
-<meta property="og:image" content="<?= e($baseUrl) ?>/icons/icon-512.png?v=4">
+<meta property="og:image" content="<?= e($baseUrl) ?>/icons/icon-512.png?v=5">
 <meta property="og:locale" content="fa_IR">
 <meta name="twitter:card" content="summary">
 <script type="application/ld+json"><?= json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
@@ -143,7 +143,7 @@ $h = $home['hero'];
 <header class="th-head" data-th-head>
   <div class="th-head-in">
     <a class="th-brand" href="/" aria-label="سامانه توسعه تجارت · صفحه اصلی">
-      <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=3" alt="" width="48" height="48" decoding="async"></span>
+      <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
       <span class="th-brand-name">سامانه توسعه تجارت<small>Arad Branding · شبکه بین‌المللی تجار</small></span>
     </a>
     <nav class="th-nav" aria-label="ناوبری اصلی">
@@ -418,7 +418,7 @@ $h = $home['hero'];
 
 <footer class="th-foot">
   <div class="th-foot-in">
-    <a class="th-brand" href="/"><span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=3" alt="" width="48" height="48" decoding="async"></span><span class="th-brand-name">سامانه توسعه تجارت<small>© <bdi>aradbranding.app</bdi></small></span></a>
+    <a class="th-brand" href="/"><span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span><span class="th-brand-name">سامانه توسعه تجارت<small>© <bdi>aradbranding.app</bdi></small></span></a>
     <nav aria-label="پیوندهای پایین صفحه"><a href="/register">عضویت</a><a href="/login">ورود</a><a href="/discover">بازارهای هدف</a><a href="/proposals">فرصت‌ها</a><?php if ($show['faq']): ?><a href="#faq">پرسش‌ها</a><?php endif; ?></nav>
   </div>
 </footer>

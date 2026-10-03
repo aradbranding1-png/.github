@@ -103,7 +103,7 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
 <div class="app-shell">
   <aside class="sidebar" aria-label="منوی اصلی">
     <a class="brand" href="/dashboard">
-      <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=3" alt="" width="48" height="48" decoding="async"></span>
+      <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
       <span class="brand-name">آراد برندینگ<small>سامانه توسعه تجارت</small></span>
     </a>
     <div class="side-scroll"><?= $renderNav() ?></div>
@@ -116,7 +116,7 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
         <summary class="icon-btn" aria-label="منو"><svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><?php if ($unreadPrivate > 0): ?><i class="dot-badge" aria-hidden="true"></i><?php endif; ?></summary>
         <div class="drawer-panel">
           <div class="drawer-head">
-            <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=3" alt="" width="48" height="48" decoding="async"></span>
+            <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
             <span class="brand-name">آراد برندینگ<small><?= e($fullName) ?></small></span>
           </div>
           <div class="side-scroll"><?= $renderNav() ?></div>
