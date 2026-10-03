@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.17.1)
+# aradbranding.app — Home page redesign (v1.17.2)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -284,3 +284,7 @@ The finance page now shows live period figures, a breakdown by audience (staff v
 - Escape
 
 It touches `panel.js`, `panel-theme.css` and `layouts/app.php`.
+
+## v1.17.2 (incremental package)
+
+`dist/aradbranding-1.17.2-update.zip` changes `panel-theme.css` only. The sidebar labels now keep the sidebar's own colours in light mode.

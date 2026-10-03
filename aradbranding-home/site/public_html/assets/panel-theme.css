@@ -845,3 +845,11 @@ html.drawer-open .bottom-nav, html.drawer-open .fab { display: none; }
 .drawer-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .drawer-close:hover, .drawer-close:focus-visible { color: #fff; border-color: var(--gold-1); }
 .nav-drawer[open]::before { cursor: pointer; }
+
+/* 1.17.2: the sidebar is always navy, so its labels never take the page's (light-theme) text colours */
+.panel-ui .sidebar, .drawer-panel { --s-muted: #B4C2D4; }
+.panel-ui .sidebar .side-nav a, .panel-ui .sidebar .side-nav > span, .panel-ui .sidebar .side-logout,
+.drawer-panel .side-nav a, .drawer-panel .side-logout { color: var(--s-muted); }
+.panel-ui .sidebar .side-nav .nav-label, .panel-ui .sidebar .side-logout span, .drawer-panel .side-nav .nav-label, .drawer-panel .side-logout span { color: inherit; }
+.panel-ui .sidebar .side-nav a:hover, .drawer-panel .side-nav a:hover, .panel-ui .sidebar .side-logout:hover { color: #fff; }
+.panel-ui .sidebar .side-nav a[aria-current="page"], .drawer-panel .side-nav a[aria-current="page"] { color: #fff; }
