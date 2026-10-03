@@ -17,10 +17,84 @@
     }, 9000);
   }
 
+  // Fallback layout (no 3D globe: projectors, old TVs): place the country cards on a ring around the poster globe,
+  // skipping any spot that would cover the hero text, the buttons, the header, the side rail or another card.
+  function layoutFallbackCards() {
+    if (!globeRoot) return;
+    if (!globeRoot.classList.contains('tg-fallback')) {
+      // Back to the 3D globe (e.g. a restored GPU context): drop the static placement.
+      var all = globeRoot.querySelectorAll('.tg-card[data-fb]');
+      for (var z = 0; z < all.length; z++) { all[z].style.left = all[z].style.top = all[z].style.display = ''; all[z].removeAttribute('data-fb'); }
+      return;
+    }
+    var box = globeRoot.querySelector('.tg-cards');
+    var poster = globeRoot.querySelector('.tg-poster');
+    if (!box || !poster) return;
+    var B = box.getBoundingClientRect();
+    var P = poster.getBoundingClientRect();
+    if (!P.width || !B.width) return;
+    var cx = P.left + P.width / 2 - B.left, cy = P.top + P.height / 2 - B.top, r = P.width / 2;
+    var avoid = [];
+    var nodes = document.querySelectorAll('[data-tg-avoid], [data-th-head], .th-head');
+    for (var i = 0; i < nodes.length; i++) {
+      var q = nodes[i].getBoundingClientRect();
+      if (q.width && q.height) avoid.push({ l: q.left - B.left - 10, t: q.top - B.top - 10, r: q.right - B.left + 10, b: q.bottom - B.top + 10 });
+    }
+    var hit = function (a, list) {
+      for (var k = 0; k < list.length; k++) {
+        var o = list[k];
+        if (a.l < o.r && a.r > o.l && a.t < o.b && a.b > o.t) return true;
+      }
+      return false;
+    };
+    // Angles (degrees, 0 = right, clockwise on screen), tried in this order: right side first, then top and bottom.
+    var angles = [-35, 30, -75, 75, 0, -110, 110, -145, 145, 180];
+    // Main markets first, then secondary ones, then route-only countries.
+    var list = globeRoot.querySelectorAll('.tg-card'), cards = [];
+    for (var pass = 0; pass < 3; pass++) {
+      for (var n = 0; n < list.length; n++) {
+        var cl = list[n].classList, rank = cl.contains('is-route') ? 2 : (cl.contains('is-secondary') ? 1 : 0);
+        if (rank === pass) cards.push(list[n]);
+      }
+    }
+    var placed = [], used = {}, max = window.innerWidth < 700 ? 3 : 6;
+    for (var c = 0; c < cards.length; c++) {
+      var el = cards[c];
+      el.setAttribute('data-fb', '1');
+      el.style.display = 'flex';
+      var w = el.offsetWidth, h = el.offsetHeight, spot = null;
+      for (var g = 0; g < angles.length && placed.length < max; g++) {
+        if (used[g]) continue;
+        var rad = angles[g] * Math.PI / 180;
+        var x = cx + Math.cos(rad) * r * 0.98, y = cy + Math.sin(rad) * r * 0.98;
+        var rect = { l: x - w / 2, t: y - h / 2, r: x + w / 2, b: y + h / 2 };
+        if (rect.l < 6 || rect.t < 6 || rect.r > B.width - 6 || rect.b > B.height - 6) continue;
+        if (hit(rect, avoid) || hit({ l: rect.l - 8, t: rect.t - 8, r: rect.r + 8, b: rect.b + 8 }, placed)) continue;
+        spot = { x: x, y: y, rect: rect, g: g };
+        break;
+      }
+      if (spot) {
+        used[spot.g] = true;
+        placed.push(spot.rect);
+        el.style.left = Math.round(spot.x) + 'px';
+        el.style.top = Math.round(spot.y) + 'px';
+      } else {
+        el.style.display = 'none';
+      }
+    }
+  }
+  if (globeRoot) {
+    var relayout = function () { setTimeout(layoutFallbackCards, 60); };
+    if (window.MutationObserver) new MutationObserver(relayout).observe(globeRoot, { attributes: true, attributeFilter: ['class'] });
+    window.addEventListener('resize', relayout);
+    window.addEventListener('load', relayout);
+    relayout();
+  }
+
   // Diagnostics for TVs and other odd browsers: open the home page with ?globe=debug.
   if (globeRoot && /[?&]globe=debug\b/.test(location.search)) {
     setTimeout(function () {
-      var info = ['نسخه کره: 1.18.4'];
+      var info = ['نسخه کره: 1.18.5'];
       var gl2 = null, gl1 = null, vendor = '';
       try { gl2 = document.createElement('canvas').getContext('webgl2'); } catch (e) { /* ignore */ }
       try { gl1 = document.createElement('canvas').getContext('webgl') || document.createElement('canvas').getContext('experimental-webgl'); } catch (e) { /* ignore */ }
