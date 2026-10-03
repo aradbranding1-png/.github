@@ -717,8 +717,13 @@ function abt_parse_response(string $body): array
             });
         }
     }
-    foreach (['detail', 'reason', 'error_code', 'code'] as $k) {
-        if (isset($j[$k]) && is_scalar($j[$k]) && (string) $j[$k] !== '' && (string) $j[$k] !== (string) $out['error']) $details[] = $k . ': ' . (string) $j[$k];
+    // جزئیاتی که API ساختِ حسابِ تاجر در ۴۰۹ برمی‌گرداند (reason_code، نامِ constraint، کاربرِ غیرتاجرِ موجود با user_id/user_type)
+    $labels = ['detail' => 'جزئیات', 'reason' => 'علت', 'reason_code' => 'کدِ علت', 'error_code' => 'کدِ خطا', 'code' => 'کد',
+        'constraint' => 'constraint', 'constraint_name' => 'constraint', 'user_type' => 'نوعِ کاربرِ موجود', 'user_id' => 'شناسه‌ی کاربرِ موجود'];
+    foreach ($pools as $p) {
+        foreach ($labels as $k => $lbl) {
+            if (isset($p[$k]) && is_scalar($p[$k]) && (string) $p[$k] !== '' && (string) $p[$k] !== (string) $out['error']) $details[] = $lbl . ': ' . (string) $p[$k];
+        }
     }
     if ($details) $out['error'] = mb_substr(trim(($out['error'] ?? '') . ' (' . implode('؛ ', array_unique($details)) . ')'), 0, 500);
     return $out;
