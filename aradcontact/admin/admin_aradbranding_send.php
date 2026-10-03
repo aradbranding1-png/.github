@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             if (!abt_connection_ready(abt_settings($pdo))) { flash_set('danger', 'اتصال فعال/تنظیم نیست.'); redirect($back); }
             @set_time_limit(300);
-            $rows = $pdo->query("SELECT * FROM aradbranding_tickets WHERE customer_id IN ($in) AND status IN ('queued','failed','skipped') AND order_id IN (SELECT id FROM sales_orders WHERE status = 'approved') ORDER BY id ASC LIMIT 40")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $rows = $pdo->query("SELECT * FROM aradbranding_tickets WHERE customer_id IN ($in) AND status IN ('queued','failed','skipped','deleted') AND order_id IN (SELECT id FROM sales_orders WHERE status = 'approved') ORDER BY id ASC LIMIT 40")->fetchAll(PDO::FETCH_ASSOC) ?: [];
             $ok = 0; $fail = [];
             foreach ($rows as $t) {
                 $o = orders_get($pdo, (int) $t['order_id']);
@@ -78,12 +78,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $r = abt_send($pdo, $o, $t, (int) $admin['id']);
                 if ($r['ok']) $ok++; else $fail[] = $r['message'];
             }
-            $left = (int) $pdo->query("SELECT COUNT(*) FROM aradbranding_tickets WHERE customer_id IN ($in) AND status IN ('queued','failed','skipped') AND order_id IN (SELECT id FROM sales_orders WHERE status = 'approved')")->fetchColumn();
+            $left = (int) $pdo->query("SELECT COUNT(*) FROM aradbranding_tickets WHERE customer_id IN ($in) AND status IN ('queued','failed','skipped','deleted') AND order_id IN (SELECT id FROM sales_orders WHERE status = 'approved')")->fetchColumn();
             flash_set($fail ? 'warning' : 'success', to_persian_digits((string) $ok) . ' تیکت ارسال شد.'
                 . ($fail ? ' ' . to_persian_digits((string) count($fail)) . ' ناموفق — نمونه: ' . $fail[0] : '')
                 . ($left ? ' هنوز ' . to_persian_digits((string) $left) . ' تیکت از همین مشتری‌ها مانده (دوباره بزنید).' : ''));
         }
         redirect($back);
+    }
+    if (($_POST['action'] ?? '') === 'acc_sms_done') {
+        abt_account_sms_done($pdo, (int) ($_POST['customer_id'] ?? 0), (int) $admin['id']);
+        flash_set('success', 'ثبت شد: اطلاعاتِ ورود برای مشتری فرستاده شد.');
+        redirect('admin_aradbranding_send.php?tab=accounts&' . http_build_query(['aq' => (string) ($_POST['aq'] ?? '')]));
     }
     if (($_POST['action'] ?? '') === 'send_queued') {
         // ارسالِ گروهیِ تیکت‌های «آماده‌ی ارسال» و «ناموفق» — هر بار حداکثر ۲۵ تیکت (قدیمی‌ترین اول)
@@ -107,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $s = abt_settings($pdo);
 $ready = abt_connection_ready($s);
-$tab = (string) ($_GET['tab'] ?? '') === 'list' ? 'list' : 'customers';
+$tab = in_array((string) ($_GET['tab'] ?? ''), ['list', 'accounts'], true) ? (string) $_GET['tab'] : 'customers';
 // صفحه‌بندی
 $perPage = in_array((int) ($_GET['per'] ?? 0), [25, 50, 100, 200], true) ? (int) $_GET['per'] : 50;
 $pageNo = max(1, (int) ($_GET['p'] ?? 1));
@@ -179,12 +184,13 @@ foreach ($pdo->query("SELECT t.status, COUNT(*) n FROM aradbranding_tickets t JO
 }
 
 $custRows = [];
-$custSum = ['all' => 0, 'done' => 0, 'pending' => 0, 'skipped' => 0];
+$custSum = ['all' => 0, 'done' => 0, 'pending' => 0, 'deleted' => 0, 'skipped' => 0];
+$deletedTickets = 0;
 $cf = (string) ($_GET['f'] ?? '');
 $cq = trim((string) ($_GET['q'] ?? ''));
 if ($tab === 'customers') {
     $csql = "SELECT t.customer_id, c.full_name, c.mobile, COUNT(*) AS total,
-            SUM(t.status IN ('sent','manual','bundled')) AS sent, SUM(t.status = 'queued') AS queued, SUM(t.status = 'failed') AS failed, SUM(t.status = 'skipped') AS skipped,
+            SUM(t.status IN ('sent','manual','bundled')) AS sent, SUM(t.status = 'queued') AS queued, SUM(t.status = 'failed') AS failed, SUM(t.status = 'skipped') AS skipped, SUM(t.status = 'deleted') AS deleted,
             GROUP_CONCAT(DISTINCT o.order_number ORDER BY o.id SEPARATOR '، ') AS orders,
             GROUP_CONCAT(CONCAT(t.status, '|', REPLACE(COALESCE(t.service_title, ''), '|', ' '), '|', t.order_id, '|', COALESCE(t.external_id, ''), '|', COALESCE(t.external_url, ''), '|', COALESCE(o.order_number, '')) ORDER BY t.order_id, t.id SEPARATOR '§') AS items,
             MAX(t.updated_at) AS last_at
@@ -199,10 +205,13 @@ if ($tab === 'customers') {
     $cst->execute($cq !== '' ? ['%' . $cq . '%', '%' . $cq . '%'] : []);
     foreach ($cst->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) {
         $pend = (int) $r['queued'] + (int) $r['failed'];
-        $r['state'] = $pend > 0 ? 'pending' : (((int) $r['skipped'] > 0 && (int) $r['sent'] === 0) ? 'skipped' : 'done');
+        // حذف‌شده از آراد برندینگ: تیکت آن‌جا نیست؛ تا دوباره فرستاده نشود جدا شمرده می‌شود
+        $r['state'] = $pend > 0 ? 'pending' : ((int) $r['deleted'] > 0 ? 'deleted' : (((int) $r['skipped'] > 0 && (int) $r['sent'] === 0) ? 'skipped' : 'done'));
         $custSum['all']++;
-        $custSum[$r['state']]++;
-        if ($cf !== '' && $cf !== $r['state']) continue;
+        if ($r['state'] !== 'deleted') $custSum[$r['state']]++;
+        // «حذف‌شده»: هر مشتری‌ای که دست‌کم یک تیکتِ حذف‌شده دارد (حتی اگر تیکتِ در صف هم داشته باشد)
+        if ((int) $r['deleted'] > 0) { $custSum['deleted']++; $deletedTickets += (int) $r['deleted']; }
+        if ($cf === 'deleted' ? (int) $r['deleted'] === 0 : ($cf !== '' && $cf !== $r['state'])) continue;
         $custRows[] = $r;
     }
     $totalRows = count($custRows);
@@ -210,6 +219,31 @@ if ($tab === 'customers') {
     $custRows = array_slice($custRows, ($pageNo - 1) * $perPage, $perPage);
 }
 
+// اکانت‌هایی که آراد کانتکت در آراد برندینگ ساخته است (نام کاربری/رمز برای ارسالِ دوباره به مشتری)
+$accRows = [];
+$accCount = 0;
+$aq = trim((string) ($_GET['aq'] ?? ''));
+try {
+    $accCount = (int) $pdo->query("SELECT COUNT(*) FROM aradbranding_accounts WHERE status = 'created'")->fetchColumn();
+    if ($tab === 'accounts') {
+        $ast = $pdo->prepare("SELECT a.*, c.full_name, u.full_name AS creator_name, su.full_name AS sms_name, o.order_number
+            FROM aradbranding_accounts a
+            LEFT JOIN customers c ON c.id = a.customer_id
+            LEFT JOIN users u ON u.id = a.created_by
+            LEFT JOIN users su ON su.id = a.sms_done_by
+            LEFT JOIN sales_orders o ON o.id = a.order_id
+            WHERE a.status = 'created'" . ($aq !== '' ? ' AND (c.full_name LIKE ? OR a.mobile LIKE ? OR a.username LIKE ?)' : '') . "
+            ORDER BY (a.sms_done_at IS NULL) DESC, a.created_at DESC");
+        $ast->execute($aq !== '' ? ['%' . $aq . '%', '%' . $aq . '%', '%' . $aq . '%'] : []);
+        $accRows = $ast->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $totalRows = count($accRows);
+        $pageNo = min($pageNo, max(1, (int) ceil($totalRows / $perPage)));
+        $accRows = array_slice($accRows, ($pageNo - 1) * $perPage, $perPage);
+    }
+} catch (Throwable $e) {
+    error_log('abt accounts list: ' . $e->getMessage());
+}
+$accLoginUrl = trim((string) ($s['acc_login_url'] ?? '')) ?: 'https://my.aradbranding.me';
 
 $pageTitle = 'ارسال تیکت‌ها';
 require_once __DIR__ . '/../includes/layout_top.php';
@@ -236,20 +270,31 @@ require_once __DIR__ . '/../includes/layout_top.php';
   <ul class="nav nav-tabs mb-3">
     <li class="nav-item"><a class="nav-link <?= $tab === 'customers' ? 'active' : '' ?>" href="admin_aradbranding_send.php"><i class="fa-solid fa-users"></i> به تفکیکِ مشتری</a></li>
     <li class="nav-item"><a class="nav-link <?= $tab === 'list' ? 'active' : '' ?>" href="admin_aradbranding_send.php?tab=list"><i class="fa-solid fa-list"></i> همه‌ی تیکت‌ها</a></li>
+    <li class="nav-item"><a class="nav-link <?= $tab === 'accounts' ? 'active' : '' ?>" href="admin_aradbranding_send.php?tab=accounts"><i class="fa-solid fa-user-plus"></i> اکانت‌های ساخته‌شده <span class="badge text-bg-dark"><?= to_persian_digits((string) $accCount) ?></span></a></li>
   </ul>
 
 <?php if ($tab === 'customers'): ?>
 
   <div class="row g-2 mb-3">
-    <?php foreach (['' => ['همه‌ی مشتریان', 'dark', $custSum['all']], 'done' => ['همه‌ی تیکت‌ها ارسال شده', 'success', $custSum['done']], 'pending' => ['ارسال‌نشده (در صف/ناموفق)', 'warning', $custSum['pending']], 'skipped' => ['«ارسال نشود»', 'secondary', $custSum['skipped']]] as $__k => [$__l, $__c, $__n]): ?>
-      <div class="col-6 col-md-3">
+    <?php foreach (['' => ['همه‌ی مشتریان', 'dark', $custSum['all']], 'done' => ['همه‌ی تیکت‌ها ارسال شده', 'success', $custSum['done']], 'pending' => ['ارسال‌نشده (در صف/ناموفق)', 'warning', $custSum['pending']], 'deleted' => ['حذف‌شده از آراد برندینگ', 'danger', $custSum['deleted']], 'skipped' => ['«ارسال نشود»', 'secondary', $custSum['skipped']]] as $__k => [$__l, $__c, $__n]): ?>
+      <div class="col-6 col-md">
         <a href="?<?= e(http_build_query(['f' => $__k, 'q' => $cq, 'per' => $perPage])) ?>" class="card p-3 text-decoration-none h-100 <?= $cf === $__k ? 'border-2 border-' . $__c : '' ?>">
           <div class="small text-muted"><?= e($__l) ?></div>
           <div class="fs-3 fw-bold text-<?= $__c ?>"><?= to_persian_digits((string) $__n) ?></div>
+          <?php if ($__k === 'deleted' && $deletedTickets): ?><div class="small text-muted"><?= to_persian_digits((string) $deletedTickets) ?> تیکت</div><?php endif; ?>
         </a>
       </div>
     <?php endforeach; ?>
+    <div class="col-6 col-md">
+      <a href="?tab=accounts" class="card p-3 text-decoration-none h-100">
+        <div class="small text-muted">اکانت‌های ساخته‌شده در آراد برندینگ</div>
+        <div class="fs-3 fw-bold text-primary"><?= to_persian_digits((string) $accCount) ?></div>
+      </a>
+    </div>
   </div>
+  <?php if ($cf === 'deleted'): ?>
+    <div class="alert alert-light border small py-2"><i class="fa-solid fa-circle-info"></i> این تیکت‌ها از سایتِ آراد برندینگ حذف شده‌اند. برای ارسالِ دوباره، مشتری را تیک بزنید و «ارسال شود» را بزنید (با شناسه‌ی تازه، تیکتِ جدید ساخته می‌شود). اگر نمی‌خواهید دوباره بروند، از صفحه‌ی سفارش «ارسال نشود» کنید.</div>
+  <?php endif; ?>
   <form method="get" class="d-flex gap-2 mb-2">
     <input type="hidden" name="f" value="<?= e($cf) ?>"><input type="hidden" name="per" value="<?= $perPage ?>">
     <input name="q" value="<?= e($cq) ?>" class="form-control form-control-sm" style="max-width:280px" placeholder="جستجوی نام یا موبایلِ مشتری">
@@ -259,7 +304,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <?= csrf_field() ?><input type="hidden" name="f" value="<?= e($cf) ?>"><input type="hidden" name="q" value="<?= e($cq) ?>"><input type="hidden" name="p" value="<?= $pageNo ?>"><input type="hidden" name="per" value="<?= $perPage ?>">
     <div class="d-flex flex-wrap gap-2 align-items-center mb-2 p-2 rounded-3" style="background:#fffbeb;border:1px solid #fde68a">
       <span class="small fw-bold">برای مشتریانِ تیک‌خورده:</span>
-      <button name="action" value="cust_send" class="btn btn-sm btn-success" <?= $ready && $canSend ? '' : 'disabled' ?> onclick="return confirm('تیکت‌های ارسال‌نشده‌ی مشتریانِ تیک‌خورده (حداکثر ۴۰ تیکت در هر بار) در آراد برندینگ ثبت شود؟');"><i class="fa-solid fa-paper-plane"></i> ارسال شود</button>
+      <button name="action" value="cust_send" class="btn btn-sm btn-success" <?= $ready && $canSend ? '' : 'disabled' ?> onclick="return confirm('تیکت‌های ارسال‌نشده یا حذف‌شده‌ی مشتریانِ تیک‌خورده (حداکثر ۴۰ تیکت در هر بار) در آراد برندینگ ثبت شود؟');"><i class="fa-solid fa-paper-plane"></i> ارسال شود</button>
       <button name="action" value="cust_skip" class="btn btn-sm btn-outline-secondary" onclick="return confirm('تیکت‌های در صف/ناموفقِ این مشتری‌ها «ارسال نشود» شوند؟');"><i class="fa-solid fa-ban"></i> ارسال نشود</button>
       <button name="action" value="cust_unskip" class="btn btn-sm btn-outline-primary" onclick="return confirm('تیکت‌های این مشتری‌ها به صفِ ارسال برمی‌گردند.\nتوجه: اگر تیکتی قبلاً ارسال شده، با ارسالِ دوباره یک تیکتِ تازه در آراد برندینگ ساخته می‌شود؛ فقط وقتی این کار را بکنید که تیکتِ قبلی آنجا حذف شده باشد.');"><i class="fa-solid fa-rotate-left"></i> برگرداندن به صفِ ارسال</button>
       <span class="small text-muted ms-auto"><span id="custSel">۰</span> مشتری انتخاب شده</span>
@@ -271,7 +316,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
       </tr></thead><tbody>
       <?php if (!$custRows): ?><tr><td colspan="6" class="text-center text-muted py-4">موردی نیست.</td></tr><?php endif; ?>
       <?php foreach ($custRows as $r):
-        $__stc = ['done' => ['همه ارسال شده', 'success'], 'pending' => ['ارسال‌نشده', 'warning'], 'skipped' => ['ارسال نشود', 'secondary']][$r['state']]; ?>
+        $__stc = ['done' => ['همه ارسال شده', 'success'], 'pending' => ['ارسال‌نشده', 'warning'], 'deleted' => ['حذف‌شده از آراد برندینگ', 'danger'], 'skipped' => ['ارسال نشود', 'secondary']][$r['state']]; ?>
         <tr>
           <td><input type="checkbox" class="form-check-input cust-cb" name="customer_ids[]" value="<?= (int) $r['customer_id'] ?>"></td>
           <td><a href="../customer_view.php?id=<?= (int) $r['customer_id'] ?>" target="_blank" class="fw-bold text-decoration-none"><?= e((string) ($r['full_name'] ?: '—')) ?></a><div class="text-muted" dir="ltr" style="text-align:right"><?= e((string) $r['mobile']) ?></div></td>
@@ -298,7 +343,8 @@ require_once __DIR__ . '/../includes/layout_top.php';
             <?php endforeach; ?>
           </td>
           <td class="text-nowrap"><span class="badge text-bg-<?= $__stc[1] ?>"><?= $__stc[0] ?></span>
-            <div class="text-muted mt-1"><?= to_persian_digits((string) (int) $r['sent']) ?> از <?= to_persian_digits((string) (int) $r['total']) ?> ارسال شده</div></td>
+            <div class="text-muted mt-1"><?= to_persian_digits((string) (int) $r['sent']) ?> از <?= to_persian_digits((string) (int) $r['total']) ?> ارسال شده</div>
+            <?php if ((int) $r['deleted'] > 0): ?><div class="text-danger mt-1"><?= to_persian_digits((string) (int) $r['deleted']) ?> حذف‌شده</div><?php endif; ?></td>
           <td class="text-nowrap text-muted"><?= $r['last_at'] ? to_jalali(substr((string) $r['last_at'], 0, 10)) : '—' ?></td>
         </tr>
       <?php endforeach; ?>
@@ -314,6 +360,63 @@ require_once __DIR__ . '/../includes/layout_top.php';
     document.querySelectorAll('.cust-cb').forEach(function (c) { c.addEventListener('change', upd); });
   })();
   </script>
+<?php elseif ($tab === 'accounts'): ?>
+
+  <div class="text-muted small mb-2">کسانی که آراد کانتکت برایشان در آراد برندینگ حسابِ کاربری (تاجر) ساخته است. اگر مشتری اطلاعاتِ ورود را گم کرد، از همین‌جا نام کاربری و رمز را کپی کنید و دوباره برایش بفرستید. ردیف‌هایی که هنوز «پیامک شد» نخورده‌اند بالاتر هستند.</div>
+  <form method="get" class="d-flex gap-2 mb-2">
+    <input type="hidden" name="tab" value="accounts"><input type="hidden" name="per" value="<?= $perPage ?>">
+    <input name="aq" value="<?= e($aq) ?>" class="form-control form-control-sm" style="max-width:280px" placeholder="جستجوی نام، موبایل یا نام کاربری">
+    <button class="btn btn-sm btn-outline-dark">جستجو</button>
+  </form>
+  <div class="card p-0"><div class="table-responsive"><table class="table table-sm align-middle small mb-0">
+    <thead class="table-light"><tr><th>مشتری</th><th>نام کاربری</th><th>رمز عبور</th><th>سفارش</th><th>ساخته‌شده</th><th>اطلاع به مشتری</th><th></th></tr></thead>
+    <tbody>
+    <?php if (!$accRows): ?><tr><td colspan="7" class="text-center text-muted py-4">حسابی ساخته نشده است.</td></tr><?php endif; ?>
+    <?php foreach ($accRows as $a):
+      $__msg = 'سلام ' . trim((string) ($a['full_name'] ?? '')) . "\nاطلاعاتِ ورود به حسابِ شما در آراد برندینگ:\nآدرس ورود: " . $accLoginUrl
+        . "\nنام کاربری: " . $a['username'] . "\nرمز عبور: " . ($a['password'] ?: '—') . "\nبا سپاس\nآراد برندینگ"; ?>
+      <tr>
+        <td><a href="../customer_view.php?id=<?= (int) $a['customer_id'] ?>" target="_blank" class="fw-bold text-decoration-none"><?= e((string) ($a['full_name'] ?: '—')) ?></a><div class="text-muted" dir="ltr" style="text-align:right"><?= e((string) $a['mobile']) ?></div></td>
+        <td dir="ltr" class="text-end"><code><?= e((string) $a['username']) ?></code></td>
+        <td dir="ltr" class="text-end text-nowrap">
+          <code class="acc-pass" data-pass="<?= e((string) $a['password']) ?>">••••••</code>
+          <button type="button" class="btn btn-link btn-sm p-0 acc-show" title="نمایش رمز"><i class="fa-solid fa-eye"></i></button>
+        </td>
+        <td><?php if (!empty($a['order_id'])): ?><a href="../order_view.php?id=<?= (int) $a['order_id'] ?>#abt-account" target="_blank"><bdi dir="ltr"><?= e(to_persian_digits((string) ($a['order_number'] ?: '#' . $a['order_id']))) ?></bdi></a><?php else: ?>—<?php endif; ?></td>
+        <td class="text-nowrap text-muted"><?= to_jalali(substr((string) $a['created_at'], 0, 10)) ?><div><?= e((string) ($a['creator_name'] ?? '')) ?></div>
+          <?php if (!empty($a['welcome_ticket_id'])): ?><div class="text-success">تیکتِ اطلاعاتِ حساب: <?= e((string) $a['welcome_ticket_id']) ?></div>
+          <?php elseif (!empty($a['welcome_error'])): ?><div class="text-danger" title="<?= e((string) $a['welcome_error']) ?>">تیکتِ اطلاعاتِ حساب نرفت</div><?php endif; ?></td>
+        <td class="text-nowrap"><?php if ($a['sms_done_at']): ?><span class="badge text-bg-success">پیامک شد</span><div class="text-muted"><?= to_jalali(substr((string) $a['sms_done_at'], 0, 10)) ?> — <?= e((string) ($a['sms_name'] ?? '')) ?></div>
+          <?php else: ?><span class="badge text-bg-warning">هنوز اطلاع داده نشده</span><?php endif; ?></td>
+        <td class="text-nowrap">
+          <button type="button" class="btn btn-sm btn-outline-dark acc-copy" data-msg="<?= e($__msg) ?>"><i class="fa-regular fa-copy"></i> کپیِ پیامِ ورود</button>
+          <?php if ($canSend && !$a['sms_done_at']): ?>
+            <form method="post" class="d-inline"><?= csrf_field() ?><input type="hidden" name="action" value="acc_sms_done"><input type="hidden" name="customer_id" value="<?= (int) $a['customer_id'] ?>"><input type="hidden" name="aq" value="<?= e($aq) ?>">
+              <button class="btn btn-sm btn-outline-success"><i class="fa-solid fa-check"></i> پیامک شد</button></form>
+          <?php endif; ?>
+        </td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody></table></div></div>
+  <?= abt_pager($totalRows, $perPage, $pageNo) ?>
+  <script>
+  document.querySelectorAll('.acc-show').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var c = b.parentNode.querySelector('.acc-pass');
+      var shown = c.dataset.shown === '1';
+      c.textContent = shown ? '••••••' : (c.dataset.pass || '—');
+      c.dataset.shown = shown ? '0' : '1';
+    });
+  });
+  document.querySelectorAll('.acc-copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var t = b.dataset.msg, done = function () { var h = b.innerHTML; b.innerHTML = '<i class="fa-solid fa-check"></i> کپی شد'; setTimeout(function () { b.innerHTML = h; }, 1500); };
+      if (navigator.clipboard) navigator.clipboard.writeText(t).then(done, function () { window.prompt('کپی کنید:', t); });
+      else window.prompt('کپی کنید:', t);
+    });
+  });
+  </script>
+
 <?php else: ?>
   <div class="card p-3 mb-3">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
