@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.18.3)
+# aradbranding.app — Home page redesign (v1.18.4)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -319,3 +319,10 @@ The source is in `src/trade-globe`.
 - `inset` is expanded to longhands in `trade-home.css`, `auth.css`, `app.css` and `panel-theme.css`.
 - Logical `inset-inline-*` becomes `right`/`left` in the always-RTL `trade-home.css` and `auth.css`.
 - The `translate` property is replaced by `transform`. The label and tip offsets are now set in `trade-globe.js`.
+
+## v1.18.4 (incremental package)
+
+`dist/aradbranding-1.18.4-update.zip` improves the globe on TVs and big screens:
+- **Big screens:** they get the 4k textures (`earth-day-4k.webp` and `earth-night-4k.webp`) and a 128-segment sphere. A TV is no longer mistaken for a phone because of its small CSS viewport.
+- **Smoothness:** frame times are eased, and adaptive pixel ratio runs every 2 s. On big screens the pixel ratio never drops below 1×.
+- **TV mode:** `html.tg-lowfx` disables backdrop blur, and hover raycasts are skipped when there is no hover.

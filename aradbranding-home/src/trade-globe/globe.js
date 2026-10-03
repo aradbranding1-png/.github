@@ -482,7 +482,12 @@ function init(root) {
   }
   const texBase = root.getAttribute('data-tex') || '/assets/globe/';
   const coarse = window.matchMedia('(pointer: coarse)').matches;
-  const small = Math.min(window.innerWidth, window.innerHeight) < 700;
+  // TVs report a small CSS viewport (1920×1080 at 2× = 960×540) but are not phones: tell them apart by the user
+  // agent or by a large physical screen without touch/hover.
+  const screenPx = Math.max(window.screen.width || 0, window.screen.height || 0) * (window.devicePixelRatio || 1);
+  const tv = /Android ?TV|GoogleTV|BRAVIA|SMART-?TV|HbbTV|NetCast|Web0S|Tizen|\bAFT[A-Z]|; TV\b|Large Screen/i.test(navigator.userAgent)
+    || (screenPx >= 1800 && window.matchMedia('(hover: none)').matches && !('ontouchstart' in window));
+  const small = !tv && Math.min(window.innerWidth, window.innerHeight) < 700;
   const weak = small || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // data-mode="login": a calmer scene (fewer routes, 2–3 ships, 1–2 planes) for the sign-in page.
@@ -494,6 +499,16 @@ function init(root) {
     Q.ships = weak ? 2 : 3;
     Q.planes = weak ? 1 : 2;
   }
+  // Big screens (TVs, 2K/4K monitors): the globe is large, so it gets the 4k Earth and a rounder sphere even on a
+  // modest chip; the adaptive resolution below keeps it smooth. A TV has no mouse: no hover work, no blur effects.
+  const big = !small && screenPx >= 1800;
+  const noHover = window.matchMedia('(any-hover: none)').matches;
+  if (big) {
+    Q.seg = 128;
+    Q.tex = '4k';
+    Q.dpr = 2;
+  }
+  if (tv) document.documentElement.classList.add('tg-lowfx');
   const SEA_LIST = lite ? SEA_ROUTES.filter((r) => ['cn-eu', 'cn-me', 'in-me'].includes(r.id)) : [...SEA_ROUTES, ...(weak ? AFRICA_SEA.slice(0, 3) : AFRICA_SEA)];
   const LAND_LIST = lite ? LAND_ROUTES : [...LAND_ROUTES, ...AFRICA_LAND];
   const AIR_LIST = lite ? [['tehran', 'dubai'], ['dubai', 'delhi'], ['istanbul', 'frankfurt']] : AIR_ROUTES.slice(0, Q.air);
@@ -518,6 +533,7 @@ function init(root) {
     if (window.console) console.warn('trade-globe: falling back to the poster:', why);
   };
   renderer.debug.onShaderError = () => fail('shader compile error');
+  if (Q.tex === '4k' && renderer.capabilities.maxTextureSize < 4096) Q.tex = '2k';
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.dpr));
   PX = renderer.getPixelRatio();
   renderer.outputColorSpace = SRGBColorSpace;
@@ -555,7 +571,11 @@ function init(root) {
 
   const loader = new TextureLoader();
   const tex = (name, onLoad) => {
-    const t = loader.load(texBase + name, onLoad);
+    const t = loader.load(texBase + name, onLoad, undefined, () => {
+      // A 4k file that cannot be decoded (memory) falls back to the 2k one.
+      if (name.includes('-4k.')) loader.load(texBase + name.replace('-4k.', '-2k.'), (t2) => { t.image = t2.image; t.needsUpdate = true; if (onLoad) onLoad(t); });
+      else if (onLoad) onLoad(t);
+    });
     t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     return t;
   };
@@ -1147,8 +1167,12 @@ function init(root) {
   function frame(now) {
     raf = 0;
     if (!running) return;
-    const dt = Math.max(0, Math.min(0.05, (now - prev) / 1000));
+    const raw = Math.max(0, Math.min(0.1, (now - prev) / 1000));
     prev = now;
+    // Even motion on uneven frame times (TV GPUs): an eased dt instead of the raw one.
+    dtS += (raw - dtS) * 0.18;
+    const dt = Math.min(0.05, dtS);
+    adapt(raw);
     time += dt;
     const motion = reduced ? 0.35 : 1;
 
@@ -1223,7 +1247,7 @@ function init(root) {
 
     if (dead) return;
     world.updateMatrixWorld();
-    if (++hoverFrame % 2 === 0) updateHover();
+    if (!noHover && ++hoverFrame % 2 === 0) updateHover();
     renderer.render(scene, camera);
     updateOverlays();
 
@@ -1272,6 +1296,32 @@ function init(root) {
   }
 
   let litCheck = 0;
+  let dtS = 1 / 60;
+  // Adaptive resolution: every 2 s, if frames are slow (< ~42 fps) render at a lower pixel ratio; if they are
+  // comfortably fast for a while, go back up. Most of the canvas is empty space, so this costs little sharpness.
+  const dprMax = renderer.getPixelRatio();
+  const dprMin = big ? Math.min(dprMax, 1) : Math.max(0.6, dprMax * 0.45); // big screens never go below 1×
+  let perfT = 0, perfN = 0, perfWarm = 0, fastRuns = 0;
+  function setDpr(v) {
+    const old = renderer.getPixelRatio();
+    v = Math.round(v * 100) / 100;
+    if (Math.abs(v - old) < 0.01) return;
+    renderer.setPixelRatio(v);
+    renderer.setSize(W, H, false);
+    pointMaterials.forEach((m) => { m.uniforms.uScale.value *= v / old; });
+    PX = v;
+  }
+  function adapt(raw) {
+    if (perfWarm < 1.5) { perfWarm += raw; return; } // skip the launch and texture upload
+    perfT += raw; perfN++;
+    if (perfT < 2) return;
+    const avg = perfT / perfN;
+    perfT = 0; perfN = 0;
+    const cur = renderer.getPixelRatio();
+    if (avg > 1 / 42 && cur > dprMin) { setDpr(Math.max(dprMin, cur * 0.8)); fastRuns = 0; }
+    else if (avg < 1 / 56 && cur < dprMax) { if (++fastRuns >= 3) { setDpr(Math.min(dprMax, cur * 1.12)); fastRuns = 0; } }
+    else fastRuns = 0;
+  }
   function schedule() {
     if (running && !raf) raf = requestAnimationFrame(frame);
   }

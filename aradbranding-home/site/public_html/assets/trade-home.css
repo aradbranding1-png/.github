@@ -618,3 +618,8 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
 
 /* ?globe=debug */
 .tg-debug { position: fixed; z-index: 9999; right: 12px; left: 12px; bottom: 12px; max-height: 50vh; overflow: auto; margin: 0; padding: 12px 14px; border-radius: 12px; background: rgba(0, 0, 0, .88); color: #9FE3FF; font: 12px/1.7 ui-monospace, monospace; white-space: pre-wrap; direction: rtl; text-align: right; border: 1px solid #1E9BFF; }
+
+/* TVs and set-top boxes (html.tg-lowfx, set by trade-globe.js): no backdrop blur — it costs more GPU time than the
+   whole globe on those chips. Panels get a slightly denser background instead. */
+.tg-lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.tg-lowfx .tg-card { background: linear-gradient(180deg, rgba(10, 30, 52, .94), rgba(4, 14, 28, .92)); }

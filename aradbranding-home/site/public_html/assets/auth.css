@@ -251,3 +251,8 @@ body.is-launching .auth-card { transform: translateY(-4px) scale(.99); opacity: 
   .auth-register .tg-stage { --gx: .27; --grw: .2; }
 }
 .auth .tg-card.is-land::before { background: #16C784; box-shadow: 0 0 10px #16C784; }
+
+/* TVs and set-top boxes (html.tg-lowfx, set by trade-globe.js): no backdrop blur — it costs more GPU time than the
+   whole globe on those chips. Panels get a slightly denser background instead. */
+.tg-lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.tg-lowfx .tg-card { background: linear-gradient(180deg, rgba(10, 30, 52, .94), rgba(4, 14, 28, .92)); }

@@ -20,7 +20,7 @@
   // Diagnostics for TVs and other odd browsers: open the home page with ?globe=debug.
   if (globeRoot && /[?&]globe=debug\b/.test(location.search)) {
     setTimeout(function () {
-      var info = ['نسخه کره: 1.18.3'];
+      var info = ['نسخه کره: 1.18.4'];
       var gl2 = null, gl1 = null, vendor = '';
       try { gl2 = document.createElement('canvas').getContext('webgl2'); } catch (e) { /* ignore */ }
       try { gl1 = document.createElement('canvas').getContext('webgl') || document.createElement('canvas').getContext('experimental-webgl'); } catch (e) { /* ignore */ }
