@@ -999,6 +999,14 @@ function abt_send_unlocked(PDO $pdo, array $order, array $ticket, int $userId): 
             orders_add_history($pdo, (int) $order['id'], $userId, 'note', null, null,
                 'تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» در آراد برندینگ ثبت شد' . ($parsed['id'] ? ' (شماره‌ی تیکت: ' . $parsed['id'] . ')' : '') . $altNote . '.');
         }
+        // تیکتِ آموزشی واقعاً ارسال شد ← بقیه‌ی خدماتِ آموزشیِ همین سفارش (که در همین تیکت اعلام شده‌اند) «انجام شد»
+        try {
+            if (function_exists('edu_item_is_edu') && (int) ($ticket['item_id'] ?? 0) > 0 && edu_item_is_edu($pdo, edu_settings($pdo), (int) $ticket['item_id'])) {
+                edu_bundle_order($pdo, (int) $order['id'], (int) $ticket['id'], (string) ($ticket['service_title'] ?? ''));
+            }
+        } catch (Throwable $e) {
+            error_log('edu bundle after send: ' . $e->getMessage());
+        }
         $accNote = $account ? ' — ' . abt_account_notice($account) : '';
         return ['ok' => true, 'message' => 'تیکتِ «' . ($ticket['service_title'] ?? 'سفارش') . '» در آراد برندینگ ثبت شد' . ($parsed['id'] ? ' (شماره‌ی تیکت: ' . $parsed['id'] . ')' : '') . $altNote . $r['att_note'] . '.' . $accNote,
             'new_account' => $account];
