@@ -25,7 +25,17 @@ if (!$myPos) {
 // کسی که در چند واحد عضو است انتخاب می‌کند نامه «از سوی» کدام واحد/سمت ارسال شود
 $myPositions = automation_user_positions_all($pdo, (int) $user['id']);
 
-$replyToId = (int) ($_GET['reply_to'] ?? 0);
+// ویرایش و ارسالِ پیش‌نویس (فقط پیش‌نویسِ خودِ کاربر)
+$draftId = (int) ($_GET['draft'] ?? ($_POST['draft_id'] ?? 0));
+$draft = null;
+if ($draftId > 0) {
+    $st = $pdo->prepare("SELECT * FROM letters WHERE id = ? AND sender_user_id = ? AND status = 'پیش‌نویس' LIMIT 1");
+    $st->execute([$draftId, (int) $user['id']]);
+    $draft = $st->fetch() ?: null;
+    if (!$draft) $draftId = 0;
+}
+
+$replyToId = (int) ($_GET['reply_to'] ?? ($draft['parent_letter_id'] ?? 0));
 $replyTo = null;
 if ($replyToId > 0) {
     $stmt = $pdo->prepare('SELECT * FROM letters WHERE id = ? LIMIT 1');
@@ -90,7 +100,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!$errors) {
-            if ($isDraft) {
+            if ($isDraft && $draft) {
+                // همان پیش‌نویس به‌روز می‌شود (پیش‌نویسِ تازه ساخته نمی‌شود)
+                $pdo->prepare('UPDATE letters SET letter_number = ?, subject = ?, body = ?, letter_type = ?, priority = ?, confidentiality = ?, sender_unit_id = ?, sender_position_title = ?, deadline_at = ?, description = ? WHERE id = ?')
+                    ->execute([$letterNumber, $subject, $body, $letterType, $priority, $confidentiality,
+                        $senderPos['unit_id'] ?? $myPos['unit_id'], $senderPos['position_title'] ?? $myPos['position_title'], $deadlineG, $description, $draftId]);
+                if (automation_hide_sender_ready($pdo)) $pdo->prepare('UPDATE letters SET hide_sender_name = ? WHERE id = ?')->execute([$hideSender ? 1 : 0, $draftId]);
+                $letterId = $draftId;
+                automation_log_history($pdo, $letterId, (int) $user['id'], 'edited', 'پیش‌نویس ویرایش شد.');
+                flash_set('success', 'پیش‌نویس ذخیره شد.');
+            } elseif ($isDraft) {
                 $ins = $pdo->prepare("INSERT INTO letters (letter_number, subject, body, letter_type, priority, confidentiality, status, sender_user_id, sender_unit_id, sender_position_title, deadline_at, description, parent_letter_id, root_letter_id)
                     VALUES (?,?,?,?,?,?,'پیش‌نویس',?,?,?,?,?,?,?)");
                 $ins->execute([
@@ -107,6 +126,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_set('success', 'پیش‌نویس ذخیره شد.');
             } else {
                 try {
+                    // ارسالِ پیش‌نویس: شماره‌ی پیش‌نویس آزاد می‌شود تا نامه‌ی ارسالی همان شماره را بگیرد
+                    if ($draft) $pdo->prepare('UPDATE letters SET letter_number = NULL WHERE id = ?')->execute([$draftId]);
                     $letterId = automation_send_letter($pdo, [
                         'letter_number' => $letterNumber,
                         'subject' => $subject,
@@ -124,7 +145,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($replyToId) {
                         automation_log_history($pdo, $replyToId, (int) $user['id'], 'replied', 'به این نامه پاسخ داده شد.');
                     }
+                    if ($draft) {
+                        // پیوست‌های پیش‌نویس به نامه‌ی ارسالی منتقل و خودِ پیش‌نویس حذف می‌شود
+                        $pdo->prepare('UPDATE letter_attachments SET letter_id = ? WHERE letter_id = ?')->execute([$letterId, $draftId]);
+                        try { $pdo->prepare('DELETE FROM letter_history WHERE letter_id = ?')->execute([$draftId]); } catch (Throwable $e) {}
+                        $pdo->prepare("DELETE FROM letters WHERE id = ? AND status = 'پیش‌نویس'")->execute([$draftId]);
+                        automation_log_history($pdo, $letterId, (int) $user['id'], 'created', 'از روی پیش‌نویس ارسال شد.');
+                    }
                 } catch (Throwable $e) {
+                    if ($draft) $pdo->prepare('UPDATE letters SET letter_number = ? WHERE id = ?')->execute([$draft['letter_number'], $draftId]);
                     $errors[] = 'خطا در ارسالِ نامه. دوباره تلاش کنید.';
                     $letterId = null;
                 }
@@ -162,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$pageTitle = $replyTo ? 'پاسخ به نامه' : 'نامه جدید';
+$pageTitle = $draft ? 'ویرایش و ارسالِ پیش‌نویس' : ($replyTo ? 'پاسخ به نامه' : 'نامه جدید');
 require_once __DIR__ . '/includes/layout_top.php';
 ?>
 <style>
@@ -255,9 +284,14 @@ require_once __DIR__ . '/includes/layout_top.php';
   <h6 class="mb-3"><i class="fa-solid fa-pen-to-square"></i> <?= $replyTo ? 'پاسخ به نامه: ' . e($replyTo['subject']) : 'نامه جدید' ?></h6>
   <form method="post" enctype="multipart/form-data" id="letterForm">
     <?= csrf_field() ?>
+    <?php if ($draft): ?><input type="hidden" name="draft_id" value="<?= (int) $draftId ?>">
+      <div class="alert alert-info py-2 small"><i class="fa-solid fa-file-pen"></i> در حالِ ویرایشِ پیش‌نویس. گیرنده(ها) را انتخاب کنید و «ارسال نامه» را بزنید؛ پیش‌نویس به نامه‌ی ارسالی تبدیل می‌شود (پیوست‌های قبلی هم همراهش می‌روند).</div>
+    <?php endif;
+      $__v = static fn(string $k, string $def = '') => isset($_POST[$k]) ? (string) $_POST[$k] : ($draft ? (string) ($draft[$k] ?? '') : $def); ?>
     <div class="row g-3">
       <?php if (count($myPositions) > 1):
-        $__selPos = (int) ($_POST['sender_position_id'] ?? ($myPositions[0]['id'] ?? 0)); ?>
+        $__selPos = (int) ($_POST['sender_position_id'] ?? ($myPositions[0]['id'] ?? 0));
+        if (!isset($_POST['sender_position_id']) && $draft) foreach ($myPositions as $__dp) if ((int) $__dp['unit_id'] === (int) $draft['sender_unit_id']) { $__selPos = (int) $__dp['id']; break; } ?>
       <div class="col-12">
         <label class="form-label">ارسال از سوی <span class="text-danger">*</span></label>
         <select name="sender_position_id" id="senderPosSel" class="form-select" required>
@@ -270,7 +304,7 @@ require_once __DIR__ . '/includes/layout_top.php';
       <?php endif; ?>
       <?php if (automation_user_has_permission($pdo, $user, 'letter_hide_sender')):
         $__defHide = automation_unit_hides_sender_by_default((string) (($myPositions[0]['unit_title'] ?? null) ?? ($myPos['unit_title'] ?? '')));
-        $__showChecked = isset($_POST['show_sender_present']) ? !empty($_POST['show_sender_name']) : !$__defHide; ?>
+        $__showChecked = isset($_POST['show_sender_present']) ? !empty($_POST['show_sender_name']) : ($draft && isset($draft['hide_sender_name']) ? (int) $draft['hide_sender_name'] !== 1 : !$__defHide); ?>
       <div class="col-12">
         <input type="hidden" name="show_sender_present" value="1">
         <div class="form-check form-switch">
@@ -289,34 +323,34 @@ require_once __DIR__ . '/includes/layout_top.php';
       <?php endif; ?>
       <div class="col-md-4">
         <label class="form-label">شماره نامه (خالی=خودکار)</label>
-        <input type="text" name="letter_number" class="form-control" dir="ltr">
+        <input type="text" name="letter_number" class="form-control" dir="ltr" value="<?= e($__v('letter_number')) ?>">
       </div>
       <div class="col-md-4">
         <label class="form-label">نوع نامه</label>
-        <input type="text" name="letter_type" class="form-control" placeholder="مثلا: داخلی، بخشنامه">
+        <input type="text" name="letter_type" class="form-control" placeholder="مثلا: داخلی، بخشنامه" value="<?= e($__v('letter_type')) ?>">
       </div>
       <div class="col-md-4">
         <label class="form-label">مهلت اقدام</label>
-        <input type="text" name="deadline_at" class="form-control jalali-date" dir="ltr" autocomplete="off" placeholder="۱۴۰۵/۰۷/۱۰">
+        <input type="text" name="deadline_at" class="form-control jalali-date" dir="ltr" autocomplete="off" placeholder="۱۴۰۵/۰۷/۱۰" value="<?= e(isset($_POST['deadline_at']) ? (string) $_POST['deadline_at'] : ($draft && $draft['deadline_at'] ? to_jalali((string) $draft['deadline_at']) : '')) ?>">
       </div>
       <div class="col-12">
         <label class="form-label">موضوع <span class="text-danger">*</span></label>
-        <input type="text" name="subject" class="form-control" required value="<?= $replyTo ? e('پاسخ: ' . $replyTo['subject']) : '' ?>">
+        <input type="text" name="subject" class="form-control" required value="<?= e($__v('subject', $replyTo ? 'پاسخ: ' . $replyTo['subject'] : '')) ?>">
       </div>
       <div class="col-12">
         <label class="form-label">متن نامه</label>
-        <textarea name="body" class="form-control" rows="6"></textarea>
+        <textarea name="body" class="form-control" rows="6"><?= e($__v('body')) ?></textarea>
       </div>
       <div class="col-md-6">
         <label class="form-label">اولویت</label>
         <select name="priority" class="form-select">
-          <?php foreach (['عادی','مهم','فوری','خیلی فوری'] as $p): ?><option value="<?= e($p) ?>"><?= e($p) ?></option><?php endforeach; ?>
+          <?php foreach (['عادی','مهم','فوری','خیلی فوری'] as $p): ?><option value="<?= e($p) ?>" <?= $__v('priority', 'عادی') === $p ? 'selected' : '' ?>><?= e($p) ?></option><?php endforeach; ?>
         </select>
       </div>
       <div class="col-md-6">
         <label class="form-label">سطح محرمانگی</label>
         <select name="confidentiality" class="form-select">
-          <?php foreach (['عادی','داخلی','محرمانه','خیلی محرمانه'] as $c): ?><option value="<?= e($c) ?>"><?= e($c) ?></option><?php endforeach; ?>
+          <?php foreach (['عادی','داخلی','محرمانه','خیلی محرمانه'] as $c): ?><option value="<?= e($c) ?>" <?= $__v('confidentiality', 'عادی') === $c ? 'selected' : '' ?>><?= e($c) ?></option><?php endforeach; ?>
         </select>
       </div>
 
@@ -339,7 +373,7 @@ require_once __DIR__ . '/includes/layout_top.php';
       </div>
       <div class="col-12">
         <label class="form-label">توضیحات</label>
-        <textarea name="description" class="form-control" rows="2"></textarea>
+        <textarea name="description" class="form-control" rows="2"><?= e($__v('description')) ?></textarea>
       </div>
     </div>
 

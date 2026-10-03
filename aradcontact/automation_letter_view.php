@@ -1048,7 +1048,8 @@ require_once __DIR__ . '/includes/layout_top.php';
       </div>
 
       <div class="d-flex gap-2 mt-3 flex-wrap">
-        <?php if ($canReply): ?><a href="automation_compose.php?reply_to=<?= $id ?>" class="btn btn-sm btn-primary btn-reply"><i class="fa-solid fa-reply"></i> پاسخ</a><?php endif; ?>
+        <?php if ($letter['status'] === 'پیش‌نویس' && (int) $letter['sender_user_id'] === $myId): ?><a href="automation_compose.php?draft=<?= $id ?>" class="btn btn-sm btn-primary"><i class="fa-solid fa-paper-plane"></i> ویرایش و ارسالِ پیش‌نویس</a><?php endif; ?>
+        <?php if ($canReply && $letter['status'] !== 'پیش‌نویس'): ?><a href="automation_compose.php?reply_to=<?= $id ?>" class="btn btn-sm btn-primary btn-reply"><i class="fa-solid fa-reply"></i> پاسخ</a><?php endif; ?>
         <?php if ($canArchive && $letter['status'] !== 'بایگانی شده'): ?>
           <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="archive">
             <button class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-box-archive"></i> بایگانی</button></form>
