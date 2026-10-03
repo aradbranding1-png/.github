@@ -30,7 +30,7 @@ function perf_ready(PDO $pdo): bool
 {
     static $ready = null;
     if ($ready !== null) return $ready;
-    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); ps_a_d_rule_v14($pdo); ps_no_direct_d_v15($pdo); } return $ready; }
+    if (is_file(PS_SCHEMA_FLAG)) { $ready = ps_schema_v4($pdo) && ps_schema_v5($pdo) && ps_schema_v12($pdo); if ($ready) { ps_backfill_c_v6($pdo); ps_recalc_d_rule_v8($pdo); ps_recalc_b_rule_v9($pdo); ps_single_b_v10($pdo); ps_a_rule_v11($pdo); ps_a_d_rule_v14($pdo); ps_no_direct_d_v15($pdo); ps_auto_a_creators($pdo); } return $ready; }
     $ddl = [
         "CREATE TABLE IF NOT EXISTS ps_base_versions (id INT UNSIGNED NOT NULL AUTO_INCREMENT, percent DECIMAL(6,3) NOT NULL, effective_from DATETIME NOT NULL,
           note VARCHAR(500) DEFAULT NULL, created_by INT UNSIGNED DEFAULT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id), KEY idx_psbv_from (effective_from)
@@ -1819,9 +1819,13 @@ function ps_customer_creator(PDO $pdo, int $recId): array
         }
     } catch (Throwable $e) {}
     if (!$hasRel) {
-        $q = $pdo->prepare('SELECT owner_user_id FROM customers WHERE id = ?');
+        $q = $pdo->prepare('SELECT * FROM customers WHERE id = ?');
         $q->execute([$recId]);
-        if ($u = (int) $q->fetchColumn()) return $cache[$recId] = ['uid' => $u, 'how' => 'صاحبِ پرونده (بدونِ هیچ انتقالی)'];
+        $c = $q->fetch(PDO::FETCH_ASSOC) ?: [];
+        // ایمپورت‌های مدیر (انتقالِ مشاوران، فهرستِ شاکیان) واردکننده‌ی کارشناس حساب نمی‌شوند
+        if (!empty($c['first_advisor_user_id'])) return $cache[$recId] = ['uid' => 0, 'how' => 'ایمپورتِ مدیر (انتقالِ مشاوران)'];
+        if (($c['status'] ?? '') === 'شاکی' && (int) ($c['status_locked'] ?? 0) === 1) return $cache[$recId] = ['uid' => 0, 'how' => 'ایمپورتِ مدیر (شاکیان)'];
+        if ($u = (int) ($c['owner_user_id'] ?? 0)) return $cache[$recId] = ['uid' => $u, 'how' => 'صاحبِ پرونده (بدونِ هیچ انتقالی)'];
     }
     return $cache[$recId] = ['uid' => 0, 'how' => 'واردکننده مشخص نیست (ایمپورت/انتقال)'];
 }
@@ -1882,6 +1886,7 @@ function ps_owner_basis(PDO $pdo, ?array $row): string
         case 'payment': return 'ثبتِ فیش (اولین پولِ مشتری را خودش گرفته)' . $at;
         case 'peer': return 'ارجاعِ هم‌سطح از کارشناسِ قبلی' . $at;
         case 'c_revive': return 'برگشتِ مشتریِ خودش از Box C' . $at;
+        case 'creator': return 'خودش مشتریِ جدید را واردِ سامانه کرده' . $at;
         case 'manual':
             $by = !empty($row['created_by']) ? (ps_user_row($pdo, (int) $row['created_by'])['full_name'] ?? '') : '';
             return 'تعیینِ دستی' . ($by !== '' ? ' توسطِ ' . $by : '') . $at;
@@ -2047,5 +2052,71 @@ function ps_no_direct_d_v15(PDO $pdo): void
         }
     } catch (Throwable $e) {
         error_log('ps_no_direct_d_v15: ' . $e->getMessage());
+    }
+}
+
+/**
+ * A ِ خودکار برای واردکننده: هر کارشناسِ نقشِ A که مشتریِ «جدید» واردِ سامانه کند (شماره قبلاً در سامانه نبوده،
+ * از هر مسیری: ثبتِ دستی، اکسل، کالیزر، …)، همان لحظه A ِ آن مشتری می‌شود (تا بتواند به Box B ارجاع دهد).
+ * شرط‌ها همان قانونِ A است (ps_a_basis): قدیمی‌ترین پرونده‌ی این شخص در ۳۶۰ همین پرونده باشد، بعد از راه‌اندازیِ Boxها
+ * ساخته شده باشد و واردکننده‌اش (نه صاحبِ فعلی) همین کارشناس باشد. مشتریِ همکار/خانواده، مشتری‌ای که A دارد یا در Box است رد می‌شود.
+ * افزایشی: هر بار فقط پرونده‌های جدیدتر از آخرین بررسی (نشانگر در storage)؛ بارِ اول پرونده‌های بعد از راه‌اندازیِ Box هم بررسی می‌شوند.
+ */
+function ps_auto_a_creators(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $launch = ps_launch_at($pdo);
+    if ($launch === null) return;
+    $cursorFile = __DIR__ . '/../storage/.ps_auto_a_cursor';
+    $last = is_file($cursorFile) ? (int) @file_get_contents($cursorFile) : 0;
+    try {
+        $st = $pdo->prepare("SELECT id, created_at FROM customers WHERE id > ? AND created_at >= ? AND COALESCE(contact_type, 'customer') = 'customer' ORDER BY id ASC LIMIT 1000");
+        $st->execute([$last, $launch]);
+        $ids = $st->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
+        // پرونده‌های دو دقیقه‌ی اخیر دفعه‌ی بعد هم دوباره بررسی می‌شوند (ممکن است ثبتِ رابطه/لاگِ ایجادشان هنوز تمام نشده باشد)
+        $fresh = (string) $pdo->query('SELECT NOW() - INTERVAL 2 MINUTE')->fetchColumn();
+        $safe = $last;
+        $blocked = false;
+        if (!$ids) {
+            // نشانگر را تا آخرین پرونده جلو ببر تا دفعه‌ی بعد فقط پرونده‌های تازه بررسی شوند
+            $max = (int) $pdo->query("SELECT COALESCE(MAX(id), 0) FROM customers WHERE created_at < NOW() - INTERVAL 2 MINUTE")->fetchColumn();
+            if ($max > $last) @file_put_contents($cursorFile, (string) $max);
+            return;
+        }
+        // تطبیقِ شماره‌ها (۳۶۰) بدونِ این فایل بی‌صدا شکست می‌خورد و هر پرونده «جدید» به نظر می‌رسد
+        if (!function_exists('normalize_phone_for_match')) require_once __DIR__ . '/spreadsheet_reader.php';
+        if (!function_exists('cc_person_ids')) require_once __DIR__ . '/customer_credit.php';
+        $openBox = $pdo->prepare("SELECT 1 FROM ps_box_items WHERE person_key = ? AND status = 'open' LIMIT 1");
+        foreach ($ids as $cid => $createdAt) {
+            $cid = (int) $cid;
+            if ((string) $createdAt >= $fresh) $blocked = true;
+            if (!$blocked) $safe = $cid;
+            try {
+                // فقط وقتی این پرونده قدیمی‌ترین پرونده‌ی این شخص است (یعنی شماره قبلاً در سامانه نبوده)
+                $pids = array_map('intval', cc_person_ids($pdo, $cid) ?: [$cid]);
+                if (!in_array($cid, $pids, true)) $pids[] = $cid;
+                $in = implode(',', $pids);
+                $first = (int) $pdo->query("SELECT id FROM customers WHERE id IN ($in) ORDER BY created_at ASC, id ASC LIMIT 1")->fetchColumn();
+                if ($first !== $cid) continue;
+                $cr = ps_customer_creator($pdo, $cid);
+                if ($cr['uid'] <= 0) continue;
+                $u = ps_user_row($pdo, $cr['uid']);
+                if (!$u || $u['role'] !== 'A') continue;
+                $own = ps_owners($pdo, $cid);
+                if ($own['A']) continue;
+                $openBox->execute([$own['person_key']]);
+                if ($openBox->fetchColumn()) continue;
+                if (!ps_a_basis($pdo, $cid, $cr['uid'])['ok']) continue;
+                $r = ps_owner_add($pdo, $cid, 'A', $cr['uid'], 'creator', $cr['uid']);
+                if ($r['ok']) ps_activity($pdo, $cid, $cr['uid'], 'A مشتری = ' . $u['full_name'] . ' (خودش مشتریِ جدید را واردِ سامانه کرد)');
+            } catch (Throwable $e) {
+                error_log('ps_auto_a_creators #' . $cid . ': ' . $e->getMessage());
+            }
+        }
+        if ($safe > $last) @file_put_contents($cursorFile, (string) $safe);
+    } catch (Throwable $e) {
+        error_log('ps_auto_a_creators: ' . $e->getMessage());
     }
 }
