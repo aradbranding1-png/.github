@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.16.0)
+# aradbranding.app — Home page redesign (v1.16.1)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -242,3 +242,10 @@ New code:
 - services registered in `bootstrap/services.php`
 
 API reference: `docs/API-v1.md`.
+
+## v1.16.1 (incremental package)
+
+`dist/aradbranding-1.16.1-update.zip` should be installed on top of 1.16.0. It is a direction and alignment fix for the proposal detail page, touching:
+- `proposals/show.php`, where each block now has `dir="auto"`
+- `ProposalController::find`, which now also selects the language
+- `app.css`

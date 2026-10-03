@@ -433,10 +433,10 @@ p { margin: 0; }
 .owner-row .grow { display: grid; line-height: 1.6; min-width: 0; }
 .owner-row .muted { font-size: 13px; }
 .specs { margin: 0; display: grid; gap: 8px; }
-.specs div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; font-size: 14px; }
+.specs div { display: grid; grid-template-columns: minmax(84px, 120px) 1fr; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; font-size: 14px; }
 .specs div:last-child { border-bottom: 0; padding-bottom: 0; }
 .specs dt { color: var(--muted); }
-.specs dd { margin: 0; font-weight: 600; text-align: end; }
+.specs dd { margin: 0; font-weight: 600; text-align: start; line-height: 1.9; }
 .gallery { columns: 2; column-gap: 10px; }
 .gallery a { display: block; break-inside: avoid; margin-bottom: 10px; }
 .gallery img { border-radius: 12px; width: 100%; height: auto; }
@@ -1010,3 +1010,9 @@ main.content > * { animation: rise .32s var(--ease) both; }
   .report-form { position: fixed; inset-inline: 16px; top: auto; bottom: 16px; width: auto; }
   .trust-status .select, .trust-status .input { flex-basis: 100%; }
 }
+
+/* 1.16.1: proposal content takes its direction from its text (dir="auto"): fa/ar right-aligned, Latin left-aligned */
+.pdetail [dir="auto"] { text-align: start; unicode-bidi: plaintext; }
+.pdetail .prose[dir="auto"], .pdetail .pdetail-summary[dir="auto"] { text-align: justify; text-align-last: start; }
+.pdetail .prose[dir="auto"] > * { unicode-bidi: plaintext; text-align: inherit; }
+@media (max-width: 520px) { .specs div { grid-template-columns: 1fr; gap: 2px; } }

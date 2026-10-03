@@ -336,10 +336,11 @@ final class ProposalController extends Controller
         }
         $p = $this->c->get(Connection::class)->first(
             'SELECT p.*, u.first_name, u.last_name, u.handle, u.avatar_path AS owner_avatar, u.business_verified_at,
-                    c.code AS country_code, c.name_fa AS country_fa, up.company_name
+                    c.code AS country_code, c.name_fa AS country_fa, up.company_name, l.code AS lang_code, l.direction
              FROM proposals p
              JOIN users u ON u.id = p.user_id
              JOIN countries c ON c.id = p.country_id
+             LEFT JOIN languages l ON l.id = p.language_id
              LEFT JOIN user_profiles up ON up.user_id = p.user_id
              WHERE p.public_id = ? AND p.deleted_at IS NULL',
             [Ulid::toBinary($uid)]
