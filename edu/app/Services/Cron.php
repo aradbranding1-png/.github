@@ -28,6 +28,7 @@ final class Cron
         $step('close_exam_attempts', fn() => ExamService::closeExpired());
         $step('recalc_queue', fn() => \App\Services\Enrollment::processQueue());
         $step('deadline_reminders', fn() => self::deadlineReminders());
+        $step('event_announcements', fn() => EventService::announce());
         $step('growth_recalc', fn() => TraderGrowth::processDirty(3000, 30.0));
         $step('growth_services_sync', fn() => ServiceSync::continueRuns(45.0));
 

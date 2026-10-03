@@ -46,6 +46,13 @@ $first = $continue[0] ?? null;
     <span class="lib-go">مشاهده کاتالوگ <?= icon('chevron-left') ?></span>
 </a>
 <?php endif; ?>
+<?php if (!empty($announced)): ?>
+<div class="card mb-3">
+    <div class="card-head"><h3><?= icon('video') ?> وبینارها و میتینگ‌های پیش رو</h3>
+        <span class="flex small" style="gap:.8rem"><a href="<?= url('/learn/events/webinar') ?>">همه وبینارها</a><a href="<?= url('/learn/events/meeting') ?>">همه میتینگ‌ها</a></span></div>
+    <div class="ev-grid"><?php foreach ($announced as $ev) include APP_PATH . '/Views/partials/event_card.php'; ?></div>
+</div>
+<?php endif; ?>
 <div class="grid g-5 mb-3">
     <div class="card stat tone-danger"><div class="bubble"><?= icon('flag') ?></div><div><div class="v"><?= fa($stats['mandatory_open']) ?><small class="faint small"> / <?= fa($stats['mandatory']) ?></small></div><div class="l">آموزش اجباری باقی‌مانده</div></div></div>
     <div class="card stat tone-primary"><div class="bubble"><?= icon('circle-play') ?></div><div><div class="v"><?= fa($stats['in_progress']) ?></div><div class="l">در حال انجام</div></div></div>

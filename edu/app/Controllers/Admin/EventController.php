@@ -55,7 +55,8 @@ final class EventController
         $id = DB::insert('events', $row);
         Audit::log('events.create', 'event', $id, 'success', ['type' => $type]);
         if (\App\Services\TraderGrowth::eventTypeUsed($type)) \App\Services\TraderGrowth::markAllDirty();
-        flash('success', EventService::TYPES[$type]['label'] . ' ایجاد شد.');
+        $sent = EventService::announce($id);
+        flash('success', EventService::TYPES[$type]['label'] . ' ایجاد شد.' . ($sent ? ' اعلان آن برای ' . fa($sent) . ' کاربر ارسال شد.' : ''));
         redirect('/admin/events/' . $type);
     }
 
@@ -72,7 +73,8 @@ final class EventController
         DB::update('events', $this->row($e['type'], $e) + ['updated_at' => now()], 'id = ?', [$id]);
         Audit::log('events.update', 'event', $id);
         if (\App\Services\TraderGrowth::eventTypeUsed($e['type'])) \App\Services\TraderGrowth::markAllDirty();
-        flash('success', 'تغییرات ذخیره شد.');
+        $sent = EventService::announce($id); // e.g. just published
+        flash('success', 'تغییرات ذخیره شد.' . ($sent ? ' اعلان آن برای ' . fa($sent) . ' کاربر ارسال شد.' : ''));
         redirect('/admin/events/' . $e['type']);
     }
 

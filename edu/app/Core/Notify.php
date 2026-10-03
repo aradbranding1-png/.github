@@ -17,6 +17,7 @@ final class Notify
         'inactivity' => ['عدم فعالیت', 'triangle-alert', 'danger'],
         'certificate' => ['گواهی', 'medal', 'success'],
         'growth' => ['نظام رشد', 'trending-up', 'success'],
+        'event' => ['جلسه آنلاین', 'video', 'purple'],
         'system' => ['اطلاعیه', 'bell', 'gray'],
     ];
 
@@ -40,14 +41,21 @@ final class Notify
         return $n;
     }
 
+    /** Hides webinar/meeting announcements once the event is over, unpublished or deleted (alias n) */
+    public static function visibleSql(string $a = 'n'): string
+    {
+        return "($a.dedupe_key IS NULL OR $a.dedupe_key NOT LIKE 'event-%'
+                 OR EXISTS (SELECT 1 FROM events e WHERE e.id = CAST(SUBSTRING($a.dedupe_key, 7) AS UNSIGNED) AND " . \App\Services\EventService::liveSql() . '))';
+    }
+
     public static function unreadCount(int $userId): int
     {
-        return (int)DB::value('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL', [$userId]);
+        return (int)DB::value('SELECT COUNT(*) FROM notifications n WHERE n.user_id = ? AND n.read_at IS NULL AND ' . self::visibleSql(), [$userId]);
     }
 
     public static function recent(int $userId, int $limit = 8): array
     {
-        return DB::all('SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT ' . (int)$limit, [$userId]);
+        return DB::all('SELECT n.* FROM notifications n WHERE n.user_id = ? AND ' . self::visibleSql() . ' ORDER BY n.id DESC LIMIT ' . (int)$limit, [$userId]);
     }
 
     /** Users who hold a permission (for notifying reviewers etc.). Includes root. */

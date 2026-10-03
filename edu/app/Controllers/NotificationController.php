@@ -10,7 +10,7 @@ final class NotificationController
 {
     public function index(): string
     {
-        $page = DB::paginate('SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC', [(int)Auth::id()], 25);
+        $page = DB::paginate('SELECT n.* FROM notifications n WHERE n.user_id = ? AND ' . \App\Core\Notify::visibleSql() . ' ORDER BY n.id DESC', [(int)Auth::id()], 25);
         $html = view('notifications/index', ['title' => 'اعلان‌ها', 'page' => $page]);
         DB::run('UPDATE notifications SET read_at = NOW() WHERE user_id = ? AND read_at IS NULL', [(int)Auth::id()]);
         return $html;

@@ -69,7 +69,7 @@ final class DashboardController
 
         $sessions = \App\Services\EventService::upcomingFor($me, 4);
         return view('learn/home', [
-            'sessions' => $sessions, 'library' => $library,
+            'sessions' => $sessions, 'library' => $library, 'announced' => \App\Services\EventService::announcements($me, 6),
             'title' => 'پیشخوان من', 'me' => $me, 'stats' => $stats, 'overall' => $overall, 'continue' => array_slice($continue, 0, 4),
             'mandatory' => array_slice($mandatory, 0, 6), 'exams' => $exams, 'exercises' => $exercises, 'certs' => $certs,
             'pathEn' => $pathEn, 'pathSteps' => $pathSteps, 'growth' => $growth, 'chart' => $chart, 'recent' => $recent,

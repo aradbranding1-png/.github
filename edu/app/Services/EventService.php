@@ -24,6 +24,53 @@ final class EventService
         'meeting' => ['label' => 'میتینگ آنلاین', 'plural' => 'میتینگ‌های آنلاین', 'mine' => 'میتینگ‌های من', 'icon' => 'users', 'tone' => 'info'],
     ];
 
+    /** Types announced to every user (dashboard + notification) while published and not over */
+    public const ANNOUNCED = ['webinar', 'meeting'];
+
+    /** SQL: published, not deleted and not finished yet (alias e) */
+    public static function liveSql(string $a = 'e'): string
+    {
+        return "$a.deleted_at IS NULL AND $a.status = 'active' AND $a.starts_at IS NOT NULL
+                AND DATE_ADD($a.starts_at, INTERVAL $a.duration_minutes MINUTE) >= NOW()";
+    }
+
+    /** Published webinars & meetings that are not over yet, for the dashboard of every user in the audience */
+    public static function announcements(array $u, int $limit = 6): array
+    {
+        [$w, $p] = self::visibleSql($u);
+        $types = "'" . implode("','", self::ANNOUNCED) . "'";
+        return DB::all("SELECT e.*, r.id AS reg_id FROM events e
+                          LEFT JOIN event_registrations r ON r.event_id = e.id AND r.user_id = ? AND r.status = 'registered'
+                         WHERE e.type IN ($types) AND $w AND " . self::liveSql() . "
+                         ORDER BY e.starts_at ASC LIMIT " . max(1, $limit), array_merge([(int)$u['id']], $p));
+    }
+
+    /**
+     * Notify every active user in the audience about published, not-yet-finished webinars/meetings.
+     * Idempotent (one notification per user and event), so it is safe to call after every save and from cron,
+     * which also reaches users added after the event was published.
+     */
+    public static function announce(?int $eventId = null): int
+    {
+        $types = "'" . implode("','", self::ANNOUNCED) . "'";
+        $events = DB::all("SELECT e.* FROM events e WHERE e.type IN ($types) AND " . self::liveSql() . ($eventId ? ' AND e.id = ?' : ''), $eventId ? [$eventId] : []);
+        $n = 0;
+        foreach ($events as $e) {
+            $key = 'event-' . $e['id'];
+            $ts = strtotime($e['starts_at']);
+            $title = self::TYPES[$e['type']]['label'] . ' جدید: ' . $e['title'];
+            $body = jdate($e['starts_at'], 'l j F') . ' ساعت ' . fa(date('H:i', $ts)) . ($e['host_name'] ? ' — ارائه: ' . $e['host_name'] : '') . ($e['summary'] ? "\n" . $e['summary'] : '');
+            $w = "u.deleted_at IS NULL AND u.status = 'active'
+                  AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.user_id = u.id AND n.dedupe_key = ?)";
+            $p = [mb_substr($title, 0, 200), $body, url('/learn/event/' . $e['id']), $key, now(), $key];
+            if ((string)$e['segments'] !== '') { $w .= ' AND FIND_IN_SET(u.segment, ?) > 0'; $p[] = $e['segments']; }
+            if ($e['group_id']) { $w .= ' AND EXISTS (SELECT 1 FROM group_members gm WHERE gm.group_id = ? AND gm.user_id = u.id)'; $p[] = (int)$e['group_id']; }
+            $n += DB::run("INSERT INTO notifications (user_id, type, title, body, link, dedupe_key, created_at)
+                           SELECT u.id, 'event', ?, ?, ?, ?, ? FROM users u WHERE $w", $p)->rowCount();
+        }
+        return $n;
+    }
+
     public static function type(string $t): array
     {
         return self::TYPES[$t] ?? throw new \App\Core\HttpException(404);
