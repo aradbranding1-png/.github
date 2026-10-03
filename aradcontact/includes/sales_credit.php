@@ -91,7 +91,8 @@ function scr_cleanup_tiny_v2(PDO $pdo): void
 /** خالصِ یک مبلغ برای سفارشِ $o (SQL) */
 function sales_net_sql(string $amountExpr, string $o = 'o'): string
 {
-    return "COALESCE(ROUND(($amountExpr) * ($o.total_amount - $o.tax_amount) / NULLIF($o.total_amount, 0)), 0)";
+    // ستون‌ها UNSIGNED اند: تفریق باید SIGNED و حداقل صفر باشد (سفارشی که مالیاتش بیش از جمعش ثبت شده، خطای «out of range» نمی‌دهد)
+    return "COALESCE(ROUND(CAST(($amountExpr) AS DECIMAL(24,2)) * GREATEST(CAST($o.total_amount AS SIGNED) - CAST($o.tax_amount AS SIGNED), 0) / NULLIF($o.total_amount, 0)), 0)";
 }
 
 function sales_payments_ready(PDO $pdo): bool

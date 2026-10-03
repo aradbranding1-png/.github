@@ -143,7 +143,7 @@ if ($ready) {
             $dOrders = $dSplits = $dNames = [];
             if ($dRows) {
                 $__oin = implode(',', array_unique(array_map(static fn($x) => (int) $x['order_id'], $dRows)));
-                foreach ($pdo->query("SELECT o.id, o.order_number, o.created_at, o.decided_at, o.seller_user_id, (o.total_amount - o.tax_amount) order_amt,
+                foreach ($pdo->query("SELECT o.id, o.order_number, o.created_at, o.decided_at, o.seller_user_id, GREATEST(CAST(o.total_amount AS SIGNED) - CAST(o.tax_amount AS SIGNED), 0) order_amt,
                         c.full_name customer_name, c.mobile customer_mobile, s.full_name seller_name,
                         (SELECT GROUP_CONCAT(i.title ORDER BY i.id SEPARATOR '، ') FROM sales_order_items i WHERE i.order_id = o.id) items_txt
                         FROM sales_orders o LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN users s ON s.id = o.seller_user_id WHERE o.id IN ($__oin)") as $__o) {
