@@ -1162,7 +1162,7 @@ function ctr_document(PDO $pdo, array $contract, bool $preview = true): array
 {
     if ($contract['status'] === 'issued' && !empty($contract['rendered_html'])) {
         $ff = json_decode((string) $contract['final_fields_json'], true) ?: [];
-        return ['html' => ctr_fix_lettering((string) $contract['rendered_html']), 'fields' => $ff, 'missing' => [], 'frozen' => true,
+        return ['html' => ctr_single_installment_wording(ctr_fix_lettering((string) $contract['rendered_html']), (string) ($ff['تعداد_قسط'] ?? '')), 'fields' => $ff, 'missing' => [], 'frozen' => true,
                 'invoice' => ctr_invoice_order($pdo, $contract)];
     }
     $data = ctr_attachment_data($pdo, $contract);
@@ -1173,8 +1173,29 @@ function ctr_document(PDO $pdo, array $contract, bool $preview = true): array
     if ($invoice) {
         $body = ctr_body_invoice_wording($body);
     }
-    return ['html' => ctr_render_body($body, $b['fields'], $preview), 'fields' => $b['fields'],
+    return ['html' => ctr_single_installment_wording(ctr_render_body($body, $b['fields'], $preview), (string) ($b['fields']['تعداد_قسط'] ?? '')), 'fields' => $b['fields'],
             'missing' => $b['missing'], 'fin' => $b['fin'], 'frozen' => false, 'settle_raw' => $b['settle_raw'], 'invoice' => $invoice];
+}
+
+/**
+ * پرداخت در «یک» قسط: عبارت‌های چندقسطی جمله‌ی اقساط درست می‌شوند
+ *   «در ۱ (به حروف یک) قسط مساوی ماهیانه به مبلغ … تومان به حروف … تومان در هر ماه» ← «در یک قسط»
+ *   «پرداخت اقساط از تاریخ …»  ← «پرداخت این قسط در تاریخ …»
+ *   «به نحو اقساط به شرح ذیل»  ← «به شرح ذیل»
+ * روی متنِ نهایی (HTML) کار می‌کند؛ پس قراردادهای صادرشده‌ی قبلی هم درست نمایش داده می‌شوند.
+ */
+function ctr_single_installment_wording(string $html, string $count): string
+{
+    if (trim(normalize_digits($count)) !== '1') return $html;
+    $t = '(?:\s|<[^>]*>)*'; // فاصله یا تگ (مقادیرِ پررنگ)
+    $html = preg_replace('/در' . $t . '[۱1]' . $t . '\(' . $t . 'به حروف' . $t . 'یک' . $t . '\)' . $t . 'قسط' . $t . 'مساوی' . $t . 'ماهیانه' . $t . 'به مبلغ.*?تومان' . $t . 'به حروف.*?تومان' . $t . 'در هر ماه/su',
+        'در یک قسط', $html) ?? $html;
+    // اگر جمله‌ی بالا شکلِ دیگری داشت، دست‌کم «ماهیانه» و «در هر ماه» برداشته شوند
+    $html = preg_replace('/(قسط' . $t . ')مساوی' . $t . 'ماهیانه' . $t . '/u', '$1', $html) ?? $html;
+    $html = preg_replace('/' . $t . 'در هر ماه(?=' . $t . 'به همان حساب)/u', '', $html) ?? $html;
+    $html = preg_replace('/پرداخت' . $t . 'اقساط' . $t . 'از' . $t . 'تاریخ/u', 'پرداخت این قسط در تاریخ', $html) ?? $html;
+    $html = preg_replace('/به نحو' . $t . 'اقساط' . $t . 'به شرح ذیل/u', 'به شرح ذیل', $html) ?? $html;
+    return $html;
 }
 
 /** صدور: منجمدکردنِ متن، مقادیر و نسخه‌ی پیش‌فاکتور/شرحِ خدمات */
