@@ -985,7 +985,7 @@ function init(root) {
       setTip(hovered);
     }
     if (tip && hovered) {
-      tip.style.transform = `translate3d(${Math.round(mouseClient.x)}px, ${Math.round(mouseClient.y)}px, 0)`;
+      tip.style.transform = `translate3d(${Math.round(mouseClient.x) + 18}px, ${Math.round(mouseClient.y) + 18}px, 0)`;
     }
   }
   function unhover() {
@@ -1130,7 +1130,7 @@ function init(root) {
     labels.forEach((lb) => {
       project(lb.local, scr);
       const o = MathUtils.smoothstep(scr.f, 0.15, 0.45);
-      lb.el.style.transform = `translate3d(${scr.x.toFixed(1)}px, ${scr.y.toFixed(1)}px, 0)`;
+      lb.el.style.transform = `translate3d(${scr.x.toFixed(1)}px, ${scr.y.toFixed(1)}px, 0) translate(-50%, -50%)`; // centred here, not with CSS translate (old TV browsers)
       lb.el.style.opacity = o.toFixed(3);
     });
   }

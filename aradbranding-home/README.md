@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.18.2)
+# aradbranding.app — Home page redesign (v1.18.3)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -312,3 +312,10 @@ The source is in `src/trade-globe`.
 ## v1.18.2 (incremental package)
 
 `dist/aradbranding-1.18.2-update.zip` adds a lit-pixel probe after about 90 frames: a globe that renders black falls back to the poster. It also adds a `?globe=debug` diagnostics overlay on the home page.
+
+## v1.18.3 (incremental package)
+
+`dist/aradbranding-1.18.3-update.zip` is the real fix for the black hero on Android TV. Old Chromium (<87) ignores `inset`, so the globe stage was 0×0.
+- `inset` is expanded to longhands in `trade-home.css`, `auth.css`, `app.css` and `panel-theme.css`.
+- Logical `inset-inline-*` becomes `right`/`left` in the always-RTL `trade-home.css` and `auth.css`.
+- The `translate` property is replaced by `transform`. The label and tip offsets are now set in `trade-globe.js`.

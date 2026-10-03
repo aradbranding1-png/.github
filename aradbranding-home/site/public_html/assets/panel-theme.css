@@ -199,7 +199,7 @@ body.panel-ui::before {
 .nav-drawer > summary { list-style: none; cursor: pointer; }
 .nav-drawer > summary::-webkit-details-marker { display: none; }
 .nav-drawer > summary svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.nav-drawer[open]::before { content: ""; position: fixed; inset: 0; z-index: 69; background: rgba(2, 9, 20, .55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.nav-drawer[open]::before { content: ""; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 69; background: rgba(2, 9, 20, .55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 .drawer-panel { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 70; width: min(300px, calc(100vw - 44px)); display: flex; flex-direction: column; gap: 8px; padding: 16px 12px; box-shadow: var(--float); animation: drawer-in .26s var(--t) both; }
 @keyframes drawer-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 .drawer-head { display: flex; align-items: center; gap: 10px; padding: 4px 6px 12px; border-bottom: 1px solid rgba(255, 255, 255, .08); }
@@ -428,7 +428,7 @@ html.drawer-open .bottom-nav, html.drawer-open .fab { display: none; }
 .ad-donut-seg:hover { stroke-width: 17; }
 .ad-d-blue { stroke: var(--blue-3); } .ad-d-gold { stroke: var(--gold-2); } .ad-d-navy { stroke: var(--navy-700); } .ad-d-cyan { stroke: var(--blue-1); }
 :root[data-theme="dark"] .ad-d-navy { stroke: #9DB1C7; }
-.ad-donut-c { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; line-height: 1.3; }
+.ad-donut-c { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; place-content: center; text-align: center; line-height: 1.3; }
 .ad-donut-c b { font-size: 24px; font-weight: 900; }
 .ad-donut-c small { font-size: 11px; color: var(--muted); }
 .ad-mix-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -492,7 +492,7 @@ html.drawer-open .bottom-nav, html.drawer-open .fab { display: none; }
   background: radial-gradient(240px 140px at 100% 0%, rgba(243, 198, 91, .22), transparent 70%), radial-gradient(260px 160px at 0% 100%, rgba(0, 140, 255, .3), transparent 70%), linear-gradient(135deg, #0B2035, #061421 60%, #020914);
   border: 1px solid rgba(243, 198, 91, .25); box-shadow: 0 18px 40px -20px rgba(2, 9, 20, .7); transition: transform var(--t), box-shadow var(--t);
 }
-.ad-promo::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, transparent 0 22px, rgba(255, 255, 255, .025) 22px 23px); pointer-events: none; }
+.ad-promo::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: repeating-linear-gradient(115deg, transparent 0 22px, rgba(255, 255, 255, .025) 22px 23px); pointer-events: none; }
 .ad-promo:hover { transform: translateY(-2px); box-shadow: 0 24px 50px -20px rgba(2, 9, 20, .8), 0 0 30px -10px rgba(243, 198, 91, .5); }
 .ad-promo-ic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; border: 1px solid rgba(243, 198, 91, .5); color: var(--gold-1); background: rgba(243, 198, 91, .08); flex: none; }
 .ad-promo-ic .icon { width: 26px; height: 26px; }
@@ -794,7 +794,7 @@ html.drawer-open .bottom-nav, html.drawer-open .fab { display: none; }
 
 /* ---- 1.15: کشف — multi-filter finder and compact opportunity lists ---- */
 .finder { position: relative; z-index: 20; display: grid; gap: 14px; padding: 18px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); overflow: visible; }
-.finder::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; border-radius: var(--r-card) var(--r-card) 0 0; background: var(--edge); }
+.finder::before { content: ""; position: absolute; top: 0; right: 0; bottom: auto; left: 0; height: 3px; border-radius: var(--r-card) var(--r-card) 0 0; background: var(--edge); }
 .finder-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .finder-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; }
 .finder-head h2 .icon { width: 20px; height: 20px; color: var(--gold-text, var(--gold)); }
