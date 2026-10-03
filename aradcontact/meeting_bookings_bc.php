@@ -57,8 +57,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['set_result'])) {
                         $pdo->prepare("UPDATE customers SET status = 'جلسه برگزار شد', meeting_held_at = NOW() WHERE id = ? AND status <> 'جلسه برگزار شد'")
                             ->execute([$booking['customer_id']]);
 
+                        // اگر بعد از رزروِ این جلسه مشتری «دستی» به کسِ دیگری ارجاع شده، پرونده نزدِ همان گیرنده می‌ماند
+                        // (قبلاً ثبتِ نتیجه‌ی جلسه پرونده را بی‌صدا به برگزارکننده برمی‌گرداند و گیرنده دیگر نمی‌توانست پیگیری/فاکتور ثبت کند)
+                        $__refAfter = 0;
+                        try {
+                            $__ra = $pdo->prepare("SELECT COUNT(*) FROM customer_referrals WHERE customer_id = ? AND created_at >= ? AND to_user_id <> ?
+                                AND (source IS NULL OR source IN ('manual','bulk','peer','phone_conflict'))");
+                            $__ra->execute([$booking['customer_id'], (string) $booking['created_at'], (int) $booking['staff_id']]);
+                            $__refAfter = (int) $__ra->fetchColumn();
+                        } catch (Throwable $e) {}
+                        if ($__refAfter > 0 && (int) $customer['owner_user_id'] !== (int) $booking['staff_id']) {
+                            log_booking_history($pdo, $bookingId, 'note', 'مشتری بعد از رزروِ این جلسه دستی به کارشناسِ دیگری ارجاع شده؛ مسئولیتِ پرونده نزدِ گیرنده‌ی ارجاع ماند.', (int) $user['id']);
+                        }
                         // انتقال مسئولیت مشتری از نیروی A به کارشناس برگزارکننده — فقط اینجا، فقط یه‌بار، و فقط اگه لازم باشه
-                        if ((int) $customer['owner_user_id'] !== (int) $booking['staff_id']) {
+                        if ($__refAfter === 0 && (int) $customer['owner_user_id'] !== (int) $booking['staff_id']) {
                             $oldOwnerId = (int) $customer['owner_user_id'];
                             $pdo->prepare('UPDATE customers SET owner_user_id = ? WHERE id = ?')->execute([$booking['staff_id'], $booking['customer_id']]);
                             $pdo->prepare('UPDATE meeting_bookings SET responsibility_transferred = 1 WHERE id = ?')->execute([$bookingId]);

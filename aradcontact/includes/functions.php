@@ -1152,12 +1152,90 @@ function referral_source_label(string $source): string
     return $labels[$source] ?? 'نامشخص';
 }
 
+/**
+ * ارجاعِ دستی = انتقالِ «کاملِ» پرونده به گیرنده تا بتواند پیگیری/فاکتور ثبت کند و مشتری در «پیگیری مشتریان»ش بیاید:
+ *   - گیرنده کارشناسِ اصلیِ (primary) پرونده می‌شود (مدلِ چندکارشناسه)
+ *   - پرونده‌های دیگرِ همین شخص (همان شماره/کدِ ملی) که نزدِ ارجاع‌دهنده بودند هم منتقل می‌شوند
+ *   - اگر مشتری در Box باز است، از Box خارج می‌شود (تا کسِ دیگری برش ندارد)
+ */
+/**
+ * یک‌بار: پرونده‌هایی که بعد از «ارجاعِ دستی» با ثبتِ نتیجه‌ی جلسه («برگزار شد») بی‌صدا به برگزارکننده برگشته بودند،
+ * به گیرنده‌ی همان ارجاع برمی‌گردند — فقط اگر از آن به بعد پرونده جابه‌جای دیگری نشده باشد.
+ */
+function referral_meeting_steal_fix_v1(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $flag = __DIR__ . '/../storage/.referral_meeting_steal_fix_v1';
+    if (is_file($flag)) return;
+    @file_put_contents($flag, date('c'));
+    try {
+        // انتقال‌های «بعد از جلسه»: زمانِ انتقال = رویدادِ responsibility_transferred
+        $rows = $pdo->query("SELECT b.id bid, b.customer_id, b.staff_id, b.created_at booked_at, MAX(h.created_at) moved_at
+            FROM meeting_bookings b JOIN meeting_booking_history h ON h.booking_id = b.id AND h.event_type = 'responsibility_transferred'
+            WHERE b.status = 'held' GROUP BY b.id, b.customer_id, b.staff_id, b.created_at")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $cur = $pdo->prepare('SELECT owner_user_id FROM customers WHERE id = ?');
+        $ref = $pdo->prepare("SELECT * FROM customer_referrals WHERE customer_id = ? AND created_at >= ? AND created_at <= ? AND to_user_id <> ?
+            AND (source IS NULL OR source IN ('manual','bulk','peer','phone_conflict')) ORDER BY created_at DESC, id DESC LIMIT 1");
+        $later = $pdo->prepare("SELECT (SELECT COUNT(*) FROM customer_referrals WHERE customer_id = ? AND created_at > ?)
+            + (SELECT COUNT(*) FROM customer_handoffs WHERE customer_id = ? AND created_at > ? AND COALESCE(ref_key, '') <> ?)");
+        $act = $pdo->prepare('SELECT is_active FROM users WHERE id = ?');
+        foreach ($rows as $r) {
+            $cid = (int) $r['customer_id'];
+            $cur->execute([$cid]);
+            if ((int) $cur->fetchColumn() !== (int) $r['staff_id']) continue;        // از آن به بعد جابه‌جا شده
+            $ref->execute([$cid, $r['booked_at'], $r['moved_at'], (int) $r['staff_id']]);
+            $rf = $ref->fetch(PDO::FETCH_ASSOC);
+            if (!$rf) continue;                                                     // ارجاعِ دستی بینِ رزرو و ثبتِ نتیجه نبوده
+            $later->execute([$cid, $r['moved_at'], $cid, $r['moved_at'], 'mb' . (int) $r['bid']]);
+            if ((int) $later->fetchColumn() > 0) continue;                         // بعد از آن هم دستی جابه‌جا شده
+            $act->execute([(int) $rf['to_user_id']]);
+            if ((int) $act->fetchColumn() !== 1) continue;
+            $pdo->prepare('UPDATE customers SET owner_user_id = ?, new_customer_notified = 0 WHERE id = ?')->execute([(int) $rf['to_user_id'], $cid]);
+            try { if (function_exists('get_or_create_relation')) get_or_create_relation($pdo, $cid, (int) $rf['to_user_id'], 'manual_link', true); } catch (Throwable $e) {}
+            $pdo->prepare('INSERT INTO customer_activity_logs (customer_id, user_id, activity_type, description) VALUES (?,?,?,?)')
+                ->execute([$cid, null, 'referral', 'اصلاحِ خودکار: پرونده بعد از ارجاعِ دستی با ثبتِ نتیجه‌ی جلسه به برگزارکننده برگشته بود؛ به گیرنده‌ی ارجاع برگردانده شد.']);
+        }
+    } catch (Throwable $e) {
+        error_log('referral_meeting_steal_fix_v1: ' . $e->getMessage());
+    }
+}
+
+function refer_customer_whole_file(PDO $pdo, int $customerId, int $fromUserId, int $toUserId, int $referredBy): void
+{
+    try { if (function_exists('get_or_create_relation')) get_or_create_relation($pdo, $customerId, $toUserId, 'manual_link', true); } catch (Throwable $e) {}
+    try {
+        if (!function_exists('cc_person_ids') && is_file(__DIR__ . '/customer_credit.php')) require_once __DIR__ . '/customer_credit.php';
+        $ids = function_exists('cc_person_ids') ? array_map('intval', cc_person_ids($pdo, $customerId) ?: []) : [];
+        $others = array_values(array_diff($ids, [$customerId]));
+        if ($others && $fromUserId > 0) {
+            $in = implode(',', $others);
+            $st = $pdo->prepare("SELECT id FROM customers WHERE id IN ($in) AND owner_user_id = ? AND COALESCE(contact_type, 'customer') = 'customer'");
+            $st->execute([$fromUserId]);
+            foreach ($st->fetchAll(PDO::FETCH_COLUMN) ?: [] as $oid) {
+                $pdo->prepare('UPDATE customers SET owner_user_id = ?, new_customer_notified = 0 WHERE id = ?')->execute([$toUserId, (int) $oid]);
+                try { get_or_create_relation($pdo, (int) $oid, $toUserId, 'manual_link', true); } catch (Throwable $e) {}
+                $pdo->prepare('INSERT INTO customer_activity_logs (customer_id, user_id, activity_type, description) VALUES (?,?,?,?)')
+                    ->execute([(int) $oid, $referredBy, 'referral', 'همراهِ پرونده‌ی اصلیِ همین شخص (#' . $customerId . ') به گیرنده‌ی ارجاع منتقل شد.']);
+            }
+        }
+        // خروج از Boxِ باز (همین شخص)
+        $pk = function_exists('ps_person_key') ? ps_person_key($pdo, $customerId) : $customerId;
+        $box = $pdo->prepare("UPDATE ps_box_items SET status = 'cancelled', note = ? WHERE status = 'open' AND (person_key = ? OR customer_id = ?)");
+        $box->execute(['خروج از Box: ارجاعِ دستی به کارشناس', $pk, $customerId]);
+    } catch (Throwable $e) {
+        error_log('refer_customer_whole_file: ' . $e->getMessage());
+    }
+}
+
 function refer_customer(PDO $pdo, int $customerId, int $fromUserId, int $toUserId, int $referredBy, string $source = 'manual'): void
 {
     if ($fromUserId === $toUserId) return;
     $pdo->prepare("UPDATE customers SET owner_user_id = ?, new_customer_notified = 0, status = 'جدید', next_followup_date = CURDATE() WHERE id = ?")
         ->execute([$toUserId, $customerId]);
     referral_log($pdo, $customerId, $fromUserId, $toUserId, $referredBy, $source); // مثلِ قبل در customer_referrals (+ نوع)
+    refer_customer_whole_file($pdo, $customerId, $fromUserId, $toUserId, $referredBy);
     try {
         $fromNameStmt = $pdo->prepare('SELECT full_name FROM users WHERE id = ? LIMIT 1');
         $fromNameStmt->execute([$fromUserId]);
@@ -1200,7 +1278,7 @@ function referral_log_ready(PDO $pdo): bool
     if ($ok !== null) return $ok;
     $flag = __DIR__ . '/../storage/.referral_log_v1';
     try {
-        if (is_file($flag)) return $ok = true;
+        if (is_file($flag)) { $ok = true; referral_meeting_steal_fix_v1($pdo); return true; }
         $cols = $pdo->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'customer_referrals'")->fetchAll(PDO::FETCH_COLUMN) ?: [];
         if (!$cols) return $ok = false;
         if (!in_array('source', $cols, true)) $pdo->exec('ALTER TABLE customer_referrals ADD COLUMN source VARCHAR(30) NULL DEFAULT NULL');
