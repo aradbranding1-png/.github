@@ -163,7 +163,7 @@ $rxApplicant = $rxCc ? rx_cc_stats($pdo, $rangeFrom, $rangeTo) : [];
     }
 }
 
-$teamNameDisplay = $team ? ($team['name'] !== null && $team['name'] !== '' ? $team['name'] : 'تیم ' . to_persian_digits((string) $team['id'])) : null;
+$teamNameDisplay = $team ? team_display_name($team['name'] ?? null, (int) $team['id']) : null;
 
 $pageTitle = 'آمار تیم من';
 require_once __DIR__ . '/includes/layout_top.php';

@@ -699,9 +699,13 @@ function leader_supervises_owner(PDO $pdo, array $user, int $ownerId): bool
     return (bool) $stmt->fetchColumn();
 }
 
+require_once __DIR__ . '/team_names.php';
+
+/** نامِ نمایشیِ تیم در گزارش‌ها: «تیم رویدادهای تجاری» (نه «تیم ۱۰۶»)؛ فقط اگر نامی تعریف نشده باشد شماره نشان داده می‌شود */
 function team_display_name(?string $name, int $id): string
 {
-    return $name !== null && $name !== '' ? ($name . ' (تیم ' . to_persian_digits((string) $id) . ')') : ('تیم ' . to_persian_digits((string) $id));
+    $n = team_config_name($id, $name);
+    return $n !== '' ? 'تیم ' . $n : 'تیم ' . to_persian_digits((string) $id);
 }
 
 function is_super_admin(array $user): bool { return !empty($user['is_super_admin']); }

@@ -41,6 +41,7 @@ function tsr_teams(PDO $pdo): array
     static $cache = null;
     if ($cache !== null) return $cache;
     $cache = [];
+    if (function_exists('team_names_sync_v1')) team_names_sync_v1($pdo);
     try {
         foreach ($pdo->query('SELECT t.id, t.name, t.leader_user_id, u.full_name AS leader_name FROM teams t LEFT JOIN users u ON u.id = t.leader_user_id ORDER BY t.id')->fetchAll(PDO::FETCH_ASSOC) ?: [] as $t) {
             $cache[(int) $t['id']] = [

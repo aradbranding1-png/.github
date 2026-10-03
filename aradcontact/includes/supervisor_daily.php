@@ -1,61 +1,72 @@
 <?php
 /**
  * ═══════════════════════════════════════════════════════════════════════
- *  گزارشِ روزانه‌ی A4ِ سرپرست — داده‌ها
+ *  گزارشِ روزانه‌ی A4ِ سرپرست — موتورِ عمومیِ گزارشِ تیم‌ها (داده‌ها)
  * ═══════════════════════════════════════════════════════════════════════
- *  A1 نیروی انسانی (روزِ انتخاب‌شده)        A2 روندِ توسعه/عملیات/ستادی از اولِ ماه تا همان روز
- *  B1 خروجیِ فروش (روزِ انتخاب‌شده)          B2 روندِ آورده (پ جدید/قدیم/کل) + روندِ مذاکره/جدید/قدیم
- *  C1 خدمات (روزِ انتخاب‌شده)               C2 روندِ هر خدمت
+ *  A1 نیروی انسانیِ روز            A2 روندِ نیروی انسانی (اولِ ماه تا تاریخِ گزارش)
+ *  B1 عملکردِ تجاریِ روز            B2 روندِ عملکردِ تجاری
+ *  C1 شاخص‌های اختصاصیِ تیم در روز   C2 روندِ شاخص‌های اختصاصیِ تیم
+ *
+ *  report_date: تاریخِ گزارش متغیر است (ورودیِ صفحه)؛ بخش‌های ۱ همان روز، نمودارهای ۲ از اولِ ماه تا همان روز.
+ *
+ *  تیم = کلِ نیروهای تحتِ مدیریتِ سرپرست (حضوری، غیرحضوری/دورکار و بقیه) + خودِ سرپرست — نه فقط ثبت‌های سرپرست.
+ *  مسیر: سرپرست ← تیمِ او ← اعضای تیم ← داده‌های ثبت‌شده‌ی همه‌ی اعضا ← تجمیع.
  *
  *  تعریف‌ها (یک جا، برای همه‌ی بخش‌ها):
- *   - تیم              : نیروهای فعالِ تیم + خودِ سرپرست (همان تعریفِ «فروشِ تیم» در گزارشِ سرپرست)
- *   - نیروی انسانی      : نیروهای فعالِ تیم (بدونِ سرپرست) به تفکیکِ «گروهِ شغلی»؛ هر روز یک عکس (snapshot) ذخیره می‌شود.
- *                         برای روزی که عکس ندارد، از نیروهای فعلی‌ای که تا آن روز در سامانه ثبت شده بودند تخمین زده می‌شود.
- *   - لید              : مشتری‌های یکتایی (نه همکار/خانواده) که تیم در آن روز برایشان پیگیری/تماس ثبت کرده
- *   - مذاکره            : مشتری‌های یکتایی که در آن روز جلسه‌شان «برگزار شد» یا پیگیری‌شان به «جلسه برگزار شد / در انتظار تصمیم / در انتظار پرداخت» رسید
- *   - جدید / قدیم        : سفارش‌های تأییدشده (تاریخِ تأییدِ مالی) با فروشنده‌ی تیم؛ «جدید» = اولین خریدِ تأییدشده‌ی آن شخص (۳۶۰)، بقیه «قدیم»
- *   - پ (آورده)         : فروشِ خالص با همان تعریفِ «گزارش فروش» (پیش‌پرداخت + قسط‌های تأییدشده، هر کدام روزِ تأییدش) — همان عددِ «فروشِ تیم»
- *   - قانونِ تعداد       : توسعه‌ی لازم = ⌈عملیات ÷ ۸⌉ + ⌈ستادی ÷ ۲⌉ ؛ ✓ اگر توسعه ≥ توسعه‌ی لازم
- *   - قانونِ پ          : حقوقِ روزانه = حقوقِ ثابتِ ماهانه ÷ ۲۴؛ هدفِ روزانه = مجموعِ حقوقِ روزانه‌ی تیم × ۱۰؛
- *                         در بازه‌ی گزارش (اولِ ماه تا روزِ انتخاب‌شده) هدف = هدفِ روزانه × تعدادِ روزهای کاری (بدونِ جمعه)؛
- *                         ✓ اگر آورده‌ی همان بازه ≥ هدف. حقوقِ ثابت: ستونِ users.monthly_salary، وگرنه آخرین «حقوق»ِ ثبت‌شده در پرداخت‌ها.
- *   - خدمات            : هر خدمت یا «خودکار» از داده‌ی سامانه شمرده می‌شود، یا سرپرست/مدیر عددِ روز را ثبت می‌کند؛ عددِ ثبت‌شده بر خودکار مقدم است.
+ *   - لید      : هر فردی (مشتری، نه همکار/خانواده) که در آن روز با تیم در ارتباط قرار گرفته، بدونِ توجه به نتیجه:
+ *                پیگیری/تماسِ ثبت‌شده (پاسخ داد، پاسخ نداد، منصرف شد، هر وضعیتی)، فردی که همان روز به سامانه اضافه شده،
+ *                جلسه‌ی برگزارشده. ملاک ثبتِ ارتباط است، نه موفقیتِ آن.
+ *   - مذاکره    : از همان لیدها، کسانی که پاسخ داده‌اند و گفت‌وگو ثبت شده: تماسِ برقرار (بیش از حدِ «برقرار»)،
+ *                پیگیریِ دستیِ غیر از «عدم پاسخ»، یا جلسه‌ی برگزارشده.
+ *   - پ ج / جدید: پولِ «اولین پرداختِ» یک مشتری (اولین پولِ تأییدشده‌ی آن شخص در کلِ سامانه) / تعدادِ همین مشتریان
+ *   - پ ق / قدیم: هر پولِ دیگری (مشتری قبلاً پول داده؛ قسط‌ها، خریدِ دوم …) / تعدادِ همین مشتریان
+ *   - پ کل      : پ ج + پ ق — همان تعریفِ «گزارش فروش» (خالص، هر پرداخت روزِ تأییدش، به نامِ صاحبِ سهم)
+ *   - قانونِ تعداد: توسعه‌ی لازم = ⌈عملیات ÷ ۸⌉ + ⌈ستادی ÷ ۲⌉ ؛ ✓ اگر توسعه ≥ توسعه‌ی لازم
+ *   - قانونِ پ  : حقوقِ روزانه‌ی هر نیرو = حقوقِ ثابتِ ماهانه ÷ ۲۴ ؛ هدفِ روزانه = مجموعِ حقوقِ روزانه‌ی تیم × ۱۰ ؛
+ *                هدفِ دوره = هدفِ روزانه × روزهای دوره (اولِ ماه تا تاریخِ گزارش، بدونِ جمعه) ؛ ✓ اگر پ کلِ دوره ≥ هدف.
+ *                حقوقِ ثابت = custom_fixed_salary اگر وارد شده، وگرنه پیش‌فرضِ نوعِ نیرو (سرپرست / حضوری / غیرحضوری) — قابلِ تنظیم.
+ *   - C1/C2    : شاخص‌های هر تیم از تنظیماتِ همان تیم (team_metrics)؛ مقدارِ روز از team_metric_values
+ *                (یا شمارشِ خودکار، اگر شاخص منبعِ خودکار دارد؛ عددِ ثبت‌شده بر خودکار مقدم است).
  */
 
 function sd_ready(PDO $pdo): bool
 {
     static $ok = null;
     if ($ok !== null) return $ok;
-    $flag = __DIR__ . '/../storage/.supervisor_daily_v1';
+    if (function_exists('team_names_sync_v1')) team_names_sync_v1($pdo);
+    $flag = __DIR__ . '/../storage/.supervisor_daily_v2';
     try {
         if (is_file($flag)) return $ok = true;
         $cols = $pdo->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'")->fetchAll(PDO::FETCH_COLUMN) ?: [];
-        if (!in_array('monthly_salary', $cols, true)) $pdo->exec('ALTER TABLE users ADD COLUMN monthly_salary BIGINT UNSIGNED NULL DEFAULT NULL');
+        if (!in_array('custom_fixed_salary', $cols, true)) $pdo->exec('ALTER TABLE users ADD COLUMN custom_fixed_salary BIGINT UNSIGNED NULL DEFAULT NULL');
+        // حقوقی که قبلاً در «حقوقِ ثابتِ ماهانه» ثبت شده بود ← حقوقِ سفارشی
+        if (in_array('monthly_salary', $cols, true)) $pdo->exec('UPDATE users SET custom_fixed_salary = monthly_salary WHERE custom_fixed_salary IS NULL AND monthly_salary > 0');
         $pdo->exec("CREATE TABLE IF NOT EXISTS sup_team_daily (
             team_id INT UNSIGNED NOT NULL, day DATE NOT NULL,
             dev INT NOT NULL DEFAULT 0, ops INT NOT NULL DEFAULT 0, staff INT NOT NULL DEFAULT 0, unknown INT NOT NULL DEFAULT 0, total INT NOT NULL DEFAULT 0,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (team_id, day)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        $pdo->exec("CREATE TABLE IF NOT EXISTS sup_service_types (
+        $pdo->exec("CREATE TABLE IF NOT EXISTS sd_settings (
+            k VARCHAR(40) NOT NULL PRIMARY KEY, v VARCHAR(255) NOT NULL,
+            updated_by INT UNSIGNED NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS team_metrics (
             id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            title VARCHAR(120) NOT NULL, source VARCHAR(30) NOT NULL DEFAULT 'manual',
-            sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            team_id INT UNSIGNED NOT NULL, metric_name VARCHAR(150) NOT NULL, metric_key VARCHAR(60) NOT NULL,
+            source VARCHAR(30) NOT NULL DEFAULT 'manual', sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_tm_key (team_id, metric_key), KEY idx_tm_team (team_id, is_active, sort_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        $pdo->exec("CREATE TABLE IF NOT EXISTS sup_service_daily (
-            team_id INT UNSIGNED NOT NULL, day DATE NOT NULL, service_id INT UNSIGNED NOT NULL,
-            cnt INT UNSIGNED NOT NULL DEFAULT 0, entered_by INT UNSIGNED NULL,
+        $pdo->exec("CREATE TABLE IF NOT EXISTS team_metric_values (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            team_id INT UNSIGNED NOT NULL, metric_id INT UNSIGNED NOT NULL, report_date DATE NOT NULL,
+            value DECIMAL(14,2) NOT NULL DEFAULT 0, entered_by INT UNSIGNED NULL,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (team_id, day, service_id), KEY idx_ssd_day (day)
+            UNIQUE KEY uq_tmv (team_id, metric_id, report_date), KEY idx_tmv_date (report_date)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        if (!(int) $pdo->query('SELECT COUNT(*) FROM sup_service_types')->fetchColumn()) {
-            $ins = $pdo->prepare('INSERT INTO sup_service_types (title, source, sort_order) VALUES (?,?,?)');
-            foreach ([['ارتباط با تاجر', 'manual'], ['میتینگ B', 'meeting_b'], ['پاسخ تیکت', 'manual'], ['مکاتبه رسمی', 'letters'],
-                      ['جلسه حضوری استخدام', 'inperson_hire'], ['میتینگ عمومی تاجران', 'manual']] as $i => [$t, $src]) {
-                $ins->execute([$t, $src, ($i + 1) * 10]);
-            }
-        }
+        sd_seed_metrics($pdo);
+        sd_migrate_services_v2($pdo);
         @file_put_contents($flag, date('c'));
         return $ok = true;
     } catch (Throwable $e) {
@@ -64,8 +75,72 @@ function sd_ready(PDO $pdo): bool
     }
 }
 
-/** منبعِ شمارشِ خودکارِ هر خدمت */
-function sd_service_sources(): array
+/** شاخص‌های پیش‌فرضِ C1 هر تیم (فقط برای تیمی که هنوز هیچ شاخصی ندارد ثبت می‌شود؛ بعد از آن از صفحه‌ی گزارش قابلِ تغییر است) */
+function sd_default_metrics(): array
+{
+    return [
+        106 => ['ارتباط با تاجر', 'میتینگ B', 'پاسخ تیکت', 'مکاتبه رسمی', 'جلسه حضوری استخدام', 'میتینگ آنلاین'],
+        109 => ['جذب نماینده داخلی', 'جذب نماینده خارجی', 'تعداد دفتر خارجی جدید', 'تعداد دفتر داخلی جدید', 'شوروم داخلی جدید', 'شوروم خارجی جدید',
+                'تجارت داخلی', 'تجارت خارجی', 'تاجر متصل به داخلی', 'تاجر متصل به خارجی', 'جلسه استخدامی', 'جلسه B'],
+        102 => ['تعداد رایزنی', 'تعداد مذاکره', 'تعداد قرارداد تجارت', 'تعداد انجام عملیات بازرگانی', 'تماس با تاجر', 'ارتباط با تاجر در فضای مجازی'],
+        107 => ['شروع مذاکره با مشتری داخلی', 'شروع مذاکره با مشتری خارجی', 'پیگیری مذاکره موجود داخلی', 'پیگیری مذاکره موجود خارجی',
+                'تجارت انجام شده داخلی', 'تجارت انجام شده خارجی', 'ارتباط با تاجران', 'مذاکره مجازی', 'میتینگ خارجی', 'میتینگ B', 'ارتباط با نمایندگان خارجی'],
+        115 => ['تعداد تولید محتوا تجارتخانه', 'تعداد تولید محتوا سایت تاجر', 'تعداد راه‌اندازی سایت', 'تیک', 'نظارت محتوا',
+                'تولید محتوا تجارتخانه معوقه', 'تولید محتوا سایت تاجر معوقه', 'طراحی سایت معوقه'],
+        112 => ['میتینگ استخدام', 'میتینگ B', 'پیگیری نماینده خارجی', 'پاسخگویی تیکت', 'تماس با تاجر', 'انتصاب سمت', 'جلسه حضوری برای استخدام'],
+        104 => ['تاجر به تامین رسید', 'بار ارسال شده', 'تامین واقعی جدید انجام شده', 'استعلام لجستیک داده شده', 'میتینگ استخدام',
+                'جلسه حضوری برای استخدام', 'پاسخ به تیکت', 'تماس با تاجر', 'جلسه حضوری با تاجر', 'ارتباط با شرکت‌های حمل'],
+        110 => ['تعداد پیشنهادهای تجاری', 'تعداد درخواست آمده', 'تعداد ارجاع موفق', 'تعداد تجارت انجام شده خارجی', 'ارائه بانک ارتباطات داخلی به تاجر',
+                'میتینگ استخدام', 'میتینگ B', 'ایجاد بانک جدید', 'پاسخ به تیکت', 'مطالبات', 'پیگیری مشتری', 'بارگذاری پیشنهاد روی سایت', 'معوقه'],
+        103 => ['تعداد نیرو', 'گزارش کار', 'پاسخگویی تیکت', 'تماس تلفنی با نیروی دورکار', 'تماس تلفنی با تاجر', 'میتینگ استخدام', 'جلسه حضوری استخدام'],
+        119 => ['لوگو', 'کارت ویزیت', 'پاکت نامه', 'سربرگ', 'کاتالوگ', 'کمپانی پروفایل', 'پاسخ تیکت', 'پیگیری مطالبات', 'معوقه'],
+        105 => ['تماس‌های پشتیبانی تجاری', 'تماس‌های مشاوره تجاری', 'تماس مشاوره انتخاب محصول', 'تیکت‌های پاسخ داده شده', 'مطالبات پیگیری شده',
+                'تماس‌های مشاوره سیستم‌سازی', 'جلسه B', 'بستن فاکتور و ارسال به مالی'],
+        101 => ['چک کامنت', 'افزایش امتیاز تاجران', 'پاسخ به تیکت', 'پیگیری و انتشار استوری', 'پیگیری مطالبه تاجران', 'انتشار خبر', 'انتشار نظرسنجی',
+                'جلسه حضوری برای استخدام', 'ارتباط با مشتری', 'تولید محتوا در سامانه', 'خدمات اکانت سامانه آموزشی', 'میتینگ آموزشی'],
+        108 => ['پاسخگویی به تیکت‌های پیشنهادات و انتقادات', 'میتینگ استخدام'],
+        // ۱۱۷ (تیم استخدام) و ۱۱۸ (قرارداد و مالی): فعلاً شاخصی تعریف نشده — از صفحه‌ی گزارش اضافه می‌شود
+    ];
+}
+
+/** منبعِ پیش‌فرضِ یک شاخص از روی نامش (فقط موارد بدیهی؛ بقیه دستی) */
+function sd_guess_source(string $name): string
+{
+    if (in_array($name, ['میتینگ B', 'جلسه B'], true)) return 'meeting_b';
+    if (in_array($name, ['جلسه حضوری استخدام', 'جلسه حضوری برای استخدام'], true)) return 'inperson_hire';
+    if ($name === 'مکاتبه رسمی') return 'letters';
+    return 'manual';
+}
+
+function sd_seed_metrics(PDO $pdo): void
+{
+    $has = $pdo->prepare('SELECT COUNT(*) FROM team_metrics WHERE team_id = ?');
+    $ins = $pdo->prepare('INSERT IGNORE INTO team_metrics (team_id, metric_name, metric_key, source, sort_order) VALUES (?,?,?,?,?)');
+    foreach (sd_default_metrics() as $tid => $names) {
+        $has->execute([$tid]);
+        if ((int) $has->fetchColumn() > 0) continue;
+        foreach (array_values($names) as $i => $n) $ins->execute([$tid, $n, sprintf('m%02d', $i + 1), sd_guess_source($n), ($i + 1) * 10]);
+    }
+}
+
+/** یک‌بار: عددهای ثبت‌شده در «خدماتِ» قبلی (یک فهرست برای همه) ← شاخصِ هم‌نامِ همان تیم */
+function sd_migrate_services_v2(PDO $pdo): void
+{
+    try {
+        $rows = $pdo->query('SELECT d.team_id, d.day, d.cnt, d.entered_by, t.title FROM sup_service_daily d JOIN sup_service_types t ON t.id = d.service_id')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return; // جدولِ قبلی وجود ندارد
+    }
+    $find = $pdo->prepare('SELECT id FROM team_metrics WHERE team_id = ? AND metric_name = ? LIMIT 1');
+    $ins = $pdo->prepare('INSERT IGNORE INTO team_metric_values (team_id, metric_id, report_date, value, entered_by) VALUES (?,?,?,?,?)');
+    foreach ($rows as $r) {
+        $find->execute([(int) $r['team_id'], (string) $r['title']]);
+        if ($mid = (int) $find->fetchColumn()) $ins->execute([(int) $r['team_id'], $mid, $r['day'], (int) $r['cnt'], $r['entered_by']]);
+    }
+}
+
+/** منبعِ شمارشِ خودکارِ هر شاخص (هر شاخصِ جدید می‌تواند یکی از این‌ها باشد؛ «دستی» = سرپرست عددِ روز را ثبت می‌کند) */
+function sd_metric_sources(): array
 {
     return [
         'manual' => 'دستی (سرپرست ثبت می‌کند)',
@@ -77,10 +152,44 @@ function sd_service_sources(): array
     ];
 }
 
-function sd_service_types(PDO $pdo, bool $activeOnly = true): array
+/** شاخص‌های C1ِ یک تیم */
+function sd_metrics(PDO $pdo, int $teamId, bool $activeOnly = true): array
 {
-    if (!sd_ready($pdo)) return [];
-    return $pdo->query('SELECT * FROM sup_service_types' . ($activeOnly ? ' WHERE is_active = 1' : '') . ' ORDER BY sort_order, id')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    if (!sd_ready($pdo) || $teamId <= 0) return [];
+    $st = $pdo->prepare('SELECT * FROM team_metrics WHERE team_id = ?' . ($activeOnly ? ' AND is_active = 1' : '') . ' ORDER BY sort_order, id');
+    $st->execute([$teamId]);
+    return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/** تنظیمات (حقوقِ پیش‌فرض و …) */
+function sd_setting(PDO $pdo, string $k, string $default = ''): string
+{
+    static $all = null;
+    if ($all === null) {
+        $all = [];
+        try { $all = $pdo->query('SELECT k, v FROM sd_settings')->fetchAll(PDO::FETCH_KEY_PAIR) ?: []; } catch (Throwable $e) {}
+    }
+    return array_key_exists($k, $all) ? (string) $all[$k] : $default;
+}
+
+function sd_setting_set(PDO $pdo, string $k, string $v, int $by): void
+{
+    $pdo->prepare('INSERT INTO sd_settings (k, v, updated_by) VALUES (?,?,?) ON DUPLICATE KEY UPDATE v = VALUES(v), updated_by = VALUES(updated_by)')->execute([$k, $v, $by ?: null]);
+}
+
+/** حقوقِ ثابتِ پیش‌فرض برای هر نوعِ نیرو (تومان) — قابلِ تنظیم */
+function sd_default_salaries(PDO $pdo): array
+{
+    return [
+        'leader' => (int) sd_setting($pdo, 'salary_leader', '60000000'),
+        'onsite' => (int) sd_setting($pdo, 'salary_onsite', '24000000'),
+        'remote' => (int) sd_setting($pdo, 'salary_remote', '0'),
+    ];
+}
+
+function sd_salary_type_label(string $t): string
+{
+    return ['leader' => 'سرپرست', 'onsite' => 'حضوری', 'remote' => 'غیرحضوری / دورکار'][$t] ?? $t;
 }
 
 /** روزهای اولِ ماهِ شمسی تا همان روز (میلادی) */
@@ -100,7 +209,7 @@ function sd_day_label(string $day): string
     return to_persian_digits((int) ($p[1] ?? 0) . str_pad((string) (int) ($p[2] ?? 0), 2, '0', STR_PAD_LEFT));
 }
 
-/** شناسه‌ی همه‌ی افرادِ تیم (نیروها + سرپرست) */
+/** شناسه‌ی همه‌ی افرادِ تیم: همه‌ی اعضا (حضوری، غیرحضوری، دورکار، …) + سرپرست */
 function sd_team_ids(PDO $pdo, int $teamId, int $leaderId): array
 {
     $ids = function_exists('tsr_team_user_ids') ? tsr_team_user_ids($pdo, $teamId) : [];
@@ -173,25 +282,45 @@ function sd_staff_rule(array $c): array
     return tsr_staff_rule(['توسعه' => $c['dev'], 'عملیات' => $c['ops'], 'ستادی' => $c['staff'], 'نامشخص' => $c['unknown']]);
 }
 
-/** «اولین خریدِ تأییدشده‌ی این شخص است؟» */
-function sd_is_first_order(PDO $pdo, int $orderId, int $customerId, string $decidedAt): bool
+/**
+ * اولین پولِ تأییدشده‌ی این شخص (۳۶۰) در کلِ سامانه: ['order', orderId] یا ['payment', paymentId]
+ * (پیش‌پرداختِ سفارش روزِ تأییدِ سفارش، قسط/پرداخت روزِ تأییدِ خودش)
+ */
+function sd_first_money(PDO $pdo, int $customerId): ?array
 {
     static $cache = [];
-    if (isset($cache[$orderId])) return $cache[$orderId];
+    if (array_key_exists($customerId, $cache)) return $cache[$customerId];
     $ids = [$customerId];
     try {
         if (!function_exists('cc_person_ids')) require_once __DIR__ . '/customer_credit.php';
         $ids = array_values(array_unique(array_merge($ids, array_map('intval', cc_person_ids($pdo, $customerId) ?: []))));
     } catch (Throwable $e) {}
     $in = implode(',', array_map('intval', $ids));
-    $st = $pdo->prepare("SELECT COUNT(*) FROM sales_orders WHERE customer_id IN ($in) AND status = 'approved' AND id <> ?
-        AND (decided_at < ? OR (decided_at = ? AND id < ?))");
-    $st->execute([$orderId, $decidedAt, $decidedAt, $orderId]);
-    return $cache[$orderId] = ((int) $st->fetchColumn() === 0);
+    $r = null;
+    try {
+        $r = $pdo->query("SELECT k, id FROM (
+                SELECT 'order' k, o.id, o.decided_at t FROM sales_orders o
+                 WHERE o.customer_id IN ($in) AND o.status = 'approved' AND COALESCE(o.confirmed_amount, o.total_amount) > 0
+                UNION ALL
+                SELECT 'payment' k, p.id, p.decided_at t FROM sales_order_payments p JOIN sales_orders o ON o.id = p.order_id
+                 WHERE o.customer_id IN ($in) AND o.status = 'approved' AND p.status = 'confirmed' AND p.kind = 'extra' AND p.amount > 0
+            ) x ORDER BY t ASC, k = 'payment', id ASC LIMIT 1")->fetch(PDO::FETCH_NUM) ?: null;
+    } catch (Throwable $e) {
+        error_log('sd_first_money: ' . $e->getMessage());
+    }
+    return $cache[$customerId] = $r ? [(string) $r[0], (int) $r[1]] : null;
+}
+
+/** «اولین خریدِ تأییدشده‌ی این شخص است؟» (برای سازگاری با فراخوانی‌های قبلی) */
+function sd_is_first_order(PDO $pdo, int $orderId, int $customerId, string $decidedAt): bool
+{
+    $f = sd_first_money($pdo, $customerId);
+    return $f !== null && $f[0] === 'order' && $f[1] === $orderId;
 }
 
 /**
- * فروشِ تیم برای هر روز: [day => leads, nego, new_cnt, new_amt, old_cnt, old_amt, total_amt]
+ * عملکردِ تجاریِ تیم برای هر روز: [day => leads, nego, new_cnt, new_amt, old_cnt, old_amt, total_amt]
+ * همه بر اساسِ داده‌ی خامِ «همه‌ی» اعضای تیم ($ids).
  */
 function sd_sales_series(PDO $pdo, array $ids, array $days): array
 {
@@ -201,107 +330,141 @@ function sd_sales_series(PDO $pdo, array $ids, array $days): array
     $in = implode(',', array_map('intval', $ids));
     $from = reset($days);
     $to = end($days);
-    // لید: مشتری‌های یکتا با پیگیری/تماس در آن روز
-    try {
-        $st = $pdo->prepare("SELECT f.followup_date d, COUNT(DISTINCT f.customer_id) n FROM followups f JOIN customers c ON c.id = f.customer_id
-            WHERE f.created_by IN ($in) AND f.followup_date BETWEEN ? AND ? AND COALESCE(c.contact_type, 'customer') = 'customer' GROUP BY f.followup_date");
-        $st->execute([$from, $to]);
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) if (isset($out[$r['d']])) $out[$r['d']]['leads'] = (int) $r['n'];
-    } catch (Throwable $e) {
-        error_log('sd leads: ' . $e->getMessage());
-    }
-    // مذاکره: جلسه‌ی برگزارشده یا پیگیری با وضعیتِ مرحله‌ی مذاکره (مشتریِ یکتا در روز)
+    $minTalk = defined('STAFF_REPORT_CONNECTED_MIN') ? (int) STAFF_REPORT_CONNECTED_MIN : 10;
+    $isCustomer = "COALESCE(c.contact_type, 'customer') = 'customer'";
+    $lead = [];
     $nego = [];
-    try {
-        $st = $pdo->prepare("SELECT f.followup_date d, f.customer_id c FROM followups f JOIN customers cu ON cu.id = f.customer_id
-            WHERE f.created_by IN ($in) AND f.followup_date BETWEEN ? AND ? AND COALESCE(cu.contact_type, 'customer') = 'customer'
-              AND f.status_after IN ('جلسه برگزار شد', 'در انتظار تصمیم', 'در انتظار پرداخت')");
-        $st->execute([$from, $to]);
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) $nego[$r['d']][(int) $r['c']] = true;
-    } catch (Throwable $e) {}
-    try {
-        $st = $pdo->prepare("SELECT meeting_date d, customer_id c FROM meeting_bookings WHERE status = 'held' AND staff_id IN ($in) AND meeting_date BETWEEN ? AND ?");
-        $st->execute([$from, $to]);
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) $nego[$r['d']][(int) $r['c']] = true;
-    } catch (Throwable $e) {}
+    $rows = static function (string $sql, array $params = []) use ($pdo, $from, $to): array {
+        try {
+            $st = $pdo->prepare($sql);
+            $st->execute($params ?: [$from, $to]);
+            return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $e) {
+            error_log('sd_sales_series: ' . $e->getMessage());
+            return [];
+        }
+    };
+    // ۱) هر پیگیری/تماسِ ثبت‌شده با هر نتیجه‌ای ← لید؛ اگر پاسخ داده و گفت‌وگو ثبت شده ← مذاکره
+    foreach ($rows("SELECT f.followup_date d, f.customer_id cid,
+            MAX(CASE WHEN f.call_duration_seconds > $minTalk THEN 1
+                     WHEN f.source = 'manual' AND COALESCE(f.status_after, '') <> 'عدم پاسخ' THEN 1 ELSE 0 END) talked
+        FROM followups f JOIN customers c ON c.id = f.customer_id
+        WHERE f.created_by IN ($in) AND f.followup_date BETWEEN ? AND ? AND $isCustomer
+        GROUP BY f.followup_date, f.customer_id") as $r) {
+        $lead[$r['d']][(int) $r['cid']] = true;
+        if ((int) $r['talked']) $nego[$r['d']][(int) $r['cid']] = true;
+    }
+    // ۲) فردی که همان روز توسطِ تیم به سامانه اضافه شده ← لید
+    foreach ($rows("SELECT DATE(l.created_at) d, l.customer_id cid FROM customer_activity_logs l JOIN customers c ON c.id = l.customer_id
+        WHERE l.activity_type = 'create' AND l.user_id IN ($in) AND l.created_at BETWEEN ? AND ? AND $isCustomer", [$from . ' 00:00:00', $to . ' 23:59:59']) as $r) {
+        $lead[$r['d']][(int) $r['cid']] = true;
+    }
+    foreach ($rows("SELECT DATE(c.created_at) d, c.id cid FROM customers c
+        WHERE c.owner_user_id IN ($in) AND c.created_at BETWEEN ? AND ? AND $isCustomer", [$from . ' 00:00:00', $to . ' 23:59:59']) as $r) {
+        $lead[$r['d']][(int) $r['cid']] = true;
+    }
+    // ۳) جلسه‌ی برگزارشده ← لید + مذاکره
+    foreach ($rows("SELECT b.meeting_date d, b.customer_id cid FROM meeting_bookings b JOIN customers c ON c.id = b.customer_id
+        WHERE b.status = 'held' AND b.staff_id IN ($in) AND b.meeting_date BETWEEN ? AND ?") as $r) {
+        $lead[$r['d']][(int) $r['cid']] = true;
+        $nego[$r['d']][(int) $r['cid']] = true;
+    }
+    foreach ($lead as $d => $set) if (isset($out[$d])) $out[$d]['leads'] = count($set);
     foreach ($nego as $d => $set) if (isset($out[$d])) $out[$d]['nego'] = count($set);
-    // فروش (همان تعریفِ «گزارش فروش»): پیش‌پرداخت در روزِ تأییدِ سفارش + هر قسط/پرداختِ تأییدشده در روزِ تأییدش، خالص
-    // جدید / قدیم بر اساسِ سفارش (اولین خریدِ آن شخص = جدید)؛ تعداد = سفارش‌هایی که همان روز تأیید شده‌اند
+
+    // پول (همان تعریفِ «گزارش فروش»: خالص، هر پرداخت روزِ تأییدش، به نامِ صاحبِ سهم):
+    //   پ ج = اولین پولِ آن مشتری در کلِ سامانه؛ بقیه پ ق. جدید/قدیم = تعدادِ مشتریانِ یکتای هر دسته در آن روز.
     try {
         if (!function_exists('sales_user_events_sql')) require_once __DIR__ . '/sales_credit.php';
-        $st = $pdo->prepare("SELECT x.order_id, x.kind, DATE(x.at) d, SUM(x.net) net, o.customer_id, o.decided_at
+        $st = $pdo->prepare("SELECT x.order_id, x.kind, x.payment_id, DATE(x.at) d, SUM(x.net) net, o.customer_id
             FROM (" . sales_user_events_sql($pdo) . ") x JOIN sales_orders o ON o.id = x.order_id
-            WHERE x.uid IN ($in) GROUP BY x.order_id, x.kind, x.payment_id, DATE(x.at), o.customer_id, o.decided_at");
+            WHERE x.uid IN ($in) GROUP BY x.order_id, x.kind, x.payment_id, DATE(x.at), o.customer_id");
         $st->execute(sales_user_events_params($pdo, $from, $to));
-        $counted = [];
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $o) {
-            if (!isset($out[$o['d']])) continue;
-            $k = sd_is_first_order($pdo, (int) $o['order_id'], (int) $o['customer_id'], (string) $o['decided_at']) ? 'new' : 'old';
-            if ($o['kind'] === 'order' && !isset($counted[$o['order_id']])) {
-                $counted[$o['order_id']] = true;
-                $out[$o['d']][$k . '_cnt']++;
-            }
-            $out[$o['d']][$k . '_amt'] += max(0, (int) $o['net']);
-            $out[$o['d']]['total_amt'] += max(0, (int) $o['net']);
+        $cust = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $e) {
+            if (!isset($out[$e['d']])) continue;
+            $net = max(0, (int) $e['net']);
+            if ($net <= 0) continue;
+            $first = sd_first_money($pdo, (int) $e['customer_id']);
+            $isNew = $first !== null && (($e['kind'] === 'order' && $first[0] === 'order' && $first[1] === (int) $e['order_id'])
+                || ($e['kind'] === 'payment' && $first[0] === 'payment' && $first[1] === (int) $e['payment_id']));
+            $k = $isNew ? 'new' : 'old';
+            $out[$e['d']][$k . '_amt'] += $net;
+            $out[$e['d']]['total_amt'] += $net;
+            $cust[$e['d']][$k][(int) $e['customer_id']] = true;
         }
+        foreach ($cust as $d => $kk) foreach ($kk as $k => $set) $out[$d][$k . '_cnt'] = count($set);
     } catch (Throwable $e) {
-        error_log('sd orders: ' . $e->getMessage());
+        error_log('sd money: ' . $e->getMessage());
     }
     return $out;
 }
 
-/** حقوقِ ثابتِ ماهانه‌ی هر نفر: [id => ['amount' => n, 'source' => 'field'|'payout'|null]] */
-function sd_salaries(PDO $pdo, array $ids): array
+/**
+ * حقوقِ ثابتِ ماهانه‌ی هر نفرِ تیم:
+ *   [id => ['name','type' (leader|onsite|remote),'type_assumed','default','custom','amount','source' (custom|default)]]
+ * اولویت: custom_fixed_salary ← وگرنه پیش‌فرضِ نوعِ نیرو (سرپرست / حضوری / غیرحضوری-دورکار).
+ * نیرویی که «حضوری/دورکار» برایش ثبت نشده، حضوری فرض می‌شود (type_assumed).
+ */
+function sd_salaries(PDO $pdo, array $ids, int $leaderId = 0): array
 {
     $out = [];
     if (!$ids) return $out;
+    $def = sd_default_salaries($pdo);
     $in = implode(',', array_map('intval', $ids));
-    foreach ($ids as $id) $out[(int) $id] = ['amount' => 0, 'source' => null];
+    $cols = function_exists('users_work_cols') ? users_work_cols($pdo) : [];
+    $sel = 'id, full_name, role, is_active, custom_fixed_salary'
+        . (!empty($cols['work_location']) ? ', work_location' : ', NULL AS work_location')
+        . (!empty($cols['work_mode']) ? ', work_mode' : ', NULL AS work_mode');
     try {
-        foreach ($pdo->query("SELECT id, monthly_salary FROM users WHERE id IN ($in)")->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) {
-            if ((int) $r['monthly_salary'] > 0) $out[(int) $r['id']] = ['amount' => (int) $r['monthly_salary'], 'source' => 'field'];
-        }
-    } catch (Throwable $e) {}
-    try {
-        $st = $pdo->query("SELECT p.user_id, p.amount FROM perf_payouts p
-            WHERE p.user_id IN ($in) AND p.kind = 'salary' AND p.voided_at IS NULL
-            ORDER BY p.user_id, COALESCE(p.period_month, '') DESC, p.paid_at DESC, p.id DESC");
-        $seen = [];
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) {
-            $u = (int) $r['user_id'];
-            if (isset($seen[$u])) continue;
-            $seen[$u] = true;
-            if ($out[$u]['source'] === null && (int) $r['amount'] > 0) $out[$u] = ['amount' => (int) $r['amount'], 'source' => 'payout'];
-        }
-    } catch (Throwable $e) {}
+        $rows = $pdo->query("SELECT $sel FROM users WHERE id IN ($in) ORDER BY role = 'leader' DESC, full_name")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        error_log('sd_salaries: ' . $e->getMessage());
+        $rows = [];
+    }
+    foreach ($rows as $u) {
+        $uid = (int) $u['id'];
+        // نیروی غیرفعال در حقوقِ تیم حساب نمی‌شود (داده‌ی گذشته‌اش در عملکرد می‌ماند)
+        if ((int) $u['is_active'] !== 1 && $uid !== $leaderId) continue;
+        $loc = function_exists('users_work_location_of') ? users_work_location_of($u) : null;
+        $assumed = false;
+        if ($uid === $leaderId || $u['role'] === 'leader') $type = 'leader';
+        elseif ($loc === 'remote') $type = 'remote';
+        else { $type = 'onsite'; $assumed = $loc === null; }
+        $custom = $u['custom_fixed_salary'] !== null ? (int) $u['custom_fixed_salary'] : null;
+        $out[$uid] = ['name' => (string) $u['full_name'], 'role' => (string) $u['role'], 'type' => $type, 'type_assumed' => $assumed,
+            'default' => $def[$type], 'custom' => $custom, 'amount' => $custom ?? $def[$type], 'source' => $custom !== null ? 'custom' : 'default'];
+    }
     return $out;
 }
 
 /**
- * قانونِ پ در بازه‌ی گزارش (اولِ ماه تا روزِ انتخاب‌شده):
- * هدف = (مجموعِ حقوقِ ماهانه ÷ ۲۴) × ۱۰ × روزهای کاری (بدونِ جمعه)؛ ✓ اگر آورده ≥ هدف. ok = null یعنی حقوقی ثبت نشده.
+ * قانونِ پ در دوره (اولِ ماه تا تاریخِ گزارش):
+ * حقوقِ روزانه = حقوقِ ماهانه ÷ ۲۴ ؛ هدفِ روزانه = مجموعِ حقوقِ روزانه‌ی تیم × ۱۰ ؛ هدفِ دوره = هدفِ روزانه × روزهای دوره (بدونِ جمعه)
  */
-function sd_p_rule(PDO $pdo, array $ids, array $days, int $actual): array
+function sd_p_rule(PDO $pdo, array $ids, array $days, int $actual, int $leaderId = 0): array
 {
-    $sal = sd_salaries($pdo, $ids);
+    $sal = sd_salaries($pdo, $ids, $leaderId);
     $monthly = array_sum(array_column($sal, 'amount'));
     $work = count(array_filter($days, static fn($d) => (int) date('N', strtotime($d)) !== 5));
-    $dailyTarget = $monthly / 24 * 10;
+    $dailySalary = $monthly / 24;
+    $dailyTarget = $dailySalary * 10;
     $target = (int) round($dailyTarget * max(1, $work));
-    return ['ok' => $monthly > 0 ? $actual >= $target : null, 'target' => $target, 'actual' => $actual, 'monthly' => $monthly,
-        'daily_target' => (int) round($dailyTarget), 'work_days' => $work, 'missing' => count(array_filter($sal, static fn($s) => $s['source'] === null))];
+    return ['ok' => $actual >= $target, 'target' => $target, 'actual' => $actual, 'monthly' => $monthly, 'daily_salary' => (int) round($dailySalary),
+        'daily_target' => (int) round($dailyTarget), 'work_days' => $work, 'salaries' => $sal,
+        'assumed' => count(array_filter($sal, static fn($s) => $s['type_assumed']))];
 }
 
 /**
- * خدمات برای هر روز: [service_id => [day => n]] — عددِ ثبت‌شده (دستی) بر شمارشِ خودکار مقدم است.
- * $auto: فقط مقدارِ خودکار (برای نمایش کنارِ فرمِ ثبت).
+ * مقدارِ شاخص‌های تیم برای هر روز: [metric_id => [day => n]] — عددِ ثبت‌شده بر شمارشِ خودکار مقدم است.
+ * $auto: فقط مقدارِ خودکار؛ $manual: فقط عددِ ثبت‌شده (برای فرمِ ثبت).
  */
-function sd_services_series(PDO $pdo, int $teamId, array $ids, array $days, array $types, ?array &$auto = null, ?array &$manual = null): array
+function sd_metric_series(PDO $pdo, int $teamId, array $ids, array $days, array $metrics, ?array &$auto = null, ?array &$manual = null): array
 {
     $out = [];
     $auto = [];
     $manual = [];
-    if (!$days) return $out;
+    if (!$days || !$metrics) return $out;
     $from = reset($days);
     $to = end($days);
     $in = $ids ? implode(',', array_map('intval', $ids)) : '0';
@@ -315,7 +478,7 @@ function sd_services_series(PDO $pdo, int $teamId, array $ids, array $days, arra
         }
     };
     $bySource = [];
-    foreach ($types as $t) {
+    foreach ($metrics as $t) {
         $src = (string) $t['source'];
         if ($src === 'manual' || isset($bySource[$src])) continue;
         $bySource[$src] = match ($src) {
@@ -328,39 +491,37 @@ function sd_services_series(PDO $pdo, int $teamId, array $ids, array $days, arra
             default => [],
         };
     }
-    if (sd_ready($pdo)) {
-        $st = $pdo->prepare('SELECT service_id, day, cnt FROM sup_service_daily WHERE team_id = ? AND day BETWEEN ? AND ?');
-        $st->execute([$teamId, $from, $to]);
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) $manual[(int) $r['service_id']][$r['day']] = (int) $r['cnt'];
-    }
-    foreach ($types as $t) {
-        $sid = (int) $t['id'];
+    $st = $pdo->prepare('SELECT metric_id, report_date, value FROM team_metric_values WHERE team_id = ? AND report_date BETWEEN ? AND ?');
+    $st->execute([$teamId, $from, $to]);
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) $manual[(int) $r['metric_id']][$r['report_date']] = (float) $r['value'];
+    foreach ($metrics as $t) {
+        $mid = (int) $t['id'];
         foreach ($days as $d) {
-            $a = (int) ($bySource[(string) $t['source']][$d] ?? 0);
-            $auto[$sid][$d] = $a;
-            $out[$sid][$d] = $manual[$sid][$d] ?? $a;
+            $a = (float) ($bySource[(string) $t['source']][$d] ?? 0);
+            $auto[$mid][$d] = $a;
+            $out[$mid][$d] = $manual[$mid][$d] ?? $a;
         }
     }
     return $out;
 }
 
-/** همه‌ی داده‌ی یک صفحه‌ی گزارش برای یک سرپرست و یک روز */
-function sd_build(PDO $pdo, array $leader, string $day): array
+/** همه‌ی داده‌ی یک صفحه‌ی گزارش برای یک سرپرست و یک تاریخِ گزارش */
+function sd_build(PDO $pdo, array $leader, string $reportDate): array
 {
     $teamId = (int) $leader['team_id'];
     $lid = (int) $leader['id'];
-    $days = sd_month_days($day);
+    $days = sd_month_days($reportDate);
     $ids = sd_team_ids($pdo, $teamId, $lid);
-    $types = sd_service_types($pdo);
+    $metrics = sd_metrics($pdo, $teamId);
     $hc = sd_headcount_series($pdo, $teamId, $lid, $days);
     $sales = sd_sales_series($pdo, $ids, $days);
-    $svc = sd_services_series($pdo, $teamId, $ids, $days, $types, $auto, $manual);
+    $mv = sd_metric_series($pdo, $teamId, $ids, $days, $metrics, $auto, $manual);
     $mtd = array_sum(array_column($sales, 'total_amt'));
     return [
-        'leader' => $leader, 'day' => $day, 'days' => $days, 'ids' => $ids, 'types' => $types,
-        'hc' => $hc, 'hc_day' => $hc[$day], 'staff_rule' => sd_staff_rule($hc[$day]),
-        'sales' => $sales, 'sales_day' => $sales[$day], 'p_rule' => sd_p_rule($pdo, $ids, $days, $mtd),
-        'svc' => $svc, 'svc_auto' => $auto, 'svc_manual' => $manual,
+        'leader' => $leader, 'day' => $reportDate, 'days' => $days, 'ids' => $ids, 'metrics' => $metrics,
+        'hc' => $hc, 'hc_day' => $hc[$reportDate], 'staff_rule' => sd_staff_rule($hc[$reportDate]),
+        'sales' => $sales, 'sales_day' => $sales[$reportDate], 'p_rule' => sd_p_rule($pdo, $ids, $days, $mtd, $lid),
+        'mv' => $mv, 'mv_auto' => $auto, 'mv_manual' => $manual,
     ];
 }
 
@@ -462,7 +623,33 @@ function sd_palette(): array
     return ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
 }
 
-/** یک صفحه‌ی A4 (HTML) */
+/** عددِ شاخص (اعشار فقط وقتی لازم است) */
+function sd_num($v): string
+{
+    $v = (float) $v;
+    return to_persian_digits(abs($v - round($v)) < 0.005 ? number_format((int) round($v)) : str_replace('.', '٫', rtrim(rtrim(number_format($v, 2, '.', ','), '0'), '.')));
+}
+
+/** نمودارِ کوچک (small multiple) برای یک شاخص: خط + نقطه‌ی آخر (مقدارِ آخر کنارِ نام، بیرونِ SVG) */
+function sd_spark(array $labels, array $values, string $color, int $w = 200, int $h = 46): string
+{
+    $n = count($values);
+    $vals = array_map('floatval', array_values($values));
+    $max = max(1.0, $vals ? max($vals) : 0);
+    $padL = 3; $padR = 3; $padT = 4; $padB = 4;
+    $x = static fn(int $i): float => $padL + ($n <= 1 ? ($w - $padL - $padR) / 2 : ($w - $padL - $padR) * $i / ($n - 1));
+    $y = static fn(float $v): float => $padT + ($h - $padT - $padB) * (1 - $v / $max);
+    $pts = [];
+    foreach ($vals as $i => $v) $pts[] = round($x($i), 1) . ',' . round($y($v), 1);
+    $last = $n ? $vals[$n - 1] : 0;
+    $svg = '<svg class="sdr-spark" viewBox="0 0 ' . $w . ' ' . $h . '" width="100%" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        . '<line x1="' . $padL . '" x2="' . ($w - $padR) . '" y1="' . ($h - $padB) . '" y2="' . ($h - $padB) . '" stroke="#d6d5cf" stroke-width="0.8"/>';
+    if ($n > 1) $svg .= '<polyline fill="none" stroke="' . $color . '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" points="' . implode(' ', $pts) . '"/>';
+    if ($n) $svg .= '<circle cx="' . round($x($n - 1), 1) . '" cy="' . round($y($last), 1) . '" r="2.6" fill="' . $color . '" stroke="#fff" stroke-width="1"/>';
+    return $svg . '</svg>';
+}
+
+/** یک صفحه‌ی A4 (HTML) — سربرگ فقط: نامِ سرپرست، نامِ تیم، تاریخ */
 function sd_render_sheet(array $R): string
 {
     $L = $R['leader'];
@@ -472,8 +659,9 @@ function sd_render_sheet(array $R): string
     $row = static fn(string $k, string $v, string $u = '', string $cls = ''): string => '<div class="sdr-kv ' . $cls . '"><span class="k">' . e($k) . '</span><span class="v">' . $v . ($u !== '' ? ' <small>' . e($u) . '</small>' : '') . '</span></div>';
     $mark = static fn(?bool $ok): string => $ok === null ? '<b class="na">—</b>' : ($ok ? '<b class="ok">✓</b>' : '<b class="no">✕</b>');
 
+    // A1 / A2 — نیروی انسانی
     $hc = $R['hc_day'];
-    $a1 = '<h3>نیروی انسانی</h3>' . $row('توسعه', $num($hc['dev']), 'نفر') . $row('عملیات', $num($hc['ops']), 'نفر') . $row('ستادی', $num($hc['staff']), 'نفر')
+    $a1 = '<h3>وضعیت نیروی انسانی</h3>' . $row('توسعه', $num($hc['dev']), 'نفر') . $row('عملیات', $num($hc['ops']), 'نفر') . $row('ستادی', $num($hc['staff']), 'نفر')
         . ($hc['unknown'] > 0 ? $row('نامشخص', $num($hc['unknown']), 'نفر', 'muted') : '')
         . $row('کل نیروها', $num($hc['total']), 'نفر', 'sum') . '<div class="sdr-rule">قانون تعداد ' . $mark($R['staff_rule']['ok']) . '</div>';
     $hcSeries = [
@@ -481,42 +669,58 @@ function sd_render_sheet(array $R): string
         ['name' => 'عملیات', 'color' => $pal[1], 'values' => array_column($R['hc'], 'ops')],
         ['name' => 'ستادی', 'color' => $pal[2], 'values' => array_column($R['hc'], 'staff')],
     ];
-    $a2 = '<h3>روند نیروها</h3>' . sd_legend($hcSeries) . sd_line_chart($labels, $hcSeries, 'نفر', 430, 180);
+    $a2 = '<h3>روند نیروی انسانی</h3>' . sd_legend($hcSeries) . sd_line_chart($labels, $hcSeries, 'نفر', 430, 180);
 
+    // B1 / B2 — عملکردِ تجاری
     $s = $R['sales_day'];
-    $b1 = '<h3>خروجی فروش</h3>' . $row('تعداد لید', $num($s['leads'])) . $row('تعداد مذاکره', $num($s['nego'])) . $row('تعداد جدید', $num($s['new_cnt']))
-        . $row('پ جدید', sd_million($s['new_amt']), 'میلیون') . $row('قدیم', $num($s['old_cnt'])) . $row('پ قدیم', sd_million($s['old_amt']), 'میلیون')
+    $b1 = '<h3>عملکرد تجاری</h3>' . $row('لید', $num($s['leads']), 'نفر') . $row('مذاکره', $num($s['nego']), 'نفر')
+        . $row('پ ج', sd_million($s['new_amt']), 'میلیون') . $row('جدید', $num($s['new_cnt']), 'نفر')
+        . $row('پ ق', sd_million($s['old_amt']), 'میلیون') . $row('قدیم', $num($s['old_cnt']), 'نفر')
         . $row('پ کل', sd_million($s['total_amt']), 'میلیون', 'sum') . '<div class="sdr-rule">قانون پ ' . $mark($R['p_rule']['ok']) . '</div>';
     $mil = static fn(array $v): array => array_map(static fn($x) => $x / 1000000, $v);
     $pSeries = [
-        ['name' => 'پ جدید', 'color' => $pal[0], 'values' => $mil(array_column($R['sales'], 'new_amt'))],
-        ['name' => 'پ قدیم', 'color' => $pal[1], 'values' => $mil(array_column($R['sales'], 'old_amt'))],
+        ['name' => 'پ ج', 'color' => $pal[0], 'values' => $mil(array_column($R['sales'], 'new_amt'))],
+        ['name' => 'پ ق', 'color' => $pal[1], 'values' => $mil(array_column($R['sales'], 'old_amt'))],
         ['name' => 'پ کل', 'color' => $pal[2], 'values' => $mil(array_column($R['sales'], 'total_amt'))],
     ];
     $cSeries = [
+        ['name' => 'لید', 'color' => $pal[3], 'values' => array_column($R['sales'], 'leads')],
         ['name' => 'مذاکره', 'color' => $pal[0], 'values' => array_column($R['sales'], 'nego')],
         ['name' => 'جدید', 'color' => $pal[1], 'values' => array_column($R['sales'], 'new_cnt')],
         ['name' => 'قدیم', 'color' => $pal[2], 'values' => array_column($R['sales'], 'old_cnt')],
     ];
-    $b2 = '<h3>روند آورده و نفرات</h3><div class="sdr-two"><div>' . sd_legend($pSeries) . sd_line_chart($labels, $pSeries, 'میلیون', 430, 140)
+    $b2 = '<h3>روند عملکرد تجاری</h3><div class="sdr-two"><div>' . sd_legend($pSeries) . sd_line_chart($labels, $pSeries, 'میلیون', 430, 140)
         . '</div><div>' . sd_legend($cSeries) . sd_line_chart($labels, $cSeries, 'نفر', 430, 140) . '</div></div>';
 
-    $c1 = '<h3>خدمات</h3>';
-    $tot = 0;
-    $svcSeries = [];
-    foreach ($R['types'] as $i => $t) {
-        $v = (int) ($R['svc'][(int) $t['id']][$R['day']] ?? 0);
-        $tot += $v;
-        $c1 .= $row((string) $t['title'], $num($v), 'مورد');
-        $svcSeries[] = ['name' => (string) $t['title'], 'color' => $pal[$i % count($pal)], 'values' => array_values($R['svc'][(int) $t['id']] ?? [])];
+    // C1 / C2 — شاخص‌های اختصاصیِ تیم (از تنظیماتِ همان تیم)
+    $metrics = $R['metrics'];
+    $cnt = count($metrics);
+    if (!$cnt) {
+        $c1 = '<h3>شاخص‌های اختصاصی تیم</h3><div class="sdr-empty">برای این تیم هنوز شاخصی تعریف نشده است.</div>';
+        $c2 = '<h3>روند شاخص‌های اختصاصی تیم</h3><div class="sdr-empty">—</div>';
+    } else {
+        $dense = $cnt > 9 ? ' sdr-dense' : '';
+        $c1 = '<h3>شاخص‌های اختصاصی تیم</h3><div class="sdr-list' . $dense . '">';
+        foreach ($metrics as $m) $c1 .= $row((string) $m['metric_name'], sd_num($R['mv'][(int) $m['id']][$R['day']] ?? 0));
+        $c1 .= '</div>';
+        if ($cnt <= 4) {
+            $mSeries = [];
+            foreach ($metrics as $i => $m) $mSeries[] = ['name' => (string) $m['metric_name'], 'color' => $pal[$i % count($pal)], 'values' => array_values($R['mv'][(int) $m['id']] ?? [])];
+            $c2 = '<h3>روند شاخص‌های اختصاصی تیم</h3>' . sd_legend($mSeries) . sd_line_chart($labels, $mSeries, 'مورد', 430, 190, false);
+        } else {
+            // بیش از ۴ شاخص: هر شاخص نمودارِ کوچکِ خودش (خوانا، بدونِ تکیه بر رنگ)
+            $c2 = '<h3>روند شاخص‌های اختصاصی تیم <small>(' . e(reset($labels) . ' تا ' . end($labels)) . ')</small></h3><div class="sdr-multi' . ($cnt > 9 ? ' c3' : '') . '">';
+            foreach ($metrics as $m) {
+                $vals = $R['mv'][(int) $m['id']] ?? [];
+                $c2 .= '<div class="sdr-mini"><div class="nm"><span>' . e((string) $m['metric_name']) . '</span><b>' . sd_num($vals ? end($vals) : 0) . '</b></div>'
+                    . sd_spark($labels, $vals, $pal[0]) . '</div>';
+            }
+            $c2 .= '</div>';
+        }
     }
-    $c1 .= $row('مجموع خدمات', $num($tot), 'مورد', 'sum');
-    $c2 = '<h3>روند خدمات</h3>' . sd_legend($svcSeries) . sd_line_chart($labels, $svcSeries, 'مورد', 430, 190, false);
 
-    $tn = trim((string) ($L['team_name'] ?? ''));
-    $teamTitle = 'سرپرست تیم ' . ($tn !== '' ? $tn : team_display_name(null, (int) $L['team_id']));
     return '<section class="sdr-sheet">'
-        . '<header class="sdr-head"><div class="n">' . e((string) $L['full_name']) . '</div><div class="t">' . e($teamTitle) . '</div><div class="d">' . e(to_persian_digits(to_jalali($R['day']))) . '</div></header>'
+        . '<header class="sdr-head"><div class="n">' . e((string) $L['full_name']) . '</div><div class="t">' . e(team_display_name($L['team_name'] ?? null, (int) $L['team_id'])) . '</div><div class="d">' . e(to_persian_digits(to_jalali($R['day']))) . '</div></header>'
         . '<div class="sdr-row"><div class="sdr-info">' . $a1 . '</div><div class="sdr-viz">' . $a2 . '</div></div>'
         . '<div class="sdr-row"><div class="sdr-info">' . $b1 . '</div><div class="sdr-viz">' . $b2 . '</div></div>'
         . '<div class="sdr-row"><div class="sdr-info">' . $c1 . '</div><div class="sdr-viz">' . $c2 . '</div></div>'
@@ -558,5 +762,16 @@ function sd_sheet_css(string $base = ''): string
 .sdr-legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-left:5px;vertical-align:middle}
 .sdr-chart{display:block;font-family:'SDR Nazanin','B Nazanin',BNazanin,'Vazirmatn',Tahoma,sans-serif;direction:ltr}
 .sdr-two{display:grid;grid-template-rows:1fr 1fr;row-gap:3mm}
+.sdr-empty{font-size:11.5pt;color:#8a8984;padding-top:2mm}
+.sdr-dense .sdr-kv{font-size:10.5pt;line-height:1.42}
+.sdr-sheet h3 small{font-size:9pt;font-weight:400;color:#8a8984}
+.sdr-multi{display:grid;grid-template-columns:1fr 1fr;gap:1.2mm 5mm}
+.sdr-multi.c3{grid-template-columns:1fr 1fr 1fr;gap:1mm 4mm}
+.sdr-mini{min-width:0}
+.sdr-mini .nm{display:flex;justify-content:space-between;gap:2mm;font-size:9pt;color:#3a3936;line-height:1.3}
+.sdr-mini .nm span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sdr-mini .nm b{font-variant-numeric:tabular-nums;color:#1d1c1a}
+.sdr-spark{display:block;height:9mm}
+.sdr-multi.c3 .sdr-spark{height:7.5mm}
 CSS;
 }
