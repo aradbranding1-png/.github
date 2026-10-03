@@ -623,6 +623,11 @@ function __call_import_run_chunk(PDO $pdo, array $user, array &$ctx, int $maxRow
                 __call_import_recon_add($s, (int) $durationSec, (int) $effectiveUserId, (string) $followupDateG);
             } elseif ($durationSec > __call_import_min_sec()) {
                 $s['seconds_by_contact_type'][$ct] += $durationSec;
+            } elseif ((int) $durationSec > 0) {
+                // تماسِ کوتاه (≤ ۱۰ ثانیه) با همکار/خانواده هم در کارتِ «مکالمه‌های زیر ۱۰ ثانیه» جمع می‌شود
+                if (!isset($s['recon'])) $s['recon'] = ['short_seconds' => 0, 'short_count' => 0, 'owner' => [], 'date' => []];
+                $s['recon']['short_seconds'] += (int) $durationSec;
+                $s['recon']['short_count']++;
             }
         }
 
@@ -1450,6 +1455,14 @@ function __buildNewCustPayload(formId) {
       </div>
     </div>
   <?php endforeach; ?>
+  <?php $__shortSec = (int) ($result['recon']['short_seconds'] ?? 0); $__shortCnt = (int) ($result['recon']['short_count'] ?? 0); ?>
+  <div class="col-md-4 col-6">
+    <div class="card ci-stat" title="تماس‌های برقرارشده‌ای که ۱۰ ثانیه یا کمتر طول کشیده‌اند؛ در مدتِ مکالمه‌ی کارت‌های دیگر و گزارش‌ها حساب نمی‌شوند">
+      <div class="text-muted"><i class="fa-solid fa-stopwatch"></i> مکالمه‌های زیرِ ۱۰ ثانیه</div>
+      <div class="fs-3 fw-bold text-secondary"><?= to_persian_digits((string) intdiv($__shortSec, 60)) ?><span class="fs-6 fw-normal text-muted"> دقیقه</span> <?= to_persian_digits((string) ($__shortSec % 60)) ?><span class="fs-6 fw-normal text-muted"> ثانیه</span></div>
+      <div class="small text-muted"><?= to_persian_digits((string) $__shortCnt) ?> تماس</div>
+    </div>
+  </div>
 </div>
 
 <div class="card p-4 mb-3">
