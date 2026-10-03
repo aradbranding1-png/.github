@@ -690,38 +690,18 @@ require_once __DIR__ . '/includes/layout_top.php';
   }
   // ساختِ PDFِ هر سند در مرورگر (برای پیوستِ تیکت) — فقط اگر در «تنظیمات تیکت» فیلدِ پیوست‌ها تعریف شده باشد
   const pdfAttach = <?= json_encode($ticketReady && trim((string) (function_exists('abt_settings') ? (abt_settings($pdo)['field_attachments'] ?? '') : '')) !== '') ?>;
+  // PDF دقیقاً مثلِ نسخه‌ی چاپی (سربرگ، تاریخ/شماره، ردیفِ امضا در هر صفحه): assets/js/contract-pdf.js
   function loadLib() {
     return new Promise((ok, fail) => {
-      if (window.html2pdf) return ok();
+      if (window.ctrMakePdf) return ok();
       const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      s.src = 'assets/js/contract-pdf.js?v=2';
       s.onload = () => ok(); s.onerror = () => fail(new Error('کتابخانه‌ی PDF بارگذاری نشد'));
       document.head.appendChild(s);
     });
   }
   function makePdf(doc) {
-    return new Promise((ok, fail) => {
-      const f = document.createElement('iframe');
-      f.style.cssText = 'position:fixed;left:-10000px;top:0;width:900px;height:1200px;border:0';
-      f.src = 'contract_print.php?id=' + id + '&doc=' + encodeURIComponent(doc);
-      f.onload = async () => {
-        try {
-          const d = f.contentDocument;
-          const tb = d.querySelector('.toolbar'); if (tb) tb.remove();
-          if (d.fonts && d.fonts.ready) await d.fonts.ready;
-          await new Promise(r => setTimeout(r, 400));
-          const el = d.querySelector('.paper') || d.body;
-          const blob = await window.html2pdf().set({
-            margin: 0, filename: doc + '.pdf', image: { type: 'jpeg', quality: 0.9 },
-            html2canvas: { scale: 2, useCORS: true, windowWidth: 900 },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['css', 'legacy'], before: '.ctr-pb-before', after: '.ctr-pb' }
-          }).from(el).outputPdf('blob');
-          f.remove(); ok(blob);
-        } catch (e) { f.remove(); fail(e); }
-      };
-      document.body.appendChild(f);
-    });
+    return window.ctrMakePdf('contract_print.php?id=' + id + '&doc=' + encodeURIComponent(doc));
   }
   async function buildPdfs(docs) {
     const tokens = {};
