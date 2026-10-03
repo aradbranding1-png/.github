@@ -87,6 +87,7 @@ if (!$isAdmin && !$__readAll) {
     $params[] = $ownerFilt;
 }
 
+$clSubstringSearch = false; // جست‌وجوی «شامل» (نام یا بخشی از شماره): پیمایشِ مستقیمِ جدول از دنبال‌کردنِ ایندکسِ ترتیب سریع‌تر است
 if ($q !== '') {
     $qDigits = function_exists('normalize_digits') ? normalize_digits($q) : $q;
     $qMobile = preg_replace('/\D/', '', $qDigits);
@@ -94,10 +95,30 @@ if ($q !== '') {
         $qMobile = substr($qMobile, 1);
     }
     $qMobileNeedle = $qMobile !== '' ? $qMobile : $qDigits;
-    $where[]  = '(c.full_name LIKE ? OR c.mobile LIKE ? OR c.mobile_2 LIKE ?)';
-    $params[] = "%$qDigits%";
-    $params[] = "%$qMobileNeedle%";
-    $params[] = "%$qMobileNeedle%";
+    $qIsPhone = preg_match('/^[\s\d+()\-]+$/', $qDigits) && strlen($qMobile) >= 4;
+    if ($qIsPhone && preg_match('/^(?:0098|98|0)?(9\d{5,})$/', preg_replace('/\D/', '', $qDigits), $__m)) {
+        // شماره‌ی موبایل (۰۹… / ۹… / ۹۸۹…): جست‌وجوی «شروع‌شونده با» روی ایندکسِ شماره‌ها — در میلیون‌ها مشتری فوری است
+        $__pre = '0' . $__m[1] . '%';
+        $where[] = '(c.mobile_normalized LIKE ? OR c.mobile2_normalized LIKE ? OR c.mobile LIKE ? OR c.mobile_2 LIKE ?)';
+        array_push($params, $__pre, $__pre, $__pre, $__pre);
+    } elseif ($qIsPhone) {
+        // بخشی از وسطِ/انتهای شماره
+        $clSubstringSearch = true;
+        $where[]  = '(c.mobile LIKE ? OR c.mobile_2 LIKE ?)';
+        $params[] = "%$qMobileNeedle%";
+        $params[] = "%$qMobileNeedle%";
+    } elseif (!preg_match('/\d/', $qDigits)) {
+        // نام (بدونِ رقم): فقط ستونِ نام
+        $clSubstringSearch = true;
+        $where[]  = 'c.full_name LIKE ?';
+        $params[] = "%$qDigits%";
+    } else {
+        $clSubstringSearch = true;
+        $where[]  = '(c.full_name LIKE ? OR c.mobile LIKE ? OR c.mobile_2 LIKE ?)';
+        $params[] = "%$qDigits%";
+        $params[] = "%$qMobileNeedle%";
+        $params[] = "%$qMobileNeedle%";
+    }
 }
 if ($statusFilt !== '') {
     $where[]  = 'c.status = ?';
@@ -144,6 +165,11 @@ if ($createdToJ !== '' && ($createdToG = to_gregorian($createdToJ))) {
 }
 
 $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // تغییرِ گروهی (حذف/ارجاع/وضعیت/…): شمارش‌های مشترکِ فهرست از نو حساب شوند
+    require_once __DIR__ . '/includes/perf_cache.php';
+    app_cache_forget_prefix('cl_count');
+}
 
 // -----------------------------------------------------------------
 // حذف مشتری
@@ -375,12 +401,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_due_date_submit'
 // =====================================================================
 $CL_CACHE_TTL = 120;
 
-$clStatusPriority = ['در انتظار پرداخت', 'در انتظار تصمیم', 'جلسه برگزار شد', 'در حال پیگیری', 'تعویق', 'جدید', 'عدم پاسخ', 'مشتری قدیمی', 'خرید کرده'];
+// ترتیبِ وضعیت‌ها در includes/perf_indexes.php (CL_STATUS_PRIORITY) تعریف شده و ستونِ ایندکس‌دارِ cl_sort از همان ساخته می‌شود
+require_once __DIR__ . '/includes/perf_indexes.php';
+$clStatusPriority = CL_STATUS_PRIORITY;
 $clStatusOrder = 'CASE c.status';
 foreach ($clStatusPriority as $__i => $__st) {
     $clStatusOrder .= ' WHEN ' . $pdo->quote($__st) . ' THEN ' . ($__i + 1);
 }
 $clStatusOrder .= ' ELSE 99 END';
+$clOrderBy = perf_indexes_ready($pdo)
+    ? 'c.cl_sort, c.status, c.owner_user_id, c.next_followup_date, c.id' // هم‌ترتیب با ایندکسِ idx_cust_type_sort (بدونِ مرتب‌سازیِ جدا)
+    : "$clStatusOrder, (c.next_followup_date IS NULL), c.next_followup_date ASC, c.created_at DESC";
+$clIndexHint = ($clSubstringSearch && perf_indexes_ready($pdo)) ? ' IGNORE INDEX (idx_cust_type_sort, idx_cust_type_status, idx_cust_owner_scope)' : '';
 $cacheKey = 'cl_cache_v2_' . md5($_SERVER['QUERY_STRING'] ?? '') . '_' . (int) $user['id'];
 
 $cached = $_SESSION[$cacheKey] ?? null;
@@ -392,22 +424,39 @@ if ($cached && isset($cached['expires_at']) && $cached['expires_at'] > time()) {
     $customers    = $cached['customers'];
     $messengersByCustomer = $cached['messengersByCustomer'];
 } else {
-    $countSql = "SELECT COUNT(*) FROM customers c $whereSql";
-    $countStmt = $pdo->prepare($countSql);
-    $countStmt->execute($params);
-    $totalCount = (int) $countStmt->fetchColumn();
+    $countSql = "SELECT COUNT(*) FROM customers c$clIndexHint $whereSql";
+    $countFn = static function () use ($pdo, $countSql, $params) {
+        $countStmt = $pdo->prepare($countSql);
+        $countStmt->execute($params);
+        return (int) $countStmt->fetchColumn();
+    };
+    // دامنه‌ی بزرگ (مدیر یا سرپرستِ تیمِ بزرگ): شمارش برای همه‌ی هم‌دسترسی‌ها مشترک و ۶۰ ثانیه‌ای است
+    $broadScope = $isAdmin || $__readAll || count($visibleOwnerIds) > 30;
+    $totalCount = $broadScope
+        ? (int) app_cache_remember('cl_count_' . md5($countSql . "\0" . json_encode($params, JSON_UNESCAPED_UNICODE)), 60, $countFn, 900)
+        : $countFn();
     $totalPages = max(1, (int) ceil($totalCount / $PER_PAGE));
     $page = min($page, $totalPages);
     $offset = ($page - 1) * $PER_PAGE;
 
-    $sql = "SELECT c.*, u.full_name AS owner_name, u.role AS owner_role
-            FROM customers c JOIN users u ON u.id = c.owner_user_id
+    // اول فقط شناسه‌ها (از روی ایندکس، بدونِ خواندنِ ردیف‌ها)، بعد همان ۲۵ ردیف
+    $idStmt = $pdo->prepare("SELECT c.id FROM customers c$clIndexHint
             $whereSql
-            ORDER BY $clStatusOrder, (c.next_followup_date IS NULL), c.next_followup_date ASC, c.created_at DESC
-            LIMIT $PER_PAGE OFFSET $offset";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $customers = $stmt->fetchAll();
+            ORDER BY $clOrderBy
+            LIMIT $PER_PAGE OFFSET $offset");
+    $idStmt->execute($params);
+    $pageIds = array_map('intval', $idStmt->fetchAll(PDO::FETCH_COLUMN));
+    $customers = [];
+    if ($pageIds) {
+        $inIds = implode(',', $pageIds);
+        $rowsById = [];
+        foreach ($pdo->query("SELECT c.*, u.full_name AS owner_name, u.role AS owner_role
+                FROM customers c JOIN users u ON u.id = c.owner_user_id
+                WHERE c.id IN ($inIds)")->fetchAll() as $__r) {
+            $rowsById[(int) $__r['id']] = $__r;
+        }
+        foreach ($pageIds as $__id) if (isset($rowsById[$__id])) $customers[] = $rowsById[$__id];
+    }
 
     $messengersByCustomer = [];
     if ($customers) {

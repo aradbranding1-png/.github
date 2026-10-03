@@ -2067,12 +2067,31 @@ function ps_auto_a_creators(PDO $pdo): void
     static $done = false;
     if ($done) return;
     $done = true;
+    // سرعت: حداکثر هر ۴۵ ثانیه یک‌بار، آن هم بعد از رسیدنِ صفحه به کاربر (هیچ صفحه‌ای منتظرِ این بررسی نمی‌ماند)
+    $tick = __DIR__ . '/../storage/.ps_auto_a_tick';
+    if (is_file($tick) && time() - (int) @filemtime($tick) < 45) return;
+    @touch($tick);
+    require_once __DIR__ . '/perf_cache.php';
+    app_defer(static function () use ($pdo, $tick) {
+        $fh = @fopen($tick, 'c');
+        if (!$fh || !flock($fh, LOCK_EX | LOCK_NB)) return;
+        try {
+            ps_auto_a_creators_run($pdo);
+        } finally {
+            flock($fh, LOCK_UN);
+            fclose($fh);
+        }
+    });
+}
+
+function ps_auto_a_creators_run(PDO $pdo): void
+{
     $launch = ps_launch_at($pdo);
     if ($launch === null) return;
     $cursorFile = __DIR__ . '/../storage/.ps_auto_a_cursor';
     $last = is_file($cursorFile) ? (int) @file_get_contents($cursorFile) : 0;
     try {
-        $st = $pdo->prepare("SELECT id, created_at FROM customers WHERE id > ? AND created_at >= ? AND COALESCE(contact_type, 'customer') = 'customer' ORDER BY id ASC LIMIT 1000");
+        $st = $pdo->prepare("SELECT id, created_at FROM customers WHERE id > ? AND created_at >= ? AND COALESCE(contact_type, 'customer') = 'customer' ORDER BY id ASC LIMIT 300");
         $st->execute([$last, $launch]);
         $ids = $st->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
         // پرونده‌های دو دقیقه‌ی اخیر دفعه‌ی بعد هم دوباره بررسی می‌شوند (ممکن است ثبتِ رابطه/لاگِ ایجادشان هنوز تمام نشده باشد)
@@ -2081,7 +2100,8 @@ function ps_auto_a_creators(PDO $pdo): void
         $blocked = false;
         if (!$ids) {
             // نشانگر را تا آخرین پرونده جلو ببر تا دفعه‌ی بعد فقط پرونده‌های تازه بررسی شوند
-            $max = (int) $pdo->query("SELECT COALESCE(MAX(id), 0) FROM customers WHERE created_at < NOW() - INTERVAL 2 MINUTE")->fetchColumn();
+            // (از انتهای کلیدِ اصلی: بدونِ پیمایشِ کلِ جدول)
+            $max = (int) $pdo->query("SELECT id FROM customers WHERE created_at < NOW() - INTERVAL 2 MINUTE ORDER BY id DESC LIMIT 1")->fetchColumn();
             if ($max > $last) @file_put_contents($cursorFile, (string) $max);
             return;
         }
