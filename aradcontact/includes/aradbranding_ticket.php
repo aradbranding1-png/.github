@@ -708,6 +708,19 @@ function abt_parse_response(string $body): array
             if ($out['error'] === null && isset($p[$k]) && is_string($p[$k])) $out['error'] = mb_substr($p[$k], 0, 300);
         }
     }
+    // جزئیاتِ خطا (مثلاً errors: {mobile: ["…"]} یا detail/reason) — تا علتِ واقعی دیده شود، نه فقط پیغامِ کلی
+    $details = [];
+    foreach (['errors', 'error_details', 'details'] as $k) {
+        if (isset($j[$k]) && is_array($j[$k])) {
+            array_walk_recursive($j[$k], static function ($v, $field) use (&$details) {
+                if (is_scalar($v) && (string) $v !== '') $details[] = (is_string($field) ? $field . ': ' : '') . (string) $v;
+            });
+        }
+    }
+    foreach (['detail', 'reason', 'error_code', 'code'] as $k) {
+        if (isset($j[$k]) && is_scalar($j[$k]) && (string) $j[$k] !== '' && (string) $j[$k] !== (string) $out['error']) $details[] = $k . ': ' . (string) $j[$k];
+    }
+    if ($details) $out['error'] = mb_substr(trim(($out['error'] ?? '') . ' (' . implode('؛ ', array_unique($details)) . ')'), 0, 500);
     return $out;
 }
 
@@ -1256,7 +1269,11 @@ function abt_create_account(PDO $pdo, array $s, array $order, int $userId): arra
     $parsed = $text !== '' ? abt_parse_response($text) : ['ok' => null, 'id' => null, 'url' => null, 'error' => null];
     if ($resp === false || $err !== '' || $code < 200 || $code >= 300 || $parsed['ok'] === false) {
         $why = $err !== '' ? 'خطای اتصال: ' . $err : 'ساختِ حساب ناموفق بود (کد ' . $code . ')' . ($parsed['error'] ? ': ' . $parsed['error'] : '');
-        if (function_exists('orders_add_history')) orders_add_history($pdo, (int) $order['id'], $userId, 'note', null, null, 'آراد برندینگ: ' . $why);
+        // برای عیب‌یابی: آنچه فرستاده شد (بدونِ رمز) + پاسخِ کاملِ آراد برندینگ در تاریخچه‌ی سفارش
+        $sent = $payload;
+        foreach ($sent as $k => $v) if (stripos((string) $k, 'pass') !== false) $sent[$k] = '***';
+        if (function_exists('orders_add_history')) orders_add_history($pdo, (int) $order['id'], $userId, 'note', null, null, 'آراد برندینگ: ' . $why
+            . "\nارسال‌شده به " . $url . ': ' . json_encode($sent, JSON_UNESCAPED_UNICODE) . ($text !== '' ? "\nپاسخ: " . mb_substr($text, 0, 1500) : ''));
         return ['ok' => false, 'message' => $why];
     }
     // نام کاربری/رمز/شناسه اگر API برگرداند (وگرنه: موبایل و همان رمزی که فرستادیم)
