@@ -309,9 +309,10 @@ table.table{width:100%;border-collapse:separate;border-spacing:0;font-size:.88re
 .list-item:last-child{border-bottom:0}
 .list-item .ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex-shrink:0}
 .timeline{position:relative;padding-right:1.4rem}
-.timeline::before{content:"";position:absolute;right:.45rem;top:.3rem;bottom:.3rem;width:2px;background:var(--border)}
+.timeline::before{content:"";position:absolute;right:.5rem;top:.3rem;bottom:.3rem;width:2px;background:var(--border)}
 .tl-item{position:relative;padding-bottom:1rem}
-.tl-item::before{content:"";position:absolute;right:-1.2rem;top:.45rem;width:12px;height:12px;border-radius:50%;background:var(--surface);border:3px solid var(--primary)}
+/* dot centred on the line: line centre is .5rem + 1px from the timeline edge, items start 1.4rem in */
+.tl-item::before{content:"";position:absolute;right:calc(1px - .9rem);top:.35rem;box-sizing:border-box;width:14px;height:14px;transform:translateX(50%);border-radius:50%;background:var(--surface);border:3px solid var(--primary);z-index:1}
 .tl-item.success::before{border-color:var(--success)}.tl-item.warning::before{border-color:var(--warning)}.tl-item.danger::before{border-color:var(--danger)}.tl-item.info::before{border-color:var(--info)}
 .tl-item .t{font-weight:700;font-size:.9rem}
 .tl-item .d{font-size:.75rem;color:var(--muted)}
