@@ -126,6 +126,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_set('warning', 'سفارش تأیید شد، ولی ساخت/ارسالِ تیکتِ آراد برندینگ با خطا روبه‌رو شد.');
             }
         }
+    } elseif ($action === 'ts_sync' && abt_can_manage($user)) {
+        // سامانه توسعه تجارت: بررسی/شارژِ دوباره‌ی استارز (ناموفق‌ها با همان شناسه، بدونِ شارژِ تکراری)
+        require_once __DIR__ . '/includes/trade_stars.php';
+        $r = ts_sync_order($pdo, $orderId, (int) $user['id']);
+        flash_set($r['ok'] === false ? 'danger' : 'success', $r['message'] !== '' ? $r['message'] : 'شارژِ جدیدی لازم نبود (همه‌ی سهمِ پول‌های تأییدشده قبلاً شارژ شده).');
+        redirect('order_view.php?id=' . $orderId . '#ts');
     } elseif ($action === 'abt_acc_sms_done' && abt_can_manage($user)) {
         // یادآوریِ «حسابِ جدید در آراد برندینگ»: مسئول اعلام می‌کند نام کاربری و رمز برای مشتری پیامک شد
         flash_set(abt_account_sms_done($pdo, (int) $order['customer_id'], (int) $user['id']) ? 'success' : 'warning', 'ثبت شد: اطلاعاتِ ورود برای مشتری پیامک شد.');
@@ -760,6 +766,43 @@ require_once __DIR__ . '/includes/layout_top.php';
           </div>
         <?php endif; ?>
       </div>
+
+      <!-- سامانه توسعه تجارت: شارژِ استارز -->
+      <?php require_once __DIR__ . '/includes/trade_stars.php';
+        $tsS = ts_settings($pdo);
+        $tsTargets = ts_ready($pdo) ? ts_order_targets($pdo, $tsS, $order) : [];
+        $tsRows = $tsTargets ? ts_credits_for_order($pdo, $orderId) : [];
+        if ($tsTargets): ?>
+      <div class="card p-3 mb-3" id="ts" style="border-color:#fde68a">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+          <h6 class="fw-bold mb-0"><i class="fa-solid fa-star" style="color:#ca8a04"></i> شارژِ استارز — سامانه توسعه تجارت</h6>
+          <?php if (!ts_active($tsS)): ?><span class="badge text-bg-secondary">اتصال غیرفعال (تنظیمات تیکت)</span><?php endif; ?>
+        </div>
+        <?php foreach ($tsTargets as $tsIid => $tsT): $tsDone = 0; foreach ($tsRows as $r) if ((int) $r['item_id'] === $tsIid && $r['status'] === 'done') $tsDone += (int) $r['amount_toman']; ?>
+          <div class="small mb-2"><b><?= e((string) $tsT['item']['title']) ?></b> — مبلغِ خدمت (بعد از تخفیف، بدونِ مالیات): <?= to_persian_digits(number_format($tsT['net'])) ?> تومان
+            · سهمِ پول‌های تأییدشده: <?= to_persian_digits(number_format($tsT['target'])) ?> · شارژشده: <b><?= to_persian_digits(number_format($tsDone)) ?></b></div>
+        <?php endforeach; ?>
+        <?php if ($tsRows): ?>
+        <div class="table-responsive"><table class="table table-sm small align-middle mb-2">
+          <thead class="table-light"><tr><th>تاریخ</th><th class="text-end">مبلغ (تومان)</th><th class="text-end">استارز</th><th class="text-end">نرخ</th><th>وضعیت</th></tr></thead><tbody>
+          <?php foreach ($tsRows as $r): ?>
+            <tr><td><?= e(to_persian_digits(to_jalali(substr((string) $r['created_at'], 0, 10)))) ?></td>
+              <td class="text-end"><?= to_persian_digits(number_format((int) $r['amount_toman'])) ?></td>
+              <td class="text-end"><?= $r['stars'] !== null ? to_persian_digits(rtrim(rtrim(number_format((float) $r['stars'], 2, '.', ','), '0'), '.')) : '—' ?></td>
+              <td class="text-end"><?= $r['toman_per_star'] !== null ? to_persian_digits(number_format((float) $r['toman_per_star'])) : '—' ?></td>
+              <td><?php if ($r['status'] === 'done'): ?><span class="badge text-bg-success">شارژ شد</span><?= (int) $r['new_account'] ? ' <span class="badge text-bg-info">حسابِ جدید</span>' : '' ?>
+                <?php else: ?><span class="badge text-bg-danger">ناموفق</span> <span class="text-danger"><?= e((string) $r['last_error']) ?></span><?php endif; ?></td></tr>
+          <?php endforeach; ?>
+          </tbody></table></div>
+        <?php else: ?>
+          <div class="small text-muted mb-2">هنوز شارژی انجام نشده؛ با تأییدِ هر پول، سهمِ همین خدمت خودکار شارژ می‌شود.</div>
+        <?php endif; ?>
+        <?php if (abt_can_manage($user) && $order['status'] === 'approved' && ts_active($tsS)): ?>
+          <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="ts_sync">
+            <button class="btn btn-sm btn-outline-warning"><i class="fa-solid fa-rotate"></i> بررسی و شارژِ دوباره (ناموفق‌ها / سهمِ جدید)</button></form>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
 
       <!-- تیکت‌های آراد برندینگ (یکی برای هر خدمت) -->
       <?php if ($abtOk && ($abtCan || $abtTickets)):

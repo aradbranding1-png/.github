@@ -565,6 +565,10 @@ if (!function_exists('orders_decide')) {
         }
         $actions = ['approved' => 'approved', 'rejected' => 'rejected', 'pending' => 'set_pending'];
         orders_add_history($pdo, $orderId, (int) $user['id'], $actions[$status], $from, $status, $note);
+        if ($status === 'approved') {
+        // سامانه توسعه تجارت: شارژِ استارزِ سهمِ همین پول
+        try { require_once __DIR__ . '/trade_stars.php'; ts_on_money($pdo, $orderId, (int) $user['id']); } catch (Throwable $e) { error_log('ts hook: ' . $e->getMessage()); }
+        }
 
         $label = orders_statuses()[$status]['label'];
         $msg = 'سفارش ' . $order['order_number'] . ' (مشتری: ' . $order['customer_name'] . ') توسط واحد مالی: «' . $label . '»';

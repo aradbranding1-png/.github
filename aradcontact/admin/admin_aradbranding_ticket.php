@@ -21,6 +21,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash_set('danger', 'نشست منقضی شده است؛ دوباره تلاش کنید.');
         redirect('admin_aradbranding_ticket.php');
     }
+    // ─── سامانه توسعه تجارت (aradbranding.app) — شارژِ استارز ───
+    if (in_array($_POST['action'] ?? '', ['save_ts', 'test_ts'], true)) {
+        require_once __DIR__ . '/../includes/trade_stars.php';
+        $data = [
+            'ts_enabled'       => !empty($_POST['ts_enabled']) ? '1' : '0',
+            'ts_base_url'      => rtrim(trim((string) ($_POST['ts_base_url'] ?? '')), '/') ?: 'https://aradbranding.app',
+            'ts_login_url'     => trim((string) ($_POST['ts_login_url'] ?? '')) ?: 'https://aradbranding.app',
+            'ts_service_ids'   => json_encode(array_values(array_filter(array_map('intval', (array) ($_POST['ts_services'] ?? []))))),
+            'ts_department'    => trim((string) ($_POST['ts_department'] ?? '')),
+            'ts_subject_new'   => trim((string) ($_POST['ts_subject_new'] ?? '')),
+            'ts_body_new'      => trim((string) ($_POST['ts_body_new'] ?? '')),
+            'ts_subject_topup' => trim((string) ($_POST['ts_subject_topup'] ?? '')),
+            'ts_body_topup'    => trim((string) ($_POST['ts_body_topup'] ?? '')),
+        ];
+        $tok = trim((string) ($_POST['ts_token'] ?? ''));
+        if ($tok !== '') $data['ts_token'] = $tok;
+        abt_settings_save($pdo, $data, (int) $admin['id']);
+        if ($_POST['action'] === 'test_ts') {
+            $r = ts_test($pdo);
+            flash_set($r['ok'] ? 'success' : 'danger', 'تنظیمات ذخیره شد. ' . $r['message']);
+        } else {
+            flash_set('success', 'تنظیماتِ سامانه توسعه تجارت ذخیره شد.');
+        }
+        redirect('admin_aradbranding_ticket.php#abt-ts');
+    }
     // ─── سامانه‌ی CRM ───
     if (in_array($_POST['action'] ?? '', ['save_crm', 'test_crm'], true)) {
         require_once __DIR__ . '/../includes/crm_provision.php';
@@ -361,6 +386,49 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <div class="d-flex gap-2">
       <button name="action" value="save_crm" class="btn btn-sm btn-primary"><i class="fa-solid fa-floppy-disk"></i> ذخیره</button>
       <button name="action" value="test_crm" class="btn btn-sm btn-outline-dark"><i class="fa-solid fa-plug"></i> تستِ اتصال</button>
+    </div>
+  </form>
+  </div>
+
+  <?php
+    require_once __DIR__ . '/../includes/trade_stars.php';
+    $__ts = ts_settings($pdo);
+    $__tsAuto = [];
+    foreach ($__svcRows as $__sv) if (ts_is_trade_item(['service_ids' => []], ['title' => $__sv['title']])) $__tsAuto[] = (int) $__sv['id'];
+  ?>
+  <div class="col-12">
+  <form method="post" class="card p-3" id="abt-ts" style="border-top:3px solid #ca8a04">
+    <?= csrf_field() ?>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
+      <h6 class="fw-bold mb-0"><i class="fa-solid fa-star" style="color:#ca8a04"></i> سامانه توسعه تجارت (aradbranding.app) — شارژِ استارز</h6>
+      <span class="badge <?= ts_active($__ts) ? 'text-bg-success' : 'text-bg-secondary' ?>"><?= ts_active($__ts) ? 'فعال' : 'غیرفعال' ?></span>
+    </div>
+    <div class="small text-muted mb-3">با تأییدِ هر پولِ سفارشی که خدمتِ «سامانه توسعه تجارت» دارد، سهمِ همین خدمت از آن پول (مبلغِ خدمت بعد از تخفیف و بدونِ مالیات ÷ جمعِ فاکتور) به‌صورتِ استارز شارژ می‌شود؛ نرخِ استارز را خودِ سامانه در لحظه‌ی شارژ حساب می‌کند.
+      اگر مشتری با هیچ‌کدام از موبایل‌هایش حساب نداشت، حساب ساخته و اطلاعاتِ ورود در تیکت فرستاده می‌شود؛ وگرنه فقط تیکتِ شارژ.</div>
+    <div class="row g-2">
+      <div class="col-md-2 d-flex align-items-end">
+        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="ts_enabled" value="1" id="tsOn" <?= $__ts['enabled'] ? 'checked' : '' ?>><label class="form-check-label small" for="tsOn">فعال باشد</label></div>
+      </div>
+      <div class="col-md-3"><label class="form-label small mb-1">آدرسِ API سامانه</label><input name="ts_base_url" class="form-control form-control-sm" dir="ltr" value="<?= e($__ts['base_url']) ?>"></div>
+      <div class="col-md-3"><label class="form-label small mb-1">لینکِ ورودِ مشتری</label><input name="ts_login_url" class="form-control form-control-sm" dir="ltr" value="<?= e($__ts['login_url']) ?>"></div>
+      <div class="col-md-4"><label class="form-label small mb-1">توکن (Bearer)</label><input name="ts_token" type="password" class="form-control form-control-sm" dir="ltr" autocomplete="new-password" placeholder="<?= $__ts['token'] !== '' ? '•••••• (خالی = بدونِ تغییر)' : 'کلیدِ API سامانه توسعه تجارت' ?>"></div>
+      <div class="col-md-6"><label class="form-label small mb-1">خدمتِ «سامانه توسعه تجارت» در آراد کانتکت</label>
+        <select name="ts_services[]" class="form-select form-select-sm" multiple size="4">
+          <?php foreach ($__svcRows as $__sv): $__sel = $__ts['service_ids'] ? in_array((int) $__sv['id'], $__ts['service_ids'], true) : in_array((int) $__sv['id'], $__tsAuto, true); ?>
+            <option value="<?= (int) $__sv['id'] ?>" <?= $__sel ? 'selected' : '' ?>><?= e((string) $__sv['title']) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <div class="form-text">انتخاب نشود = هر خدمتی که عنوانش «توسعه تجارت» دارد.</div></div>
+      <div class="col-md-3"><label class="form-label small mb-1">واحدِ تیکت (اختیاری)</label><input name="ts_department" class="form-control form-control-sm" value="<?= e($__ts['department']) ?>" placeholder="خالی = واحدِ پیش‌فرض"></div>
+      <div class="col-md-6"><label class="form-label small mb-1">تیکتِ «حسابِ جدید + شارژ» — موضوع</label><input name="ts_subject_new" class="form-control form-control-sm" value="<?= e($__ts['subject_new']) ?>">
+        <textarea name="ts_body_new" class="form-control form-control-sm mt-1" rows="7"><?= e($__ts['body_new']) ?></textarea></div>
+      <div class="col-md-6"><label class="form-label small mb-1">تیکتِ «فقط شارژ» (حسابِ موجود) — موضوع</label><input name="ts_subject_topup" class="form-control form-control-sm" value="<?= e($__ts['subject_topup']) ?>">
+        <textarea name="ts_body_topup" class="form-control form-control-sm mt-1" rows="7"><?= e($__ts['body_topup']) ?></textarea></div>
+    </div>
+    <div class="small text-muted my-2">متغیرها: «نام_مشتری» «شماره_فاکتور» «مبلغ_شارژ» «تعداد_استارز» «نرخ_استارز» «موجودی» «آدرس_ورود» «نام_کاربری» «رمز_عبور» (دو مورد آخر فقط برای حسابِ جدید).</div>
+    <div class="d-flex gap-2">
+      <button name="action" value="save_ts" class="btn btn-sm btn-primary"><i class="fa-solid fa-floppy-disk"></i> ذخیره</button>
+      <button name="action" value="test_ts" class="btn btn-sm btn-outline-dark"><i class="fa-solid fa-plug"></i> تستِ اتصال (خواندنِ نرخِ استارز)</button>
     </div>
   </form>
   </div>

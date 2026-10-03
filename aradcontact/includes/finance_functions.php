@@ -634,6 +634,10 @@ if (!function_exists('fin_add_payment')) {
         }
         orders_add_history($pdo, (int) $order['id'], (int) $user['id'], 'payment_added', null, null,
             'پرداختِ ' . number_format($amount) . ' تومان ثبت شد' . ($autoConfirm ? ' و توسطِ مالی تأیید شد.' : ' (در انتظارِ تأییدِ مالی).'));
+        if ($autoConfirm) {
+            // سامانه توسعه تجارت: شارژِ استارزِ سهمِ همین پول
+            try { require_once __DIR__ . '/trade_stars.php'; ts_on_money($pdo, (int) $order['id'], (int) $user['id']); } catch (Throwable $e) { error_log('ts hook: ' . $e->getMessage()); }
+        }
         return ['ok' => true, 'id' => $pid, 'message' => $autoConfirm ? 'پرداخت ثبت و تأیید شد.' : 'پرداخت ثبت شد و پس از تأییدِ واحد مالی از بدهی کسر می‌شود.'];
     }
 }
@@ -662,6 +666,10 @@ if (!function_exists('fin_decide_payment')) {
         $labels = fin_payment_statuses();
         orders_add_history($pdo, (int) $p['order_id'], (int) $user['id'], 'payment_' . $status, null, null,
             'پرداختِ ' . number_format($newAmount) . ' تومان: ' . $labels[$status]['label'] . ($note !== '' ? ' — ' . $note : ''));
+        if ($status === 'confirmed') {
+        // سامانه توسعه تجارت: شارژِ استارزِ سهمِ همین پول
+        try { require_once __DIR__ . '/trade_stars.php'; ts_on_money($pdo, (int) $p['order_id'], (int) $user['id']); } catch (Throwable $e) { error_log('ts hook: ' . $e->getMessage()); }
+        }
         $o = orders_get($pdo, (int) $p['order_id']);
         if ($o && $status !== 'pending') {
             orders_notify($pdo, (int) $user['id'], (int) $o['seller_user_id'],

@@ -295,6 +295,17 @@ function abt_settings_defaults(): array
         'crm_token'        => '',
         'crm_login_url'    => 'https://crm.aradbranding.me/login.php',
         'crm_map_json'     => '',   // {service_id: basic|professional|enterprise | "-"}         // نامِ فیلدِ API برای فهرستِ اسناد [{title,url}] — خالی = ارسال نشود // آخرین فهرستِ واحدهای دریافت‌شده از آراد برندینگ: {"48":"آموزش و اطلاعات", …} // شناسه‌ی یکتای هر تیکت (arad-contact-<id>) — جلوی ثبتِ تکراری در ارسالِ دوباره را می‌گیرد
+        // ─── سامانه توسعه تجارت (aradbranding.app): شارژِ استارز با تأییدِ هر پول (includes/trade_stars.php) ───
+        'ts_enabled'       => '0',
+        'ts_base_url'      => 'https://aradbranding.app',
+        'ts_token'         => '',
+        'ts_login_url'     => 'https://aradbranding.app',
+        'ts_service_ids'   => '',   // [service_id, …] — خالی = از روی عنوان («توسعه تجارت»)
+        'ts_department'    => '',
+        'ts_subject_new'   => '',
+        'ts_body_new'      => '',
+        'ts_subject_topup' => '',
+        'ts_body_topup'    => '',
         'field_department' => 'department',
         'default_department' => '',
         'extra_json'      => '{"department": "sales"}',
