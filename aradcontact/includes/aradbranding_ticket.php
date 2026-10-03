@@ -1273,7 +1273,7 @@ function abt_create_account(PDO $pdo, array $s, array $order, int $userId): arra
         $sent = $payload;
         foreach ($sent as $k => $v) if (stripos((string) $k, 'pass') !== false) $sent[$k] = '***';
         if (function_exists('orders_add_history')) orders_add_history($pdo, (int) $order['id'], $userId, 'note', null, null, 'آراد برندینگ: ' . $why
-            . "\nارسال‌شده به " . $url . ': ' . json_encode($sent, JSON_UNESCAPED_UNICODE) . ($text !== '' ? "\nپاسخ: " . mb_substr($text, 0, 1500) : ''));
+            . "\nارسال‌شده به " . $url . ': ' . json_encode($sent, JSON_UNESCAPED_UNICODE) . ($text !== '' ? "\nپاسخ: " . mb_substr(is_array(json_decode($text, true)) ? json_encode(json_decode($text, true), JSON_UNESCAPED_UNICODE) : $text, 0, 1500) : ''));
         return ['ok' => false, 'message' => $why];
     }
     // نام کاربری/رمز/شناسه اگر API برگرداند (وگرنه: موبایل و همان رمزی که فرستادیم)
