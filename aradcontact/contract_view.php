@@ -585,6 +585,26 @@ require_once __DIR__ . '/includes/layout_top.php';
               <button type="button" class="btn btn-outline-primary btn-sm d-none" id="pdf-rebuild" title="فایل‌های PDFِ پیوستِ تیکت دوباره (مثلِ نسخه‌ی چاپی) ساخته می‌شوند و جای فایل‌های قبلی را می‌گیرند"><i class="fa-solid fa-file-pdf"></i> ساختِ دوباره‌ی PDFِ پیوست‌ها</button>
             <?php endif; ?>
           </div>
+          <?php
+          // آخرین PDFِ پیوستِ هر سند — برای بررسیِ مستقیمِ همان فایلی که به آراد برندینگ می‌رود
+          $__pdfs = [];
+          try {
+              require_once __DIR__ . '/includes/contract_pdf.php';
+              if (cpdf_ready($pdo)) {
+                  $__q = $pdo->prepare('SELECT p.* FROM contract_pdfs p JOIN (SELECT doc_type, MAX(id) mid FROM contract_pdfs WHERE contract_id = ? GROUP BY doc_type) x ON x.mid = p.id ORDER BY p.doc_type');
+                  $__q->execute([$id]);
+                  $__pdfs = $__q->fetchAll(PDO::FETCH_ASSOC) ?: [];
+              }
+          } catch (Throwable $e) {}
+          if ($__pdfs): ?>
+            <div class="small mt-2 text-muted">
+              <i class="fa-solid fa-paperclip"></i> PDFِ فعلیِ پیوستِ تیکت (همین فایل به آراد برندینگ می‌رود):
+              <?php foreach ($__pdfs as $__p): ?>
+                <a href="doc_pdf.php/<?= e((string) $__p['token']) ?>.pdf" target="_blank" class="ms-2"><?= e((string) $__p['file_name']) ?></a>
+                <span class="text-muted">(<?= to_persian_digits(to_jalali(substr((string) $__p['created_at'], 0, 10)) . ' ' . substr((string) $__p['created_at'], 11, 5)) ?>)</span>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
           <div id="send-box" class="border rounded-3 p-3 mt-3 d-none" style="background:#fdfbf5">
             <div class="small mb-2" id="send-hint"></div>
             <textarea id="send-msg" class="form-control form-control-sm mb-2" rows="6" readonly dir="rtl"></textarea>

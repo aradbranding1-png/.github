@@ -659,7 +659,7 @@ function abt_payload(PDO $pdo, array $s, array $order, array $ticket): array
     // اسنادِ پیوست (مثلاً لینک‌های قرارداد): فقط اگر API فیلدش را پشتیبانی کند و نامش در تنظیمات آمده باشد
     $att = json_decode((string) ($ticket['attachments_json'] ?? ''), true);
     if (is_array($att) && $att) {
-        $map['field_attachments'] = array_values(array_map(static fn($a) => ['title' => (string) ($a['title'] ?? ''), 'url' => (string) ($a['url'] ?? '')], $att));
+        $map['field_attachments'] = array_values(array_map(static fn($a) => ['title' => (string) ($a['title'] ?? ''), 'url' => abt_latest_pdf_url($pdo, (string) ($a['url'] ?? ''))], $att));
     }
     foreach ($map as $cfg => $val) {
         $name = trim((string) ($s[$cfg] ?? ''));
@@ -1449,4 +1449,23 @@ function abt_send_all(PDO $pdo, array $order, array $tickets, int $userId): arra
         return ['ok' => true, 'message' => to_persian_digits((string) $ok) . ' تیکت (یکی برای هر خدمت) در آراد برندینگ ثبت شد.'];
     }
     return ['ok' => false, 'message' => ($ok ? to_persian_digits((string) $ok) . ' تیکت ارسال شد؛ ' : '') . implode(' | ', $fail)];
+}
+
+/**
+ * پیوستِ PDFِ سندِ قرارداد: همیشه تازه‌ترین PDFِ ساخته‌شده‌ی همان سند (با آدرسِ تازه).
+ * آراد برندینگ فایلِ پیوست را با آدرسش نگه می‌دارد؛ اگر آدرس عوض نشود، ارسالِ مجدد همان فایلِ قدیمی را نشان می‌دهد.
+ */
+function abt_latest_pdf_url(PDO $pdo, string $url): string
+{
+    if (!preg_match('#^(.*doc_pdf\.php/)([a-f0-9]{40})\.pdf$#', $url, $m)) return $url;
+    try {
+        $st = $pdo->prepare('SELECT n.token FROM contract_pdfs o JOIN contract_pdfs n ON n.contract_id = o.contract_id AND n.doc_type = o.doc_type
+            WHERE o.token = ? ORDER BY n.id DESC LIMIT 1');
+        $st->execute([$m[2]]);
+        $tok = (string) $st->fetchColumn();
+        if ($tok !== '' && $tok !== $m[2]) return $m[1] . $tok . '.pdf';
+    } catch (Throwable $e) {
+        error_log('abt_latest_pdf_url: ' . $e->getMessage());
+    }
+    return $url;
 }
