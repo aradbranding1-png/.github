@@ -32,31 +32,37 @@ $usedIds = array_map('intval', array_column($pages, 'language_id'));
       </div>
     <?php else: ?>
       <ul class="list">
-        <?php foreach ($pages as $p): ?>
-          <li class="list-row">
-            <span class="lang-badge"><?= e($p['lang_code']) ?></span>
-            <div class="grow">
-              <div class="title"><?= e($p['title']) ?></div>
-              <div class="meta">
-                <span><?= e($p['lang_name_fa']) ?></span>
-                <?php if ((int) $p['status'] === 2): ?><span class="chip chip-ok">فعال</span><?php elseif ((int) $p['status'] === 0): ?><span class="chip">غیرفعال</span><?php else: ?><span class="chip chip-warn">متوقف‌شده توسط مدیر</span><?php endif; ?>
-                <?php if ($p['is_default']): ?><span class="chip chip-gold">پیش‌فرض</span><?php endif; ?>
+        <?php foreach ($pages as $p): $st = (int) $p['status']; $on = $st === 2; ?>
+          <li class="list-row page-row">
+            <div class="page-row-main">
+              <span class="lang-badge"><?= e($p['lang_code']) ?></span>
+              <div class="grow">
+                <div class="title"><?= e($p['title']) ?></div>
+                <div class="meta">
+                  <span><?= e($p['lang_name_fa']) ?></span>
+                  <?php if ($st !== 0 && $st !== 2): ?><span class="chip chip-warn">متوقف‌شده توسط مدیر</span><?php endif; ?>
+                  <?php if ($p['is_default']): ?><span class="chip chip-gold">پیش‌فرض</span><?php endif; ?>
+                </div>
               </div>
             </div>
-            <?php $st = (int) $p['status']; if ($st === 0 || $st === 2): $on = $st === 2; ?>
-              <form class="inline-form" method="post" action="/pages/<?= e($p['uid']) ?>/toggle">
-                <?= csrf_field() ?>
-                <button class="onoff<?= $on ? ' is-on' : '' ?>" type="submit" role="switch" aria-checked="<?= $on ? 'true' : 'false' ?>" aria-label="<?= $on ? 'غیرفعال‌کردن صفحه' : 'فعال‌کردن صفحه' ?>" title="<?= $on ? 'فعال — برای خاموش‌کردن بزنید' : 'غیرفعال — برای روشن‌کردن بزنید' ?>">
-                  <span class="onoff-track" aria-hidden="true"><i></i></span><span class="onoff-label"><?= $on ? 'فعال' : 'غیرفعال' ?></span>
-                </button>
-              </form>
-            <?php endif; ?>
-            <?php if (!$p['is_default']): ?>
-              <form class="inline-form" method="post" action="/pages/<?= e($p['uid']) ?>/default">
-                <?= csrf_field() ?><button class="btn btn-quiet btn-sm" type="submit">پیش‌فرض شود</button>
-              </form>
-            <?php endif; ?>
-            <a class="btn btn-ghost btn-sm" href="/pages/<?= e($p['uid']) ?>/edit">ویرایش</a>
+            <div class="page-row-actions">
+              <?php if ($st === 0 || $st === 2): ?>
+                <form class="inline-form" method="post" action="/pages/<?= e($p['uid']) ?>/toggle">
+                  <?= csrf_field() ?>
+                  <button class="onoff<?= $on ? ' is-on' : '' ?>" type="submit" role="switch" aria-checked="<?= $on ? 'true' : 'false' ?>" aria-label="<?= $on ? 'غیرفعال‌کردن صفحه' : 'فعال‌کردن صفحه' ?>" title="<?= $on ? 'فعال — برای خاموش‌کردن بزنید' : 'غیرفعال — برای روشن‌کردن بزنید' ?>">
+                    <span class="onoff-track" aria-hidden="true"><i></i></span><span class="onoff-label"><?= $on ? 'فعال' : 'غیرفعال' ?></span>
+                  </button>
+                </form>
+              <?php endif; ?>
+              <span class="page-row-end">
+                <?php if (!$p['is_default']): ?>
+                  <form class="inline-form" method="post" action="/pages/<?= e($p['uid']) ?>/default">
+                    <?= csrf_field() ?><button class="btn btn-quiet btn-sm" type="submit">پیش‌فرض شود</button>
+                  </form>
+                <?php endif; ?>
+                <a class="btn btn-ghost btn-sm" href="/pages/<?= e($p['uid']) ?>/edit">ویرایش</a>
+              </span>
+            </div>
           </li>
         <?php endforeach; ?>
       </ul>

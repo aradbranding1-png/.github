@@ -1016,3 +1016,16 @@ main.content > * { animation: rise .32s var(--ease) both; }
 .pdetail .prose[dir="auto"], .pdetail .pdetail-summary[dir="auto"] { text-align: justify; text-align-last: start; }
 .pdetail .prose[dir="auto"] > * { unicode-bidi: plaintext; text-align: inherit; }
 @media (max-width: 520px) { .specs div { grid-template-columns: 1fr; gap: 2px; } }
+
+/* 1.16.4: «صفحه‌ها» list — the switch shows the status; actions sit on their own line on phones */
+.page-row { flex-wrap: wrap; row-gap: 12px; }
+.page-row-main { display: flex; align-items: center; gap: 12px; flex: 1 1 260px; min-width: 0; }
+.page-row-main .grow { min-width: 0; }
+.page-row-main .title { overflow-wrap: anywhere; }
+.page-row-actions { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; flex-wrap: wrap; }
+.page-row-end { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 190px; }
+.page-row-actions .inline-form { margin: 0; }
+@media (max-width: 640px) {
+  .page-row-actions { flex-basis: 100%; justify-content: space-between; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .page-row-end { min-width: 0; }
+}
