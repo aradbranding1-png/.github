@@ -722,6 +722,145 @@ require_once __DIR__ . '/includes/layout_top.php';
       </div>
 
       <?php if ($order['status'] !== 'cancelled') { try { consent_render_card($pdo, $order, $user); } catch (Throwable $e) { error_log('consent card: ' . $e->getMessage()); } } ?>
+
+      <!-- اطلاعاتِ پرداخت، هشدارِ واریزیِ تکراری و تصمیمِ واحد مالی: ستونِ اصلی، زیرِ پیامِ رضایت -->
+      <?php if ($dupCands): $dupCertain = $dupCands[0]['level'] === 'certain'; ?>
+      <div class="card p-3 mb-3" id="dup-check" style="border:2px solid <?= $dupCertain ? '#dc2626' : '#f59e0b' ?>;background:<?= $dupCertain ? '#fef2f2' : '#fffbeb' ?>">
+        <h6 class="fw-bold mb-1 <?= $dupCertain ? 'text-danger' : 'text-warning-emphasis' ?>"><i class="fa-solid fa-clone"></i> <?= $dupCertain ? 'واریزیِ تکراری — تقریباً قطعی' : 'احتمالِ واریزیِ تکراری' ?></h6>
+        <div class="small text-muted mb-2">همین واریزی احتمالاً توسطِ کارشناسِ دیگری هم در سفارشِ جداگانه ثبت شده. قبل از تأیید، فیش‌ها را کنارِ هم ببینید و مشخص کنید.</div>
+        <?php foreach ($dupCands as $dc): $o2 = $dc['order']; ?>
+          <div class="border rounded-3 p-2 mb-2 bg-white">
+            <div class="d-flex justify-content-between flex-wrap gap-1">
+              <div>
+                <a href="order_view.php?id=<?= (int) $o2['id'] ?>" target="_blank" class="fw-bold text-decoration-none"><?= e(to_persian_digits((string) $o2['order_number'])) ?></a>
+                <?= orders_status_badge((string) $o2['status']) ?>
+                <span class="badge <?= $dc['level'] === 'certain' ? 'text-bg-danger' : 'text-bg-warning' ?>"><?= $dc['level'] === 'certain' ? 'قطعی' : 'محتمل' ?></span>
+              </div>
+              <div class="small text-muted"><?= to_jalali((string) ($o2['submitted_at'] ?? $o2['created_at'])) ?> <?= e(to_persian_digits(substr((string) ($o2['submitted_at'] ?? $o2['created_at']), 11, 5))) ?></div>
+            </div>
+            <div class="small mt-1">
+              کارشناس: <b><?= e((string) ($o2['seller_name'] ?? '—')) ?></b> — مشتری: <?= e((string) ($o2['customer_name'] ?? '—')) ?>
+              — واریزی: <b><?= format_toman((int) $o2['paid_amount']) ?></b><?= $o2['payment_ref'] ? ' — پیگیری: <span dir="ltr">' . e((string) $o2['payment_ref']) . '</span>' : '' ?>
+            </div>
+            <ul class="small mb-2 mt-1 ps-3">
+              <?php foreach ($dc['reasons'] as $why): ?><li><?= e($why) ?></li><?php endforeach; ?>
+            </ul>
+            <?php if ($canDecide): ?>
+              <div class="d-flex flex-wrap gap-2">
+                <?php if ($order['status'] === 'pending'): ?>
+                  <form method="post" onsubmit="return confirm('یک واریزی است؛ همین سفارش (<?= e((string) $order['order_number']) ?>) به‌عنوانِ تکراری رد شود و سفارشِ <?= e((string) $o2['order_number']) ?> بماند؟');">
+                    <?= csrf_field() ?><input type="hidden" name="action" value="dup_same"><input type="hidden" name="other_id" value="<?= (int) $o2['id'] ?>">
+                    <button class="btn btn-sm btn-danger"><i class="fa-solid fa-clone"></i> یک واریزی است — این سفارش رد شود</button>
+                  </form>
+                <?php endif; ?>
+                <form method="post" onsubmit="return confirm('مطمئنید این‌ها دو واریزیِ جدا هستند؟');">
+                  <?= csrf_field() ?><input type="hidden" name="action" value="dup_separate"><input type="hidden" name="other_id" value="<?= (int) $o2['id'] ?>">
+                  <button class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-code-branch"></i> دو واریزیِ جداست</button>
+                </form>
+                <a href="order_view.php?id=<?= (int) $o2['id'] ?>" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-receipt"></i> دیدنِ فیشِ آن سفارش</a>
+              </div>
+              <?php if ($order['status'] !== 'pending'): ?><div class="small text-muted mt-1">این سفارش تأیید شده؛ اگر تکراری است، از داخلِ سفارشِ <?= e((string) $o2['order_number']) ?> آن را رد کنید.</div><?php endif; ?>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <?php if ($canDecide && $order['status'] !== 'cancelled'): ?>
+      <div class="card p-3 mb-3 dec" id="decide" style="border-color:#bbf7d0">
+        <h6 class="fw-bold mb-2"><i class="fa-solid fa-scale-balanced text-success"></i> تصمیمِ واحد مالی</h6>
+        <form method="post">
+          <?= csrf_field() ?>
+          <input type="hidden" name="action" value="decide">
+          <input type="hidden" name="form_version" value="<?= e(md5((string) $order['status'] . '|' . (string) $order['paid_amount'] . '|' . (string) ($order['submitted_at'] ?? '') . '|' . (string) ($order['payment_date'] ?? ''))) ?>">
+          <label class="form-label small mb-1">مبلغِ دریافتیِ تأییدشده (تومان) <span class="text-muted">— مبلغِ اعلامیِ کارشناس: <b dir="ltr"><?= e(number_format((int) $order['paid_amount'])) ?></b></span></label>
+          <input name="confirmed_amount" id="decConfirmed" data-declared="<?= (int) $order['paid_amount'] ?>" class="form-control form-control-sm mb-1" dir="ltr" value="<?= e(number_format((int) ($order['status'] === 'approved' ? ($order['confirmed_amount'] ?? $order['paid_amount']) : $order['paid_amount']))) ?>">
+          <div class="form-check small mb-2 p-2 rounded" id="decMismatch" style="background:#fff7ed;display:none">
+            <input class="form-check-input ms-0 me-1" type="checkbox" name="amount_mismatch_ack" value="1" id="decMismatchAck">
+            <label class="form-check-label text-warning-emphasis" for="decMismatchAck">مبلغِ تأییدی با مبلغِ اعلامیِ کارشناس فرق دارد؛ مبلغِ متفاوت را عمداً تأیید می‌کنم (طبقِ فیش).</label>
+          </div>
+          <label class="form-label small mb-1">تاریخِ واریز طبقِ فیش <span class="text-muted">(مبنای «تاریخ عملکرد» در سهم عملکرد — با فیش چک کنید)</span></label>
+          <input name="receipt_date" class="form-control form-control-sm mb-2 jalali-date" autocomplete="off" value="<?= e(!empty($order['payment_date']) ? to_jalali((string) $order['payment_date']) : '') ?>">
+          <label class="form-label small mb-1">توضیح (برای «رد» الزامی است)</label>
+          <textarea name="finance_note" class="form-control form-control-sm mb-2" rows="2"><?= e((string) ($order['finance_note'] ?? '')) ?></textarea>
+          <?php if ($order['status'] !== 'approved' && scr_ready($pdo)) echo scr_editor_html($pdo, $order, 'decConfirmed'); ?>
+          <?php if ($order['status'] === 'approved'):
+            $__sentN = count(array_filter(abt_ready($pdo) ? abt_tickets_for_order($pdo, $orderId) : [], static fn($t) => in_array($t['status'], ['sent', 'manual'], true))); ?>
+            <div class="small p-2 mb-2 rounded" style="background:#fef2f2">
+              <b class="text-danger">اگر به اشتباه تأیید شده:</b> دلیل را در «توضیح» بنویسید و «لغوِ تأیید و رد» را بزنید؛ سفارش برای اصلاح به کارشناس برمی‌گردد.
+              <?php if ($__sentN && abt_can_manage($user)): ?>
+                <div class="form-check mt-1">
+                  <input class="form-check-input ms-0 me-1" type="checkbox" name="revoke_delete_tickets" value="1" id="revokeDelTickets" checked>
+                  <label class="form-check-label" for="revokeDelTickets"><?= to_persian_digits((string) $__sentN) ?> تیکتِ ارسال‌شده‌ی این سفارش هم از آراد برندینگ حذف شود (بعد از اصلاح و تأییدِ دوباره، از روی خدماتِ درست دوباره ارسال می‌شوند)</label>
+                </div>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
+          <?php if ($dupCands): ?>
+            <div class="form-check small mb-2 p-2 rounded" style="background:#fef2f2">
+              <input class="form-check-input ms-0 me-1" type="checkbox" name="dup_ack" value="1" id="dup_ack">
+              <label class="form-check-label text-danger" for="dup_ack">هشدارِ واریزیِ تکراری را بررسی کردم و این سفارش جداگانه تأیید شود.</label>
+            </div>
+          <?php endif; ?>
+          <script>
+          (function () {
+            var f = document.getElementById('decConfirmed'), box = document.getElementById('decMismatch');
+            if (!f || !box) return;
+            function sync() {
+              var v = Number(String(f.value).replace(/[^0-9]/g, '')), d = Number(f.dataset.declared);
+              box.style.display = (v && v !== d) ? 'block' : 'none';
+            }
+            f.addEventListener('input', sync); sync();
+          })();
+          </script>
+          <div class="d-flex gap-2 flex-wrap">
+            <?php if ($order['status'] !== 'approved'): ?><button name="decision" value="approved" class="btn btn-success btn-sm flex-grow-1" onclick="var f=document.getElementById('decConfirmed');return confirm('سفارش با مبلغِ تأییدیِ ' + f.value + ' تومان تأیید و ثبت شود؟\n(مبلغِ اعلامیِ کارشناس: ' + Number(f.dataset.declared).toLocaleString('en-US') + ' تومان — با فیش مطابقت دارد؟)')"><i class="fa-solid fa-circle-check"></i> تأیید و ثبت سفارش</button><?php endif; ?>
+            <?php if ($order['status'] !== 'pending'): ?><button name="decision" value="pending" class="btn btn-warning btn-sm flex-grow-1"><i class="fa-solid fa-hourglass-half"></i> در انتظار بررسی</button><?php endif; ?>
+            <?php if ($order['status'] === 'approved'): ?>
+              <button name="decision" value="rejected" class="btn btn-danger btn-sm flex-grow-1" onclick="if (!this.form.finance_note.value.trim()) { alert('دلیلِ لغوِ تأیید را در «توضیح» بنویسید تا کارشناس بداند چه چیزی را اصلاح کند.'); this.form.finance_note.focus(); return false; } return confirm('تأییدِ این سفارش لغو و سفارش «رد» شود؟\n\n• کارشناسِ ثبت‌کننده می‌تواند خدمات/مبلغ را اصلاح و دوباره ارسال کند.\n• فروش، گزارش‌ها و سهم عملکردِ این سفارش تا تأییدِ دوباره حساب نمی‌شوند.');"><i class="fa-solid fa-rotate-left"></i> لغوِ تأیید و رد (برای اصلاحِ کارشناس)</button>
+            <?php elseif ($order['status'] !== 'rejected'): ?><button name="decision" value="rejected" class="btn btn-outline-danger btn-sm flex-grow-1"><i class="fa-solid fa-circle-xmark"></i> رد</button><?php endif; ?>
+          </div>
+        </form>
+        <?php if ($order['status'] === 'approved' && scr_ready($pdo)): ?>
+          <form method="post" class="mt-2"><?= csrf_field() ?><input type="hidden" name="action" value="sales_split">
+            <?= scr_editor_html($pdo, $order) ?>
+            <button class="btn btn-sm" style="background:#6d28d9;color:#fff"><i class="fa-solid fa-floppy-disk"></i> ذخیره‌ی تفکیکِ فروش</button>
+          </form>
+        <?php endif; ?>
+        <form method="post" class="d-flex gap-2 mt-2">
+          <?= csrf_field() ?>
+          <input type="hidden" name="action" value="finance_note">
+          <input name="note" class="form-control form-control-sm" placeholder="یادداشتِ داخلیِ مالی (بدونِ تغییرِ وضعیت)">
+          <button class="btn btn-sm btn-outline-secondary">ثبت</button>
+        </form>
+      </div>
+      <?php endif; ?>
+
+      <div class="card p-3 mb-3">
+        <h6 class="fw-bold mb-2"><i class="fa-solid fa-money-check-dollar text-success"></i> اطلاعاتِ پرداخت</h6>
+        <div class="kv"><span>مبلغِ اعلامیِ پرداخت</span><span class="fw-bold"><?= format_toman((int) $order['paid_amount']) ?></span></div>
+        <?php if ($diff !== 0): ?>
+          <div class="kv"><span>اختلاف با فاکتور</span><span class="<?= $diff < 0 ? 'text-warning' : 'text-info' ?>"><?= $diff < 0 ? 'کسری ' : 'مازاد ' ?><?= format_toman(abs($diff)) ?></span></div>
+        <?php endif; ?>
+        <?php if ($order['confirmed_amount'] !== null): ?><div class="kv"><span>مبلغِ تأییدشده‌ی مالی</span><span class="text-success fw-bold"><?= format_toman((int) $order['confirmed_amount']) ?></span></div><?php endif; ?>
+        <?php $__splits = scr_ready($pdo) ? scr_get($pdo, $orderId) : []; if ($__splits): ?>
+          <div class="kv"><span>فروشِ مشترک <span class="text-muted small">(فقط گزارشِ فروش)</span></span><span class="small"><?php foreach ($__splits as $__sp): ?><span class="badge text-bg-light border ms-1"><?= e((string) $__sp['full_name']) ?>: <?= format_toman((int) $__sp['amount']) ?></span><?php endforeach; ?></span></div>
+        <?php endif; ?>
+        <div class="kv"><span>روش پرداخت</span><span><?= e($methods[$order['payment_method']] ?? (string) $order['payment_method']) ?></span></div>
+        <div class="kv"><span>تاریخ پرداخت</span><span><?= $order['payment_date'] ? to_jalali($order['payment_date']) : '—' ?></span></div>
+        <div class="kv"><span>شماره پیگیری</span><span dir="ltr"><?= e((string) ($order['payment_ref'] ?? '—')) ?></span></div>
+        <?php if (($order['payment_method'] ?? '') === 'barter'): ?>
+          <div class="kv"><span>تهاتر با</span><span><?= e((string) ($order['barter_desc'] ?? '—')) ?></span></div>
+          <div class="kv"><span>ارزشِ تهاتر</span><span><?= format_toman((int) $order['paid_amount']) ?></span></div>
+        <?php endif; ?>
+        <div class="kv"><span>شیوه‌ی تسویه</span><span><?= e(orders_settle_label($order, $installments ?? [])) ?></span></div>
+        <div class="kv"><span>واریزکننده</span><span><?= e((string) ($order['payer_name'] ?? '—')) ?></span></div>
+        <div class="kv"><span>شماره فاکتور</span><span><bdi dir="ltr"><?= e(to_persian_digits((string) $order['order_number'])) ?></bdi></span></div>
+        <?php if (!$isLegacyOrder): ?><div class="kv"><span>پیش‌فاکتورِ اولیه</span><span class="text-muted"><?= e(to_persian_digits((string) $order['quote_number'])) ?></span></div><?php endif; ?>
+        <?php if ($order['seller_note']): ?><div class="small mt-2 p-2 rounded" style="background:#fafaf9"><b>توضیحِ کارشناس:</b> <?= nl2br(e($order['seller_note'])) ?></div><?php endif; ?>
+      </div>
+
+
     </div>
 
     <div class="col-lg-5">
@@ -961,142 +1100,6 @@ require_once __DIR__ . '/includes/layout_top.php';
       </div>
       <?php endif; ?>
 
-      <div class="card p-3 mb-3">
-        <h6 class="fw-bold mb-2"><i class="fa-solid fa-money-check-dollar text-success"></i> اطلاعاتِ پرداخت</h6>
-        <div class="kv"><span>مبلغِ اعلامیِ پرداخت</span><span class="fw-bold"><?= format_toman((int) $order['paid_amount']) ?></span></div>
-        <?php if ($diff !== 0): ?>
-          <div class="kv"><span>اختلاف با فاکتور</span><span class="<?= $diff < 0 ? 'text-warning' : 'text-info' ?>"><?= $diff < 0 ? 'کسری ' : 'مازاد ' ?><?= format_toman(abs($diff)) ?></span></div>
-        <?php endif; ?>
-        <?php if ($order['confirmed_amount'] !== null): ?><div class="kv"><span>مبلغِ تأییدشده‌ی مالی</span><span class="text-success fw-bold"><?= format_toman((int) $order['confirmed_amount']) ?></span></div><?php endif; ?>
-        <?php $__splits = scr_ready($pdo) ? scr_get($pdo, $orderId) : []; if ($__splits): ?>
-          <div class="kv"><span>فروشِ مشترک <span class="text-muted small">(فقط گزارشِ فروش)</span></span><span class="small"><?php foreach ($__splits as $__sp): ?><span class="badge text-bg-light border ms-1"><?= e((string) $__sp['full_name']) ?>: <?= format_toman((int) $__sp['amount']) ?></span><?php endforeach; ?></span></div>
-        <?php endif; ?>
-        <div class="kv"><span>روش پرداخت</span><span><?= e($methods[$order['payment_method']] ?? (string) $order['payment_method']) ?></span></div>
-        <div class="kv"><span>تاریخ پرداخت</span><span><?= $order['payment_date'] ? to_jalali($order['payment_date']) : '—' ?></span></div>
-        <div class="kv"><span>شماره پیگیری</span><span dir="ltr"><?= e((string) ($order['payment_ref'] ?? '—')) ?></span></div>
-        <?php if (($order['payment_method'] ?? '') === 'barter'): ?>
-          <div class="kv"><span>تهاتر با</span><span><?= e((string) ($order['barter_desc'] ?? '—')) ?></span></div>
-          <div class="kv"><span>ارزشِ تهاتر</span><span><?= format_toman((int) $order['paid_amount']) ?></span></div>
-        <?php endif; ?>
-        <div class="kv"><span>شیوه‌ی تسویه</span><span><?= e(orders_settle_label($order, $installments ?? [])) ?></span></div>
-        <div class="kv"><span>واریزکننده</span><span><?= e((string) ($order['payer_name'] ?? '—')) ?></span></div>
-        <div class="kv"><span>شماره فاکتور</span><span><bdi dir="ltr"><?= e(to_persian_digits((string) $order['order_number'])) ?></bdi></span></div>
-        <?php if (!$isLegacyOrder): ?><div class="kv"><span>پیش‌فاکتورِ اولیه</span><span class="text-muted"><?= e(to_persian_digits((string) $order['quote_number'])) ?></span></div><?php endif; ?>
-        <?php if ($order['seller_note']): ?><div class="small mt-2 p-2 rounded" style="background:#fafaf9"><b>توضیحِ کارشناس:</b> <?= nl2br(e($order['seller_note'])) ?></div><?php endif; ?>
-      </div>
-
-      <?php if ($dupCands): $dupCertain = $dupCands[0]['level'] === 'certain'; ?>
-      <div class="card p-3 mb-3" id="dup-check" style="border:2px solid <?= $dupCertain ? '#dc2626' : '#f59e0b' ?>;background:<?= $dupCertain ? '#fef2f2' : '#fffbeb' ?>">
-        <h6 class="fw-bold mb-1 <?= $dupCertain ? 'text-danger' : 'text-warning-emphasis' ?>"><i class="fa-solid fa-clone"></i> <?= $dupCertain ? 'واریزیِ تکراری — تقریباً قطعی' : 'احتمالِ واریزیِ تکراری' ?></h6>
-        <div class="small text-muted mb-2">همین واریزی احتمالاً توسطِ کارشناسِ دیگری هم در سفارشِ جداگانه ثبت شده. قبل از تأیید، فیش‌ها را کنارِ هم ببینید و مشخص کنید.</div>
-        <?php foreach ($dupCands as $dc): $o2 = $dc['order']; ?>
-          <div class="border rounded-3 p-2 mb-2 bg-white">
-            <div class="d-flex justify-content-between flex-wrap gap-1">
-              <div>
-                <a href="order_view.php?id=<?= (int) $o2['id'] ?>" target="_blank" class="fw-bold text-decoration-none"><?= e(to_persian_digits((string) $o2['order_number'])) ?></a>
-                <?= orders_status_badge((string) $o2['status']) ?>
-                <span class="badge <?= $dc['level'] === 'certain' ? 'text-bg-danger' : 'text-bg-warning' ?>"><?= $dc['level'] === 'certain' ? 'قطعی' : 'محتمل' ?></span>
-              </div>
-              <div class="small text-muted"><?= to_jalali((string) ($o2['submitted_at'] ?? $o2['created_at'])) ?> <?= e(to_persian_digits(substr((string) ($o2['submitted_at'] ?? $o2['created_at']), 11, 5))) ?></div>
-            </div>
-            <div class="small mt-1">
-              کارشناس: <b><?= e((string) ($o2['seller_name'] ?? '—')) ?></b> — مشتری: <?= e((string) ($o2['customer_name'] ?? '—')) ?>
-              — واریزی: <b><?= format_toman((int) $o2['paid_amount']) ?></b><?= $o2['payment_ref'] ? ' — پیگیری: <span dir="ltr">' . e((string) $o2['payment_ref']) . '</span>' : '' ?>
-            </div>
-            <ul class="small mb-2 mt-1 ps-3">
-              <?php foreach ($dc['reasons'] as $why): ?><li><?= e($why) ?></li><?php endforeach; ?>
-            </ul>
-            <?php if ($canDecide): ?>
-              <div class="d-flex flex-wrap gap-2">
-                <?php if ($order['status'] === 'pending'): ?>
-                  <form method="post" onsubmit="return confirm('یک واریزی است؛ همین سفارش (<?= e((string) $order['order_number']) ?>) به‌عنوانِ تکراری رد شود و سفارشِ <?= e((string) $o2['order_number']) ?> بماند؟');">
-                    <?= csrf_field() ?><input type="hidden" name="action" value="dup_same"><input type="hidden" name="other_id" value="<?= (int) $o2['id'] ?>">
-                    <button class="btn btn-sm btn-danger"><i class="fa-solid fa-clone"></i> یک واریزی است — این سفارش رد شود</button>
-                  </form>
-                <?php endif; ?>
-                <form method="post" onsubmit="return confirm('مطمئنید این‌ها دو واریزیِ جدا هستند؟');">
-                  <?= csrf_field() ?><input type="hidden" name="action" value="dup_separate"><input type="hidden" name="other_id" value="<?= (int) $o2['id'] ?>">
-                  <button class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-code-branch"></i> دو واریزیِ جداست</button>
-                </form>
-                <a href="order_view.php?id=<?= (int) $o2['id'] ?>" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-receipt"></i> دیدنِ فیشِ آن سفارش</a>
-              </div>
-              <?php if ($order['status'] !== 'pending'): ?><div class="small text-muted mt-1">این سفارش تأیید شده؛ اگر تکراری است، از داخلِ سفارشِ <?= e((string) $o2['order_number']) ?> آن را رد کنید.</div><?php endif; ?>
-            <?php endif; ?>
-          </div>
-        <?php endforeach; ?>
-      </div>
-      <?php endif; ?>
-
-      <?php if ($canDecide && $order['status'] !== 'cancelled'): ?>
-      <div class="card p-3 mb-3 dec" id="decide" style="border-color:#bbf7d0">
-        <h6 class="fw-bold mb-2"><i class="fa-solid fa-scale-balanced text-success"></i> تصمیمِ واحد مالی</h6>
-        <form method="post">
-          <?= csrf_field() ?>
-          <input type="hidden" name="action" value="decide">
-          <input type="hidden" name="form_version" value="<?= e(md5((string) $order['status'] . '|' . (string) $order['paid_amount'] . '|' . (string) ($order['submitted_at'] ?? '') . '|' . (string) ($order['payment_date'] ?? ''))) ?>">
-          <label class="form-label small mb-1">مبلغِ دریافتیِ تأییدشده (تومان) <span class="text-muted">— مبلغِ اعلامیِ کارشناس: <b dir="ltr"><?= e(number_format((int) $order['paid_amount'])) ?></b></span></label>
-          <input name="confirmed_amount" id="decConfirmed" data-declared="<?= (int) $order['paid_amount'] ?>" class="form-control form-control-sm mb-1" dir="ltr" value="<?= e(number_format((int) ($order['status'] === 'approved' ? ($order['confirmed_amount'] ?? $order['paid_amount']) : $order['paid_amount']))) ?>">
-          <div class="form-check small mb-2 p-2 rounded" id="decMismatch" style="background:#fff7ed;display:none">
-            <input class="form-check-input ms-0 me-1" type="checkbox" name="amount_mismatch_ack" value="1" id="decMismatchAck">
-            <label class="form-check-label text-warning-emphasis" for="decMismatchAck">مبلغِ تأییدی با مبلغِ اعلامیِ کارشناس فرق دارد؛ مبلغِ متفاوت را عمداً تأیید می‌کنم (طبقِ فیش).</label>
-          </div>
-          <label class="form-label small mb-1">تاریخِ واریز طبقِ فیش <span class="text-muted">(مبنای «تاریخ عملکرد» در سهم عملکرد — با فیش چک کنید)</span></label>
-          <input name="receipt_date" class="form-control form-control-sm mb-2 jalali-date" autocomplete="off" value="<?= e(!empty($order['payment_date']) ? to_jalali((string) $order['payment_date']) : '') ?>">
-          <label class="form-label small mb-1">توضیح (برای «رد» الزامی است)</label>
-          <textarea name="finance_note" class="form-control form-control-sm mb-2" rows="2"><?= e((string) ($order['finance_note'] ?? '')) ?></textarea>
-          <?php if ($order['status'] !== 'approved' && scr_ready($pdo)) echo scr_editor_html($pdo, $order, 'decConfirmed'); ?>
-          <?php if ($order['status'] === 'approved'):
-            $__sentN = count(array_filter(abt_ready($pdo) ? abt_tickets_for_order($pdo, $orderId) : [], static fn($t) => in_array($t['status'], ['sent', 'manual'], true))); ?>
-            <div class="small p-2 mb-2 rounded" style="background:#fef2f2">
-              <b class="text-danger">اگر به اشتباه تأیید شده:</b> دلیل را در «توضیح» بنویسید و «لغوِ تأیید و رد» را بزنید؛ سفارش برای اصلاح به کارشناس برمی‌گردد.
-              <?php if ($__sentN && abt_can_manage($user)): ?>
-                <div class="form-check mt-1">
-                  <input class="form-check-input ms-0 me-1" type="checkbox" name="revoke_delete_tickets" value="1" id="revokeDelTickets" checked>
-                  <label class="form-check-label" for="revokeDelTickets"><?= to_persian_digits((string) $__sentN) ?> تیکتِ ارسال‌شده‌ی این سفارش هم از آراد برندینگ حذف شود (بعد از اصلاح و تأییدِ دوباره، از روی خدماتِ درست دوباره ارسال می‌شوند)</label>
-                </div>
-              <?php endif; ?>
-            </div>
-          <?php endif; ?>
-          <?php if ($dupCands): ?>
-            <div class="form-check small mb-2 p-2 rounded" style="background:#fef2f2">
-              <input class="form-check-input ms-0 me-1" type="checkbox" name="dup_ack" value="1" id="dup_ack">
-              <label class="form-check-label text-danger" for="dup_ack">هشدارِ واریزیِ تکراری را بررسی کردم و این سفارش جداگانه تأیید شود.</label>
-            </div>
-          <?php endif; ?>
-          <script>
-          (function () {
-            var f = document.getElementById('decConfirmed'), box = document.getElementById('decMismatch');
-            if (!f || !box) return;
-            function sync() {
-              var v = Number(String(f.value).replace(/[^0-9]/g, '')), d = Number(f.dataset.declared);
-              box.style.display = (v && v !== d) ? 'block' : 'none';
-            }
-            f.addEventListener('input', sync); sync();
-          })();
-          </script>
-          <div class="d-flex gap-2 flex-wrap">
-            <?php if ($order['status'] !== 'approved'): ?><button name="decision" value="approved" class="btn btn-success btn-sm flex-grow-1" onclick="var f=document.getElementById('decConfirmed');return confirm('سفارش با مبلغِ تأییدیِ ' + f.value + ' تومان تأیید و ثبت شود؟\n(مبلغِ اعلامیِ کارشناس: ' + Number(f.dataset.declared).toLocaleString('en-US') + ' تومان — با فیش مطابقت دارد؟)')"><i class="fa-solid fa-circle-check"></i> تأیید و ثبت سفارش</button><?php endif; ?>
-            <?php if ($order['status'] !== 'pending'): ?><button name="decision" value="pending" class="btn btn-warning btn-sm flex-grow-1"><i class="fa-solid fa-hourglass-half"></i> در انتظار بررسی</button><?php endif; ?>
-            <?php if ($order['status'] === 'approved'): ?>
-              <button name="decision" value="rejected" class="btn btn-danger btn-sm flex-grow-1" onclick="if (!this.form.finance_note.value.trim()) { alert('دلیلِ لغوِ تأیید را در «توضیح» بنویسید تا کارشناس بداند چه چیزی را اصلاح کند.'); this.form.finance_note.focus(); return false; } return confirm('تأییدِ این سفارش لغو و سفارش «رد» شود؟\n\n• کارشناسِ ثبت‌کننده می‌تواند خدمات/مبلغ را اصلاح و دوباره ارسال کند.\n• فروش، گزارش‌ها و سهم عملکردِ این سفارش تا تأییدِ دوباره حساب نمی‌شوند.');"><i class="fa-solid fa-rotate-left"></i> لغوِ تأیید و رد (برای اصلاحِ کارشناس)</button>
-            <?php elseif ($order['status'] !== 'rejected'): ?><button name="decision" value="rejected" class="btn btn-outline-danger btn-sm flex-grow-1"><i class="fa-solid fa-circle-xmark"></i> رد</button><?php endif; ?>
-          </div>
-        </form>
-        <?php if ($order['status'] === 'approved' && scr_ready($pdo)): ?>
-          <form method="post" class="mt-2"><?= csrf_field() ?><input type="hidden" name="action" value="sales_split">
-            <?= scr_editor_html($pdo, $order) ?>
-            <button class="btn btn-sm" style="background:#6d28d9;color:#fff"><i class="fa-solid fa-floppy-disk"></i> ذخیره‌ی تفکیکِ فروش</button>
-          </form>
-        <?php endif; ?>
-        <form method="post" class="d-flex gap-2 mt-2">
-          <?= csrf_field() ?>
-          <input type="hidden" name="action" value="finance_note">
-          <input name="note" class="form-control form-control-sm" placeholder="یادداشتِ داخلیِ مالی (بدونِ تغییرِ وضعیت)">
-          <button class="btn btn-sm btn-outline-secondary">ثبت</button>
-        </form>
-      </div>
-      <?php endif; ?>
-
       <?php if ((is_super_admin($user) || user_can('orders_delete', $user)) && in_array($order['status'], ['pending', 'rejected'], true)): ?>
         <form method="post" class="card p-3 mb-3" onsubmit="return confirm('این سفارش لغو شود؟');">
           <?= csrf_field() ?>
@@ -1109,7 +1112,8 @@ require_once __DIR__ . '/includes/layout_top.php';
       <?php endif; ?>
 
       <div class="card p-3">
-        <h6 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-warning"></i> تاریخچه</h6>
+        <h6 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-warning"></i> تاریخچه <span class="text-muted small fw-normal">(<?= to_persian_digits((string) count($history)) ?> مورد)</span></h6>
+        <div style="max-height:420px;overflow-y:auto;overscroll-behavior:contain;padding-inline-start:8px">
         <div class="tl">
           <?php foreach ($history as $h): ?>
             <div class="it">
@@ -1118,6 +1122,7 @@ require_once __DIR__ . '/includes/layout_top.php';
               <?php if ($h['note']): ?><div class="small"><?= nl2br(e($h['note'])) ?></div><?php endif; ?>
             </div>
           <?php endforeach; ?>
+        </div>
         </div>
       </div>
     </div>
