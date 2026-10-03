@@ -1,4 +1,4 @@
-# aradbranding.app — Home page redesign (v1.17.2)
+# aradbranding.app — Home page redesign (v1.18.0)
 
 A redesign of **only the home page** (`/`) of aradbranding.app as a "global trade command center":
 a real WebGL Earth (three.js) with day/night shading, atmosphere, clouds and city lights, curved
@@ -288,3 +288,11 @@ It touches `panel.js`, `panel-theme.css` and `layouts/app.php`.
 ## v1.17.2 (incremental package)
 
 `dist/aradbranding-1.17.2-update.zip` changes `panel-theme.css` only. The sidebar labels now keep the sidebar's own colours in light mode.
+
+## v1.18.0 — Arad Contact internal API (incremental package)
+
+`dist/aradbranding-1.18.0-update.zip` must be installed on top of 1.17.2. It adds `AradContactController`, the routes in `routes/api.php` and migration `2026_10_15_000001_arad_contact_integration`. The migration:
+- creates the `integration_refs` table
+- adds the `users.create` scope
+
+Endpoints are documented in `docs/API-arad-contact-internal.md`.

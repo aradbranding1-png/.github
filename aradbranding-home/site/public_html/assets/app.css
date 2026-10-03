@@ -1057,3 +1057,6 @@ main.content > * { animation: rise .32s var(--ease) both; }
   .fin-del .form { min-width: 0; }
   .fin-filter, .fin-filter .select { width: 100%; }
 }
+
+/* 1.18 */
+.api-sub { font-size: 14px; margin: 14px 0 8px; color: var(--muted); }

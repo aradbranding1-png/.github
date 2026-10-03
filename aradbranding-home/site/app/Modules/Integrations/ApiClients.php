@@ -16,6 +16,7 @@ final class ApiClients
         'wallet.charge' => 'شارژ کیف پول مشتری (و ساخت حساب در صورت نبودن)',
         'users.read' => 'استعلام حساب و موجودی با شماره موبایل',
         'users.credentials' => 'صدور رمز ورود تازه برای مشتری',
+        'users.create' => 'ساخت حساب برای مشتری با شماره موبایل و شناسه خارجی',
     ];
 
     public function __construct(private Connection $db)

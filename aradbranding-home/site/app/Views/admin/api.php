@@ -8,7 +8,8 @@ $err = static fn (string $k): string => isset($errors[$k]) ? '<div class="error"
 $cls = static fn (string $k): string => isset($errors[$k]) ? ' has-error' : '';
 $picked = (array) ($old['scopes'] ?? array_keys($scopes));
 $endpoint = ($baseUrl !== '' ? $baseUrl : 'https://aradbranding.app') . '/api/v1';
-$names = ['wallet.charge' => 'شارژ کیف پول', 'users.lookup' => 'استعلام حساب', 'users.credentials' => 'صدور رمز ورود', 'users.read' => 'استعلام حساب'];
+$names = ['wallet.charge' => 'شارژ کیف پول', 'users.lookup' => 'استعلام حساب', 'users.credentials' => 'صدور رمز ورود', 'users.read' => 'استعلام حساب', 'users.create' => 'ساخت حساب',
+    'ac.lookup' => 'آراد کانتکت: استعلام', 'ac.users' => 'آراد کانتکت: ساخت حساب', 'ac.stars.credit' => 'آراد کانتکت: شارژ'];
 ?>
 <div class="mailbox">
   <?= $this->partial('admin/_nav', ['perms' => $perms, 'active' => 'api']) ?>
@@ -28,6 +29,16 @@ $names = ['wallet.charge' => 'شارژ کیف پول', 'users.lookup' => 'است
           <p class="muted">با این کلیدها سامانه آراد کانتکت (یا هر سامانه دیگری که مجاز کنید) هنگام ثبت سفارش، کیف پول مشتری را با شماره موبایل شارژ می‌کند؛ اگر مشتری حساب نداشته باشد، حساب برایش ساخته می‌شود و اطلاعات ورود برای ارسال در تیکت برمی‌گردد.</p>
         </div>
       </div>
+      <h3 class="api-sub">API داخلی آراد کانتکت</h3>
+      <div class="api-endpoints">
+        <?php $ac = ($baseUrl !== '' ? $baseUrl : 'https://aradbranding.app') . '/api/integrations/arad-contact'; ?>
+        <div><b>POST</b><code dir="ltr"><?= e($ac) ?>/users/lookup</code><span>یافتن حساب با شماره‌های موبایل</span></div>
+        <div><b>POST</b><code dir="ltr"><?= e($ac) ?>/users</code><span>ساخت حساب و رمز موقت (یک بار برای هر external_id)</span></div>
+        <div><b>GET</b><code dir="ltr"><?= e($ac) ?>/stars/rate</code><span>نرخ فعلی هر Star به تومان</span></div>
+        <div><b>POST</b><code dir="ltr"><?= e($ac) ?>/stars/credit</code><span>شارژ کیف پول با مبلغ تومانی (یک بار برای هر external_id)</span></div>
+      </div>
+      <p class="hint muted">دسترسی‌های لازم کلید: استعلام حساب (<code dir="ltr">users.read</code>)، ساخت حساب (<code dir="ltr">users.create</code>) و شارژ کیف پول (<code dir="ltr">wallet.charge</code>) برای نرخ و شارژ. راهنما: <code dir="ltr">docs/API-arad-contact-internal.md</code>.</p>
+      <h3 class="api-sub">API نسخه ۱ (قدیمی‌تر)</h3>
       <div class="api-endpoints">
         <div><b>POST</b><code dir="ltr"><?= e($endpoint) ?>/wallet/charge</code><span>شارژ کیف پول (و ساخت حساب)</span></div>
         <div><b>GET</b><code dir="ltr"><?= e($endpoint) ?>/users/lookup?mobile=…</code><span>استعلام حساب و موجودی</span></div>

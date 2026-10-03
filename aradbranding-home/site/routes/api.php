@@ -27,4 +27,13 @@ return static function (Router $r): void {
         $r->get('/traders', [$api, 'traders']);
         $r->get('/traders/{handle:[a-z0-9-]{3,32}}', [$api, 'trader']);
     });
+
+    // Internal API for «آراد کانتکت» (partner key from Admin → «اتصال API»). docs/API-arad-contact-internal.md
+    $r->group('/api/integrations/arad-contact', ['throttle:api'], static function (Router $r): void {
+        $ac = \App\Modules\Integrations\AradContactController::class;
+        $r->post('/users/lookup', [$ac, 'lookup']);
+        $r->post('/users', [$ac, 'createUser']);
+        $r->get('/stars/rate', [$ac, 'rate']);
+        $r->post('/stars/credit', [$ac, 'credit']);
+    });
 };
