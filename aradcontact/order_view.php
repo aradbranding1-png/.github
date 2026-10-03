@@ -96,8 +96,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirect('order_view.php?id=' . $orderId . '#decide');
             }
         }
+        $__wasApproved = $order['status'] === 'approved';
         $res = orders_decide($pdo, $orderId, $status, $user, trim((string) ($_POST['finance_note'] ?? '')), $confirmed);
         flash_set($res['ok'] ? 'success' : 'danger', $res['message']);
+        // لغوِ تأییدِ اشتباه: آمار و سهم عملکرد خودکار اصلاح می‌شوند (فقط سفارشِ «تأییدشده» شمرده می‌شود)؛ این‌جا تیکت‌ها و استارز
+        if ($res['ok'] && $__wasApproved && $status !== 'approved') {
+            $__notes = ['تأییدِ سفارش لغو شد؛ فروش، گزارش‌ها و سهم عملکردِ این سفارش دیگر حساب نمی‌شوند تا دوباره تأیید شود.'];
+            try {
+                // تیکت‌های ارسال‌نشده پاک می‌شوند تا بعد از اصلاحِ خدمات و تأییدِ دوباره، از روی خدماتِ جدید ساخته شوند («ارسال نشود»ها می‌مانند)
+                $__n = $pdo->prepare("DELETE FROM aradbranding_tickets WHERE order_id = ? AND status IN ('queued','failed') AND (external_id IS NULL OR external_id = '')");
+                $__n->execute([$orderId]);
+                if ($__n->rowCount()) $__notes[] = to_persian_digits((string) $__n->rowCount()) . ' تیکتِ ارسال‌نشده‌ی این سفارش حذف شد.';
+                $__sent = array_values(array_filter(abt_tickets_for_order($pdo, $orderId), static fn($t) => in_array($t['status'], ['sent', 'manual'], true)));
+                if ($__sent && !empty($_POST['revoke_delete_tickets']) && abt_can_manage($user)) {
+                    $__ok = 0; $__fail = [];
+                    foreach ($__sent as $__t) {
+                        $__r = abt_delete_remote($pdo, $order, $__t, (int) $user['id'], 'لغوِ تأییدِ سفارش');
+                        if ($__r['ok']) $__ok++; else $__fail[] = $__r['message'];
+                    }
+                    $__notes[] = to_persian_digits((string) $__ok) . ' تیکتِ ارسال‌شده از آراد برندینگ حذف شد' . ($__fail ? '؛ ' . to_persian_digits((string) count($__fail)) . ' مورد حذف نشد — ' . $__fail[0] : '') . '.';
+                    // حذف‌شده‌ها هم پاک می‌شوند تا با تأییدِ دوباره، از روی خدماتِ اصلاح‌شده (با شناسه‌ی تازه) ساخته و ارسال شوند
+                    $pdo->prepare("DELETE FROM aradbranding_tickets WHERE order_id = ? AND status = 'deleted'")->execute([$orderId]);
+                } elseif ($__sent) {
+                    $__notes[] = to_persian_digits((string) count($__sent)) . ' تیکتِ ارسال‌شده در آراد برندینگ باقی ماند (در «ارسال تیکت‌ها» می‌توانید حذفشان کنید).';
+                }
+            } catch (Throwable $e) {
+                error_log('revoke tickets: ' . $e->getMessage());
+            }
+            try {
+                require_once __DIR__ . '/includes/trade_stars.php';
+                $__stars = 0;
+                foreach (ts_credits_for_order($pdo, $orderId) as $__c) if (($__c['status'] ?? '') === 'done') $__stars += (int) ($__c['amount_toman'] ?? 0);
+                if ($__stars > 0) $__notes[] = 'توجه: ' . number_format($__stars) . ' تومان استارز قبلاً در aradbranding.app شارژ شده و خودکار برگشت داده نمی‌شود؛ در صورتِ نیاز دستی کسر کنید. (با تأییدِ دوباره، شارژِ تکراری انجام نمی‌شود.)';
+            } catch (Throwable $e) {
+                error_log('revoke stars: ' . $e->getMessage());
+            }
+            orders_add_history($pdo, $orderId, (int) $user['id'], 'note', null, null, implode(' ', $__notes));
+            flash_set('warning', implode(' ', $__notes));
+        }
         if ($res['ok'] && $status === 'approved' && $__splitRows !== null) {
             try {
                 $__o2 = orders_get($pdo, $orderId);
@@ -1009,6 +1045,18 @@ require_once __DIR__ . '/includes/layout_top.php';
           <label class="form-label small mb-1">توضیح (برای «رد» الزامی است)</label>
           <textarea name="finance_note" class="form-control form-control-sm mb-2" rows="2"><?= e((string) ($order['finance_note'] ?? '')) ?></textarea>
           <?php if ($order['status'] !== 'approved' && scr_ready($pdo)) echo scr_editor_html($pdo, $order, 'decConfirmed'); ?>
+          <?php if ($order['status'] === 'approved'):
+            $__sentN = count(array_filter(abt_ready($pdo) ? abt_tickets_for_order($pdo, $orderId) : [], static fn($t) => in_array($t['status'], ['sent', 'manual'], true))); ?>
+            <div class="small p-2 mb-2 rounded" style="background:#fef2f2">
+              <b class="text-danger">اگر به اشتباه تأیید شده:</b> دلیل را در «توضیح» بنویسید و «لغوِ تأیید و رد» را بزنید؛ سفارش برای اصلاح به کارشناس برمی‌گردد.
+              <?php if ($__sentN && abt_can_manage($user)): ?>
+                <div class="form-check mt-1">
+                  <input class="form-check-input ms-0 me-1" type="checkbox" name="revoke_delete_tickets" value="1" id="revokeDelTickets" checked>
+                  <label class="form-check-label" for="revokeDelTickets"><?= to_persian_digits((string) $__sentN) ?> تیکتِ ارسال‌شده‌ی این سفارش هم از آراد برندینگ حذف شود (بعد از اصلاح و تأییدِ دوباره، از روی خدماتِ درست دوباره ارسال می‌شوند)</label>
+                </div>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
           <?php if ($dupCands): ?>
             <div class="form-check small mb-2 p-2 rounded" style="background:#fef2f2">
               <input class="form-check-input ms-0 me-1" type="checkbox" name="dup_ack" value="1" id="dup_ack">
@@ -1029,7 +1077,9 @@ require_once __DIR__ . '/includes/layout_top.php';
           <div class="d-flex gap-2 flex-wrap">
             <?php if ($order['status'] !== 'approved'): ?><button name="decision" value="approved" class="btn btn-success btn-sm flex-grow-1" onclick="var f=document.getElementById('decConfirmed');return confirm('سفارش با مبلغِ تأییدیِ ' + f.value + ' تومان تأیید و ثبت شود؟\n(مبلغِ اعلامیِ کارشناس: ' + Number(f.dataset.declared).toLocaleString('en-US') + ' تومان — با فیش مطابقت دارد؟)')"><i class="fa-solid fa-circle-check"></i> تأیید و ثبت سفارش</button><?php endif; ?>
             <?php if ($order['status'] !== 'pending'): ?><button name="decision" value="pending" class="btn btn-warning btn-sm flex-grow-1"><i class="fa-solid fa-hourglass-half"></i> در انتظار بررسی</button><?php endif; ?>
-            <?php if ($order['status'] !== 'rejected'): ?><button name="decision" value="rejected" class="btn btn-outline-danger btn-sm flex-grow-1"><i class="fa-solid fa-circle-xmark"></i> رد</button><?php endif; ?>
+            <?php if ($order['status'] === 'approved'): ?>
+              <button name="decision" value="rejected" class="btn btn-danger btn-sm flex-grow-1" onclick="if (!this.form.finance_note.value.trim()) { alert('دلیلِ لغوِ تأیید را در «توضیح» بنویسید تا کارشناس بداند چه چیزی را اصلاح کند.'); this.form.finance_note.focus(); return false; } return confirm('تأییدِ این سفارش لغو و سفارش «رد» شود؟\n\n• کارشناسِ ثبت‌کننده می‌تواند خدمات/مبلغ را اصلاح و دوباره ارسال کند.\n• فروش، گزارش‌ها و سهم عملکردِ این سفارش تا تأییدِ دوباره حساب نمی‌شوند.');"><i class="fa-solid fa-rotate-left"></i> لغوِ تأیید و رد (برای اصلاحِ کارشناس)</button>
+            <?php elseif ($order['status'] !== 'rejected'): ?><button name="decision" value="rejected" class="btn btn-outline-danger btn-sm flex-grow-1"><i class="fa-solid fa-circle-xmark"></i> رد</button><?php endif; ?>
           </div>
         </form>
         <?php if ($order['status'] === 'approved' && scr_ready($pdo)): ?>
