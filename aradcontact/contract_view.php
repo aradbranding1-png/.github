@@ -581,6 +581,9 @@ require_once __DIR__ . '/includes/layout_top.php';
             <button type="button" class="btn btn-outline-dark btn-sm send-btn" data-docs="quote"><i class="fa-solid fa-file-invoice"></i> ارسال <?= e($finDocLabel) ?></button>
             <button type="button" class="btn btn-outline-dark btn-sm send-btn" data-docs="services"><i class="fa-solid fa-list-check"></i> ارسال شرح خدمات</button>
             <button type="button" class="btn btn-success btn-sm send-btn" data-docs="contract,quote,services"><i class="fa-solid fa-layer-group"></i> ارسال همه</button>
+            <?php if ($ticketReady): ?>
+              <button type="button" class="btn btn-outline-primary btn-sm d-none" id="pdf-rebuild" title="فایل‌های PDFِ پیوستِ تیکت دوباره (مثلِ نسخه‌ی چاپی) ساخته می‌شوند و جای فایل‌های قبلی را می‌گیرند"><i class="fa-solid fa-file-pdf"></i> ساختِ دوباره‌ی PDFِ پیوست‌ها</button>
+            <?php endif; ?>
           </div>
           <div id="send-box" class="border rounded-3 p-3 mt-3 d-none" style="background:#fdfbf5">
             <div class="small mb-2" id="send-hint"></div>
@@ -640,7 +643,7 @@ require_once __DIR__ . '/includes/layout_top.php';
                     <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 mark-row" data-id="<?= (int) $s['id'] ?>" data-status="failed" title="ارسال نشد"><i class="fa-solid fa-xmark"></i></button>
                   <?php endif; ?>
                   <?php if ($canSend && in_array($s['status'], ['failed', 'sending'], true)): ?>
-                    <button type="button" class="btn btn-sm btn-outline-primary py-0 retry-btn" data-id="<?= (int) $s['id'] ?>"><i class="fa-solid fa-rotate-right"></i> ارسال مجدد</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary py-0 retry-btn" data-id="<?= (int) $s['id'] ?>" data-docs="<?= e((string) $s['doc_types']) ?>" data-channel="<?= e((string) $s['channel']) ?>"><i class="fa-solid fa-rotate-right"></i> ارسال مجدد</button>
                   <?php endif; ?>
                 </td>
               </tr>
@@ -756,7 +759,25 @@ require_once __DIR__ . '/includes/layout_top.php';
     const deptEl = document.getElementById('ticket-dept');
     start({ docs: b.dataset.docs.split(','), channel: ch.value, department: deptEl ? deptEl.value : '' });
   }));
-  document.querySelectorAll('.retry-btn').forEach(b => b.addEventListener('click', () => start({ retry_of: b.dataset.id })));
+  // ارسالِ مجدد: PDFها هم از نو ساخته می‌شوند
+  document.querySelectorAll('.retry-btn').forEach(b => b.addEventListener('click', () => start({ retry_of: b.dataset.id, docs: (b.dataset.docs || '').split(',').filter(Boolean), channel: b.dataset.channel || '' })));
+  // ساختِ دوباره‌ی PDFِ پیوست‌ها (بدونِ ارسالِ تیکت): فایلِ پشتِ لینک‌های قبلی هم با نسخه‌ی تازه جایگزین می‌شود
+  const rb = document.getElementById('pdf-rebuild');
+  if (rb && pdfAttach) {
+    rb.classList.remove('d-none');
+    rb.addEventListener('click', async () => {
+      rb.disabled = true;
+      try {
+        await buildPdfs(['contract', 'quote', 'services']);
+        hint.innerHTML = '<b class="text-success">PDFِ پیوست‌ها دوباره ساخته شد</b> (مثلِ نسخه‌ی چاپی) و جای فایل‌های قبلی را گرفت.<br>'
+          + 'برای این‌که مشتری در آراد برندینگ فایلِ درست را ببیند، در صفحه‌ی سفارش (یا «ارسال تیکت‌ها») تیکتِ قرارداد را از آراد برندینگ حذف و دوباره ارسال کنید.';
+      } catch (e) {
+        hint.innerHTML = '<b class="text-danger">ساختِ PDF ناموفق بود:</b> ' + e.message;
+      }
+      box.classList.remove('d-none');
+      rb.disabled = false;
+    });
+  }
   document.getElementById('send-copy').addEventListener('click', async () => { if (await copy(msgEl.value)) hint.innerHTML = 'پیام کپی شد.'; });
   async function mark(sid, status) {
     let note = '';

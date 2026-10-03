@@ -41,14 +41,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('admin_aradbranding_send.php');
     }
     // ─── وضعیتِ ارسال به تفکیکِ مشتری: ارسال / «ارسال نشود» / برگرداندن، برای مشتریانِ تیک‌خورده ───
-    if (in_array($_POST['action'] ?? '', ['cust_send', 'cust_skip', 'cust_unskip'], true)) {
+    if (in_array($_POST['action'] ?? '', ['cust_send', 'cust_skip', 'cust_unskip', 'cust_delete'], true)) {
         $a = (string) $_POST['action'];
         $ids = array_values(array_unique(array_filter(array_map('intval', (array) ($_POST['customer_ids'] ?? [])))));
         $back = 'admin_aradbranding_send.php?' . http_build_query(['f' => $_POST['f'] ?? '', 'q' => $_POST['q'] ?? '', 'p' => (int) ($_POST['p'] ?? 1), 'per' => (int) ($_POST['per'] ?? 50)]);
         if (!$ids) { flash_set('warning', 'هیچ مشتری‌ای تیک نخورده است.'); redirect($back); }
         $in = implode(',', $ids);
         $now = date('Y-m-d H:i:s');
-        if ($a === 'cust_skip') {
+        if ($a === 'cust_delete') {
+            // حذفِ همه‌ی تیکت‌های ارسال‌شده‌ی این مشتری‌ها از سامانه‌ی آراد برندینگ (هر بار حداکثر ۶۰ تیکت)
+            if (!abt_connection_ready(abt_settings($pdo))) { flash_set('danger', 'اتصال فعال/تنظیم نیست.'); redirect($back); }
+            @set_time_limit(300);
+            $reason = mb_substr(trim((string) ($_POST['delete_reason'] ?? '')), 0, 200);
+            $rows = $pdo->query("SELECT * FROM aradbranding_tickets WHERE customer_id IN ($in) AND status IN ('sent','manual') ORDER BY id ASC LIMIT 60")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $ok = 0; $fail = [];
+            foreach ($rows as $t) {
+                $o = orders_get($pdo, (int) $t['order_id']) ?: ['id' => (int) $t['order_id'], 'customer_id' => (int) $t['customer_id']];
+                try {
+                    $r = abt_delete_remote($pdo, $o, $t, (int) $admin['id'], $reason !== '' ? $reason : 'حذفِ گروهی از «ارسال تیکت‌ها»');
+                } catch (Throwable $e) {
+                    $r = ['ok' => false, 'message' => $e->getMessage()];
+                }
+                if ($r['ok']) $ok++; else $fail[] = ($t['service_title'] ?? '#' . $t['id']) . ': ' . $r['message'];
+            }
+            $left = (int) $pdo->query("SELECT COUNT(*) FROM aradbranding_tickets WHERE customer_id IN ($in) AND status IN ('sent','manual')")->fetchColumn();
+            flash_set($fail ? 'warning' : 'success', to_persian_digits((string) $ok) . ' تیکت از آراد برندینگ حذف شد (حالا در «حذف‌شده» هستند و هر وقت خواستید با «ارسال شود» دوباره می‌روند).'
+                . ($fail ? ' ' . to_persian_digits((string) count($fail)) . ' مورد حذف نشد — نمونه: ' . $fail[0] : '')
+                . ($left ? ' هنوز ' . to_persian_digits((string) $left) . ' تیکتِ ارسال‌شده از همین مشتری‌ها مانده (دوباره بزنید).' : ''));
+        } elseif ($a === 'cust_skip') {
             $n = $pdo->exec("UPDATE aradbranding_tickets SET status = 'skipped', updated_at = " . $pdo->quote($now) . " WHERE customer_id IN ($in) AND status IN ('queued','failed')");
             flash_set('success', to_persian_digits((string) (int) $n) . ' تیکت «ارسال نشود» شد (برای ' . to_persian_digits((string) count($ids)) . ' مشتری).');
         } elseif ($a === 'cust_unskip') {
@@ -307,6 +327,8 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <button name="action" value="cust_send" class="btn btn-sm btn-success" <?= $ready && $canSend ? '' : 'disabled' ?> onclick="return confirm('تیکت‌های ارسال‌نشده یا حذف‌شده‌ی مشتریانِ تیک‌خورده (حداکثر ۴۰ تیکت در هر بار) در آراد برندینگ ثبت شود؟');"><i class="fa-solid fa-paper-plane"></i> ارسال شود</button>
       <button name="action" value="cust_skip" class="btn btn-sm btn-outline-secondary" onclick="return confirm('تیکت‌های در صف/ناموفقِ این مشتری‌ها «ارسال نشود» شوند؟');"><i class="fa-solid fa-ban"></i> ارسال نشود</button>
       <button name="action" value="cust_unskip" class="btn btn-sm btn-outline-primary" onclick="return confirm('تیکت‌های این مشتری‌ها به صفِ ارسال برمی‌گردند.\nتوجه: اگر تیکتی قبلاً ارسال شده، با ارسالِ دوباره یک تیکتِ تازه در آراد برندینگ ساخته می‌شود؛ فقط وقتی این کار را بکنید که تیکتِ قبلی آنجا حذف شده باشد.');"><i class="fa-solid fa-rotate-left"></i> برگرداندن به صفِ ارسال</button>
+      <button name="action" value="cust_delete" class="btn btn-sm btn-outline-danger" <?= $ready && $canSend ? '' : 'disabled' ?> onclick="var r = prompt('همه‌ی تیکت‌های ارسال‌شده‌ی مشتریانِ تیک‌خورده از سامانه‌ی آراد برندینگ حذف شوند؟\n(هر بار حداکثر ۶۰ تیکت؛ بعداً با «ارسال شود» می‌توانید دوباره بفرستید)\n\nدلیلِ حذف (اختیاری):', ''); if (r === null) return false; document.getElementById('custDelReason').value = r; return true;"><i class="fa-solid fa-trash-can"></i> حذفِ همه‌ی تیکت‌ها از آراد برندینگ</button>
+      <input type="hidden" name="delete_reason" id="custDelReason" value="">
       <span class="small text-muted ms-auto"><span id="custSel">۰</span> مشتری انتخاب شده</span>
     </div>
     <div class="card p-0"><div class="table-responsive"><table class="table table-sm align-middle small mb-0">

@@ -99,11 +99,23 @@
     g.fillRect(0, 0, c.width, c.height);
     return [c, g];
   }
+  /**
+   * صفحه‌ها: یا بومِ کامل، یا {bg, fg, y}: پس‌زمینه‌ی مشترک (سربرگ) یک‌بار در فایل جاسازی می‌شود و
+   * متنِ هر صفحه جداگانه (PNGِ شفاف) رویش می‌نشیند — حجمِ فایل چند برابر کمتر از تصویرِ کاملِ هر صفحه.
+   */
   function toPdf(pages) {
     const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    const bgData = new Map();
     pages.forEach((c, i) => {
       if (i) pdf.addPage();
-      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, A4W, A4H, undefined, 'FAST');
+      if (c instanceof HTMLCanvasElement) {
+        pdf.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, A4W, A4H, undefined, 'FAST');
+        return;
+      }
+      if (!bgData.has(c.bg)) bgData.set(c.bg, c.bg.toDataURL('image/jpeg', 0.85));
+      pdf.addImage(bgData.get(c.bg), 'JPEG', 0, 0, A4W, A4H, 'ctr-bg', 'FAST');
+      const mmPerPx = 1 / (PX_PER_MM * SCALE);
+      pdf.addImage(c.fg.toDataURL('image/png'), 'PNG', c.x * mmPerPx, c.y * mmPerPx, c.fg.width * mmPerPx, c.fg.height * mmPerPx, undefined, 'SLOW');
     });
     return pdf.output('blob');
   }
@@ -151,13 +163,13 @@
       .concat(Array.from(content.querySelectorAll('.ctr-pb-before')).map(el => Math.round((el.getBoundingClientRect().top - top) * SCALE)))
       .sort((a, b) => a - b);
     const pageH = Math.floor((A4H - CTR_TOP - CTR_BOTTOM) * mm * SCALE);
+    const [probe] = pageCanvas();
     const pages = cuts(textCanvas, pageH, forced).map(([y0, y1]) => {
-      const [c, g] = pageCanvas();
-      g.drawImage(frameCanvas, 0, 0, c.width, c.height);
-      const h = y1 - y0;
-      const dx = Math.round((c.width - textCanvas.width) / 2);
-      g.drawImage(textCanvas, 0, y0, textCanvas.width, h, dx, Math.round(CTR_TOP * mm * SCALE), textCanvas.width, h);
-      return c;
+      const fg = document.createElement('canvas');
+      fg.width = textCanvas.width;
+      fg.height = Math.max(1, y1 - y0);
+      fg.getContext('2d').drawImage(textCanvas, 0, y0, textCanvas.width, fg.height, 0, 0, fg.width, fg.height);
+      return { bg: frameCanvas, fg, x: Math.round((probe.width - textCanvas.width) / 2), y: Math.round(CTR_TOP * mm * SCALE) };
     });
     return toPdf(pages);
   }
