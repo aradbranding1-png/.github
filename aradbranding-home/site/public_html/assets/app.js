@@ -63,6 +63,105 @@
     });
   });
 
+  // Images are copied into memory as soon as they are picked, and shrunk to the upload limit. Two reasons:
+  //  - Chrome on Android keeps only a link to a photo from the gallery / Google Photos and reads it again on submit;
+  //    if the phone touched the file in between (sync, edit, a camera shot still being saved) the whole form fails
+  //    with ERR_UPLOAD_FILE_CHANGED. A copy in memory cannot change.
+  //  - phone photos are several MB; they are resized here (longest side 1600px, the largest size the server keeps)
+  //    instead of being refused. The server still checks type and size.
+  var IMG_TYPES = /^image\/(jpeg|png|webp)$/;
+  var canSetFiles = (function () { try { return !!new DataTransfer().items; } catch (e) { return false; } })();
+
+  function decode(file) {
+    if (window.createImageBitmap) {
+      return createImageBitmap(file, { imageOrientation: 'from-image' }).catch(function () { return createImageBitmap(file); });
+    }
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+      img.onload = function () { resolve(img); };
+      img.onerror = function () { reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+
+  function encode(canvas, type, q) {
+    return new Promise(function (resolve) { canvas.toBlob(resolve, type, q); });
+  }
+
+  // Resolves to a File held in memory, at most maxKb (or the original bytes when they already fit and are small).
+  function shrinkImage(file, maxKb, maxSide) {
+    var limit = maxKb * 1024;
+    var copy = function () {
+      return file.arrayBuffer().then(function (buf) { return new File([buf], file.name, { type: file.type, lastModified: Date.now() }); });
+    };
+    return decode(file).then(function (bmp) {
+      var w = bmp.width, h = bmp.height;
+      if (file.size <= limit && Math.max(w, h) <= maxSide) return copy();
+      var side = Math.min(maxSide, Math.max(w, h));
+      var base = file.name.replace(/\.[^.]+$/, '') || 'image';
+      var attempt = function (s, qi) {
+        var qs = [0.86, 0.78, 0.68, 0.56];
+        var scale = s / Math.max(w, h);
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        return encode(canvas, 'image/webp', qs[qi]).then(function (blob) {
+          if (blob && blob.type === 'image/webp') return blob;
+          // No WebP encoder (older Safari): JPEG on white, since JPEG has no transparency.
+          ctx.globalCompositeOperation = 'destination-over';
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          return encode(canvas, 'image/jpeg', qs[qi]);
+        }).then(function (blob) {
+          if (!blob) throw new Error('encode');
+          if (blob.size <= limit) {
+            var ext = blob.type === 'image/webp' ? '.webp' : '.jpg';
+            return new File([blob], base + ext, { type: blob.type, lastModified: Date.now() });
+          }
+          if (qi < qs.length - 1) return attempt(s, qi + 1);
+          if (s > 400) return attempt(Math.round(s * 0.75), 1);
+          throw new Error('size');
+        });
+      };
+      return attempt(side, 0);
+    }, function () {
+      // The browser cannot draw it (rare): send the picked bytes unchanged if they fit.
+      if (file.size <= limit) return copy();
+      throw new Error('size');
+    });
+  }
+
+  function setFiles(input, files) {
+    var dt = new DataTransfer();
+    files.forEach(function (f) { dt.items.add(f); });
+    input.files = dt.files;
+  }
+
+  // A form waits for its images to be ready before it is sent.
+  function trackPending(input, promise) {
+    var form = input.form;
+    if (!form) return promise;
+    form._imgPending = (form._imgPending || 0) + 1;
+    var done = function () {
+      form._imgPending--;
+      if (!form._imgPending && form._imgSubmit) {
+        var by = form._imgSubmit; form._imgSubmit = null;
+        if (form.requestSubmit) form.requestSubmit(by && by.form === form ? by : undefined); else form.submit();
+      }
+    };
+    promise.then(done, done);
+    if (!form._imgGuard) {
+      form._imgGuard = true;
+      form.addEventListener('submit', function (e) {
+        if (form._imgPending) { e.preventDefault(); form._imgSubmit = e.submitter || true; }
+      });
+    }
+    return promise;
+  }
+
   // Image size check + preview before upload (the server checks again).
   document.querySelectorAll('input[type=file][data-preview]').forEach(function (input) {
     var target = document.getElementById(input.getAttribute('data-preview'));
@@ -73,26 +172,18 @@
     msg.setAttribute('role', 'alert');
     msg.hidden = true;
     input.insertAdjacentElement('afterend', msg);
+    var seq = 0;
 
     function restore() {
       var current = document.getElementById(input.getAttribute('data-preview'));
       if (current && original) current.replaceWith(original.cloneNode(true));
     }
-
-    input.addEventListener('change', function () {
-      msg.hidden = true;
-      var file = input.files && input.files[0];
-      if (!file) { restore(); return; }
-      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
-        msg.textContent = T('فقط تصاویر JPG، PNG و WebP پذیرفته می‌شوند.');
-        msg.hidden = false; input.value = ''; restore(); return;
-      }
-      if (maxKb && file.size > maxKb * 1024) {
-        var size = Math.ceil(file.size / 1024).toLocaleString(NUM);
-        msg.textContent = T('حجم این تصویر :size کیلوبایت است. حداکثر مجاز :max کیلوبایت است؛ تصویر را فشرده کنید و دوباره انتخاب کنید.',
-          { size: size, max: maxKb.toLocaleString(NUM) });
-        msg.hidden = false; input.value = ''; restore(); return;
-      }
+    function tooBig(size) {
+      msg.textContent = T('حجم این تصویر :size کیلوبایت است. حداکثر مجاز :max کیلوبایت است؛ تصویر را فشرده کنید و دوباره انتخاب کنید.',
+        { size: Math.ceil(size / 1024).toLocaleString(NUM), max: maxKb.toLocaleString(NUM) });
+      msg.hidden = false; input.value = ''; restore();
+    }
+    function preview(file) {
       var current = document.getElementById(input.getAttribute('data-preview'));
       if (!current) return;
       var img = current;
@@ -102,26 +193,67 @@
         current.replaceWith(img);
       }
       img.src = URL.createObjectURL(file);
+    }
+
+    input.addEventListener('change', function () {
+      msg.hidden = true;
+      var file = input.files && input.files[0];
+      var mine = ++seq;
+      if (!file) { restore(); return; }
+      if (!IMG_TYPES.test(file.type)) {
+        msg.textContent = T('فقط تصاویر JPG، PNG و WebP پذیرفته می‌شوند.');
+        msg.hidden = false; input.value = ''; restore(); return;
+      }
+      if (!canSetFiles || !maxKb) {
+        if (maxKb && file.size > maxKb * 1024) { tooBig(file.size); return; }
+        preview(file); return;
+      }
+      preview(file);
+      input.classList.add('is-busy');
+      trackPending(input, shrinkImage(file, maxKb, 1600).then(function (ready) {
+        if (mine !== seq) return;
+        setFiles(input, [ready]);
+        preview(ready);
+      }, function () {
+        if (mine === seq) tooBig(file.size);
+      }).then(function () { input.classList.remove('is-busy'); }));
     });
   });
 
-  // Multiple-file inputs (gallery): count and size check
+  // Multiple-file inputs (gallery): count, then the same in-memory copy and resize for each image
   document.querySelectorAll('input[type=file][multiple][data-max-kb]').forEach(function (input) {
     var maxKb = parseInt(input.getAttribute('data-max-kb'), 10);
     var maxFiles = parseInt(input.getAttribute('data-max-files') || '10', 10);
     var msg = document.createElement('div');
     msg.className = 'error'; msg.setAttribute('role', 'alert'); msg.hidden = true;
     input.insertAdjacentElement('afterend', msg);
+    var seq = 0;
     input.addEventListener('change', function () {
       msg.hidden = true;
+      var mine = ++seq;
       var files = Array.prototype.slice.call(input.files || []);
-      var tooBig = files.filter(function (f) { return f.size > maxKb * 1024; });
       if (files.length > maxFiles) {
         msg.textContent = T('حداکثر :n تصویر می‌توانید انتخاب کنید.', { n: maxFiles.toLocaleString(NUM) });
-      } else if (tooBig.length) {
-        msg.textContent = T('حجم :n تصویر بیشتر از :max کیلوبایت است؛ آن‌ها را فشرده کنید.', { n: tooBig.length.toLocaleString(NUM), max: maxKb.toLocaleString(NUM) });
-      } else { return; }
-      msg.hidden = false; input.value = '';
+        msg.hidden = false; input.value = ''; return;
+      }
+      if (!canSetFiles) {
+        var big = files.filter(function (f) { return f.size > maxKb * 1024; });
+        if (!big.length) return;
+        msg.textContent = T('حجم :n تصویر بیشتر از :max کیلوبایت است؛ آن‌ها را فشرده کنید.', { n: big.length.toLocaleString(NUM), max: maxKb.toLocaleString(NUM) });
+        msg.hidden = false; input.value = ''; return;
+      }
+      var failed = 0;
+      input.classList.add('is-busy');
+      trackPending(input, Promise.all(files.map(function (f) {
+        return shrinkImage(f, maxKb, 1600).catch(function () { failed++; return null; });
+      })).then(function (ready) {
+        if (mine !== seq) return;
+        if (failed) {
+          msg.textContent = T('حجم :n تصویر بیشتر از :max کیلوبایت است؛ آن‌ها را فشرده کنید.', { n: failed.toLocaleString(NUM), max: maxKb.toLocaleString(NUM) });
+          msg.hidden = false; input.value = ''; return;
+        }
+        setFiles(input, ready);
+      }).then(function () { input.classList.remove('is-busy'); }));
     });
   });
 
