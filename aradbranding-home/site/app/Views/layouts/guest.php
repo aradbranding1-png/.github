@@ -7,16 +7,9 @@
  */
 $isRegister = str_contains($content, 'action="/register"');
 // Same globe cards as the home page: the admin's globe markets plus every country reached by a drawn route.
-$cards = \App\Modules\System\GlobeCards::build(
-    \App\Modules\System\GlobeCards::globeMarkets((new \App\Modules\System\HomeContent(\App\Core\Container::instance()->get(\App\Core\Settings\Settings::class)))->get()),
-    static fn (string $code): string => t('بازار هدف')
-);
-foreach ($cards as &$card) {
-    if ($card['note'] === t('مسیر زمینی از ایران')) {
-        $card['class'] .= ' is-land';
-    }
-}
-unset($card);
+$cards = \App\Modules\System\GlobeCards::build(\App\Modules\System\GlobeCards::globeMarkets(
+    (new \App\Modules\System\HomeContent(\App\Core\Container::instance()->get(\App\Core\Settings\Settings::class)))->get()
+));
 ?>
 <!doctype html>
 <html <?= \App\Core\I18n\I18n::htmlAttrs() ?> data-theme="dark">

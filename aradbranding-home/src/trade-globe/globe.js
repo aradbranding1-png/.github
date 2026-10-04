@@ -791,7 +791,7 @@ function init(root) {
     world.add(hit);
     hitTargets.push(hit);
     const home = el.classList.contains('is-home');
-    return { el, local: p, w: 0, h: 0, hover: false, home, priority: el.dataset.priority !== undefined ? +el.dataset.priority || 0 : home ? 0 : el.classList.contains('is-secondary') ? 0.6 : 0.3, on: false, alpha: 0, since: 0, rest: 0 };
+    return { el, local: p, w: 0, h: 0, hover: false, home, priority: el.dataset.priority !== undefined ? +el.dataset.priority || 0 : home ? 0 : el.classList.contains('is-secondary') ? 0.6 : 0.3, on: false, alpha: 0, since: 0, rest: 0, off: 0 };
   });
   cards.forEach((c) => {
     c.el.addEventListener('pointerenter', () => { c.hover = true; c.el.classList.add('is-hot'); });
@@ -1097,19 +1097,22 @@ function init(root) {
   const overlaps = (a, b, pad) => a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
 
   // Turn-taking: the globe turns slowly, so without a limit one country (and its long caption) could hold its spot for
-  // most of a turn. A card stays at most `dwell` ms, then rests while others get the place. Iran (is-home) never rests:
-  // it comes first and stays for as long as it faces the viewer, from a little earlier on the rim than the others.
-  const dwell = () => (W < 720 ? 4500 : 7000);
-  const restFor = () => (W < 720 ? 6500 : 5000);
+  // most of a turn. A card stays at most `dwell` ms, then rests while others get the place. Iran (is-home) comes first,
+  // from a little earlier on the rim than the others, and stays about three times longer; its short rest is the
+  // neighbours' turn (Saudi Arabia, Iraq, the Emirates, Oman…), which would otherwise never fit next to it.
+  // Among the rest, the card that has waited longest since it was last shown wins, so neighbours (Nigeria, Niger,
+  // Ghana…) share the place fairly instead of the same one always winning.
+  const dwell = (c) => (c.home ? (W < 720 ? 10000 : 14000) : W < 720 ? 4500 : 7000);
+  const restFor = (c) => (c.home ? 3500 : W < 720 ? 6500 : 5000);
 
   function pickCards(now) {
     // A card that is still fading out keeps its space, so a newcomer never appears on top of it.
     const boxes = obstacles.concat(cards.filter((c) => !c.on && c.alpha > 0.08).map((c) => ({ x: c.px, y: c.py, w: c.w, h: c.h })));
     const anchors = [];
-    const score = (c) => (c.hover ? 10 : 0) + (c.home ? 0.6 : 0) + c.f + (c.on ? 0.15 : 0) - c.priority * 0.15;
+    const score = (c) => (c.hover ? 10 : 0) + (c.home ? 2 : 0) + c.f + (c.on ? 0.15 : Math.min(0.8, (now - c.off) / 25000)) - c.priority * 0.15;
     cards.forEach((c) => {
       c.next = false;
-      if (c.on && !c.hover && !c.home && now - c.since > dwell()) { c.rest = now + restFor(); }
+      if (c.on && !c.hover && now - c.since > dwell(c)) { c.rest = now + restFor(c); }
     });
     let n = 0;
     cards.filter((c) => c.w && (c.f > (c.home ? 0.2 : 0.32) || c.hover) && (c.hover || now >= c.rest)).sort((a, b) => score(b) - score(a)).forEach((c) => {
@@ -1124,6 +1127,7 @@ function init(root) {
     });
     cards.forEach((c) => {
       if (c.next && !c.on) c.since = now;
+      if (!c.next && c.on) c.off = now;
       c.on = c.next;
     });
   }

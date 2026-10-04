@@ -60,7 +60,7 @@ $marketNote = static function (string $code) use ($marketStat): string {
 $cardMarkets = array_values(array_filter($markets, static fn (array $m): bool => $m['card']));
 $globeMarkets = array_values(array_filter($markets, static fn (array $m): bool => $m['globe']));
 // Globe cards: the admin's globe markets plus every country reached by a drawn route (shared with sign-in/sign-up).
-$globeCards = \App\Modules\System\GlobeCards::build($globeMarkets, $marketNote);
+$globeCards = \App\Modules\System\GlobeCards::build($globeMarkets);
 
 // Stats strip: real cached totals when the admin switches them on, otherwise the admin's fixed facts.
 $strip = [];
