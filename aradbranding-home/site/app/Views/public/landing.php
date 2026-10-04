@@ -129,6 +129,7 @@ $h = $home['hero'];
 <html <?= \App\Core\I18n\I18n::htmlAttrs() ?> data-theme="dark">
 <head>
 <?= \App\Core\I18n\I18n::headScript() ?><?= $this->partial('partials/head') ?>
+<link rel="preload" href="/assets/fonts/Estedad-Arabic-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="<?= e(asset('trade-home.css')) ?>">
 <link rel="modulepreload" href="<?= e(asset('trade-globe.js')) ?>">
 <script src="<?= e(asset('trade-home.js')) ?>" defer></script>

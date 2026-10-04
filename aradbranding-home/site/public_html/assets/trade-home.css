@@ -4,6 +4,14 @@
    rest of the app (app.css design system) is untouched.
    ========================================================================== */
 
+/* Display face for the hero title: Estedad (SIL OFL, assets/fonts/Estedad-OFL.txt) — round, geometric and heavy. */
+@font-face { font-family: "Estedad"; src: url("/assets/fonts/Estedad-Arabic-Variable.woff2") format("woff2-variations"), url("/assets/fonts/Estedad-Arabic-Variable.woff2") format("woff2");
+  font-weight: 100 900; font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+200C-200E, U+2010-2011, U+204F, U+FB50-FDFF, U+FE70-FEFC; }
+@font-face { font-family: "Estedad"; src: url("/assets/fonts/Estedad-Latin-Variable.woff2") format("woff2-variations"), url("/assets/fonts/Estedad-Latin-Variable.woff2") format("woff2");
+  font-weight: 100 900; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; }
+
 .th {
   --th-bg: #020914; --th-bg-2: #04111F; --th-bg-3: #061A2D; --th-navy: #08243A;
   --th-gold: #F5C65D; --th-gold-2: #E8B94F; --th-gold-3: #FFD978; --th-gold-ink: #1a1203;
@@ -221,12 +229,14 @@
 }
 .th-badge .th-ic { width: 20px; height: 20px; }
 .th-hero h1 { display: grid; gap: 4px; margin: 0; line-height: 1.25; letter-spacing: 0; }
+.th-hero h1 { font-family: "Estedad", var(--font, "Vazirmatn"), system-ui, sans-serif; }
 .th-h1-gold {
-  font-size: clamp(50px, 6.6vw, 108px); font-weight: 900; line-height: 1.15;
+  font-size: clamp(56px, 7vw, 102px); font-weight: 900; line-height: 1.12;
   background: var(--th-foil); -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 6px 30px rgba(245, 198, 93, .25));
 }
-.th-h1-sub { font-size: clamp(26px, 2.9vw, 48px); white-space: nowrap; font-weight: 900; color: #fff; text-shadow: 0 4px 30px rgba(0, 0, 0, .6); }
+.th-h1-sub { font-size: clamp(26px, 2.85vw, 42px); white-space: nowrap; font-weight: 900; color: #fff; text-shadow: 0 4px 30px rgba(0, 0, 0, .6); }
+@media (max-width: 720px) { .th-h1-gold { font-size: min(16.5vw, 66px); } .th-h1-sub { font-size: min(7vw, 26px); } }
 .th-lead { color: var(--th-muted); font-size: clamp(15.5px, 1.25vw, 19px); line-height: 2.05; max-width: 52ch; text-shadow: 0 2px 16px rgba(0, 0, 0, .8); }
 .th-cta { display: flex; flex-wrap: wrap; gap: 14px; }
 .th-cta-center { justify-content: center; }
@@ -483,7 +493,7 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
   .tg-stage { --grh: .42; --grw: .43; }
   .tg-card { min-width: 0; padding: 7px 10px; gap: 8px; border-radius: 12px; }
   .tg-card-t b { font-size: 12.5px; }
-  .tg-card-t small { font-size: 10px; max-width: 132px; overflow: hidden; text-overflow: ellipsis; }
+  .tg-card-t small { font-size: 10px; }
   .tg-card .th-flag { width: 22px; height: 14px; }
   .tg-label { font-size: 11px; }
   .tg-label i { width: 24px; height: 24px; background-size: 14px; }
