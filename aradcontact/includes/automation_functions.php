@@ -910,23 +910,38 @@ function automation_mark_read(PDO $pdo, int $letterId, int $userId): void
         ->execute([$letterId, $userId]);
 }
 
+/** اولین شماره‌ی نامه در دبیرخانه */
+const AUTOMATION_LETTER_NUMBER_START = 10000;
+
+/** شماره‌ی خودکارِ نامه‌ی بعدی: بزرگ‌ترین شماره‌ی عددی + ۱ (حداقل ۱۰۰۰۰) */
+function automation_next_letter_number(PDO $pdo): string
+{
+    $max = (int) $pdo->query("SELECT COALESCE(MAX(CAST(letter_number AS UNSIGNED)), 0) FROM letters WHERE letter_number REGEXP '^[0-9]+$'")->fetchColumn();
+    return (string) max(AUTOMATION_LETTER_NUMBER_START, $max + 1);
+}
+
 /**
- * یک‌بار: شماره‌ی نامه‌های قبلی (مثلاً «L-20261003-5941» یا «DR-777») ← فقط عدد.
- * به ترتیبِ ثبت (id) از ۱ به بعد، بدونِ تکرارِ شماره‌های عددیِ موجود؛ نامه‌های جدید از بزرگ‌ترین عدد + ۱ ادامه می‌دهند.
+ * یک‌بار: شماره‌ی نامه‌های قبلی ← عدد از ۱۰۰۰۰ به بعد (به ترتیبِ ثبت).
+ * شامل: شماره‌های حرف‌دار (مثلاً «L-20261003-5941»، «DR-777») و شماره‌های کوچک‌تر از ۱۰۰۰۰
+ * (از جمله شماره‌هایی که نسخه‌ی قبلی از ۱ داده بود). شماره‌های ۱۰۰۰۰ به بالا دست نمی‌خورند و تکرار نمی‌شوند.
  */
 function automation_letter_numbers_v1(PDO $pdo): void
 {
     static $done = false;
     if ($done) return;
     $done = true;
-    $flag = __DIR__ . '/../storage/.automation_letter_numbers_v1';
+    $flag = __DIR__ . '/../storage/.automation_letter_numbers_v2';
     if (is_file($flag)) return;
     try {
+        $start = AUTOMATION_LETTER_NUMBER_START;
         $used = [];
-        foreach ($pdo->query("SELECT letter_number FROM letters WHERE letter_number REGEXP '^[0-9]+$'")->fetchAll(PDO::FETCH_COLUMN) ?: [] as $n) $used[(int) $n] = true;
-        $rows = $pdo->query("SELECT id FROM letters WHERE letter_number IS NOT NULL AND letter_number <> '' AND letter_number NOT REGEXP '^[0-9]+$' ORDER BY id")->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        foreach ($pdo->query("SELECT letter_number FROM letters WHERE letter_number REGEXP '^[0-9]+$'")->fetchAll(PDO::FETCH_COLUMN) ?: [] as $n) {
+            if ((int) $n >= $start) $used[(int) $n] = true;
+        }
+        $rows = $pdo->query("SELECT id FROM letters WHERE letter_number IS NOT NULL AND letter_number <> ''
+            AND (letter_number NOT REGEXP '^[0-9]+$' OR CAST(letter_number AS UNSIGNED) < $start) ORDER BY id")->fetchAll(PDO::FETCH_COLUMN) ?: [];
         $up = $pdo->prepare('UPDATE letters SET letter_number = ? WHERE id = ?');
-        $next = 1;
+        $next = $start;
         foreach ($rows as $id) {
             while (isset($used[$next])) $next++;
             $up->execute([(string) $next, (int) $id]);
@@ -934,7 +949,6 @@ function automation_letter_numbers_v1(PDO $pdo): void
         }
         @file_put_contents($flag, date('c') . ' ' . count($rows));
     } catch (Throwable $e) {
-        error_log('automation_letter_numbers_v1: ' . $e->getMessage());
+        error_log('automation_letter_numbers: ' . $e->getMessage());
     }
 }
-

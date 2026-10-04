@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // شماره‌ی نامه فقط عدد است (بدونِ حروفِ فارسی/انگلیسی)؛ خالی ← شماره‌ی بعدیِ دبیرخانه
         $letterNumber = preg_replace('/\D+/', '', normalize_digits(trim((string) ($_POST['letter_number'] ?? ''))));
         if ($letterNumber === '') {
-            $letterNumber = (string) ((int) $pdo->query("SELECT COALESCE(MAX(CAST(letter_number AS UNSIGNED)), 0) FROM letters WHERE letter_number REGEXP '^[0-9]+$'")->fetchColumn() + 1);
+            $letterNumber = automation_next_letter_number($pdo);
         }
 
         $payload = json_decode((string) ($_POST['recipients_payload'] ?? '[]'), true);
