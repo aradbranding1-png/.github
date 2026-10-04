@@ -178,7 +178,14 @@ function sales_user_events_sql(PDO $pdo, string $orderWhere = '1=1'): string
         $spKey = $hasPay ? 'COALESCE(sp.payment_id, 0)' : '0';
         $tSel = $hasPay ? 'order_id, COALESCE(payment_id, 0) pk, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id, COALESCE(payment_id, 0)'
                         : 'order_id, 0 pk, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id';
-        return "SELECT ev.order_id, COALESCE(sp.user_id, $credit) uid, ev.at, ev.kind, ev.payment_id,
+        // واریزیِ قبل از سامانه (ورود از اکسل) که سهم عملکردش حساب شده: سهم‌گیرِ اکسل فقط اگر در سهم عملکردِ همان
+        // سفارش جایگاه دارد فروش می‌گیرد؛ وگرنه سهمِ او مثلِ بقیه‌ی سفارش‌ها به «سازمان» (0) می‌رود
+        $spUid = 'sp.user_id';
+        if ($snapJoin !== '' && sales_has_import_col($pdo)) {
+            $spUid = "CASE WHEN o.import_ref IS NOT NULL AND o.import_perf = 1 AND snap.owners_json IS NOT NULL
+                            AND snap.owners_json NOT LIKE CONCAT('%\"user_id\":', sp.user_id, ',%') THEN 0 ELSE sp.user_id END";
+        }
+        return "SELECT ev.order_id, COALESCE($spUid, $credit) uid, ev.at, ev.kind, ev.payment_id,
                     CASE WHEN sp.user_id IS NULL THEN ev.gross ELSE ROUND(sp.amount * ev.gross / NULLIF(t.tot, 0)) END gross,
                     CASE WHEN sp.user_id IS NULL THEN ev.net ELSE ROUND(sp.amount * ev.net / NULLIF(t.tot, 0)) END net,
                     CASE WHEN sp.user_id IS NULL THEN 0 ELSE 1 END shared
@@ -191,6 +198,19 @@ function sales_user_events_sql(PDO $pdo, string $orderWhere = '1=1'): string
     }
     return "SELECT ev.order_id, $credit uid, ev.at, ev.kind, ev.payment_id, ev.gross, ev.net, 0 shared
             FROM ($ev) ev JOIN sales_orders o ON o.id = ev.order_id LEFT JOIN customers c ON c.id = o.customer_id$snapJoin WHERE ($orderWhere)";
+}
+
+/** ستون‌های ورود از اکسل (sales_orders.import_ref / import_perf — includes/sales_import.php) */
+function sales_has_import_col(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $pdo->query('SELECT import_ref, import_perf FROM sales_orders LIMIT 0');
+        return $ok = true;
+    } catch (Throwable $e) {
+        return $ok = false;
+    }
 }
 
 function sales_snapshots_ready(PDO $pdo): bool

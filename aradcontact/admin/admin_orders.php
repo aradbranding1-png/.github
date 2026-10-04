@@ -151,8 +151,14 @@ if ($ready) {
                     $dOrders[(int) $__o['id']] = $__o;
                 }
                 if ($__splitReady) {
-                    foreach ($pdo->query("SELECT sp.order_id, u.full_name, sp.amount FROM sales_order_credit_splits sp LEFT JOIN users u ON u.id = sp.user_id WHERE sp.order_id IN ($__oin) ORDER BY sp.id") as $__x) {
-                        $dSplits[(int) $__x['order_id']][] = [(string) $__x['full_name'], (int) $__x['amount']];
+                    // واریزیِ اکسل با سهم عملکرد: سهم‌گیری که در سهم عملکرد جایگاه ندارد ← سهمش به سازمان رفته (همان منطقِ sales_user_events_sql)
+                    $__imp = sales_has_import_col($pdo) && sales_snapshots_ready($pdo);
+                    foreach ($pdo->query("SELECT sp.order_id, sp.user_id, u.full_name, sp.amount" . ($__imp ? ", o.import_ref, o.import_perf, snap.owners_json" : '') . "
+                        FROM sales_order_credit_splits sp LEFT JOIN users u ON u.id = sp.user_id" . ($__imp ? ' JOIN sales_orders o ON o.id = sp.order_id LEFT JOIN ps_order_snapshots snap ON snap.order_id = sp.order_id' : '') . "
+                        WHERE sp.order_id IN ($__oin) ORDER BY sp.id") as $__x) {
+                        $__org = $__imp && (string) $__x['import_ref'] !== '' && (int) $__x['import_perf'] === 1 && $__x['owners_json'] !== null
+                            && strpos((string) $__x['owners_json'], '"user_id":' . (int) $__x['user_id'] . ',') === false;
+                        $dSplits[(int) $__x['order_id']][] = [(string) $__x['full_name'] . ($__org ? ' (در سهم عملکرد جایگاه ندارد ← سازمان)' : ''), (int) $__x['amount']];
                     }
                 }
                 foreach ($pdo->query('SELECT id, full_name FROM users WHERE id IN (' . implode(',', array_map('intval', $dUids)) . ')') as $__u) $dNames[(int) $__u['id']] = $__u['full_name'];
