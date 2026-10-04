@@ -160,7 +160,7 @@ final class PublicPageController extends Controller
             $this->c->get(PageViewGate::class)->unlock($viewer, $owner['id'], (int) $model['country_id'], $pageId, $token);
         } catch (InsufficientStars $e) {
             return $this->redirect('/wallet?need=' . $e->missing() . '&next=' . rawurlencode($back),
-                'موجودی Stars کافی نیست. برای مشاهده این صفحه ' . fa_num($e->missing()) . ' Star دیگر لازم دارید.', 'error');
+                t('موجودی Stars کافی نیست. برای مشاهده این صفحه :n Star دیگر لازم دارید.', ['n' => fa_num($e->missing())]), 'error');
         }
         return Response::redirect($back, 303);
     }

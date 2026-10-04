@@ -8,7 +8,8 @@
       var show = input.type === 'password';
       input.type = show ? 'text' : 'password';
       btn.setAttribute('aria-pressed', show ? 'true' : 'false');
-      btn.setAttribute('aria-label', show ? 'پنهان کردن رمز عبور' : 'نمایش رمز عبور');
+      var T = window.sadtT || function (s) { return s; };
+      btn.setAttribute('aria-label', show ? T('پنهان کردن رمز عبور') : T('نمایش رمز عبور'));
       input.focus();
     });
   });

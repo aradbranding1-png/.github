@@ -22,7 +22,7 @@ final class DiscoverController extends Controller
             'category_id'
         ));
         return $this->view($request, 'discover/index', [
-            'title' => 'کشف',
+            'title' => t('کشف'),
             'recommended' => $d->recommended($user, $interests),
             'hasInterests' => $interests !== [],
             'newProposals' => $d->newProposals(),
@@ -43,7 +43,7 @@ final class DiscoverController extends Controller
         $before = (int) $request->query('before', '0');
         $list = $this->c->get(DiscoverService::class)->tradersOf($id, $before ?: null);
         return $this->view($request, 'discover/country', [
-            'title' => 'تجار ' . $countries[$id]['name_fa'],
+            'title' => t('تجار :country', ['country' => t($countries[$id]['name_fa'])]),
             'country' => $countries[$id],
             'traders' => $list['rows'],
             'next' => $list['next'],
@@ -73,7 +73,7 @@ final class DiscoverController extends Controller
             }, $result['rows']);
         }
         return $this->view($request, 'discover/search', [
-            'title' => 'جستجو',
+            'title' => t('جستجو'),
             'q' => $q,
             'type' => $type,
             'country' => $country,

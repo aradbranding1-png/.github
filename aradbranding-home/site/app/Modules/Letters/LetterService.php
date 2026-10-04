@@ -49,7 +49,7 @@ final class LetterService
     public function sendPrivate(array $sender, array $recipient, string $subject, string $body, string $token): string
     {
         if ((int) $sender['id'] === (int) $recipient['id']) {
-            throw new ValidationFailed(['to' => 'نمی‌توانید برای خودتان نامه بفرستید.']);
+            throw new ValidationFailed(['to' => t('نمی‌توانید برای خودتان نامه بفرستید.')]);
         }
         $this->trust->assertCanAct($sender);
         $this->trust->assertCanMessage((int) $sender['id'], (int) $recipient['id']);
@@ -103,12 +103,12 @@ final class LetterService
         $this->trust->assertCanAct($user);
         // A block on either side closes the conversation (official threads stay open).
         if ((int) $thread['type'] !== self::T_OFFICIAL && $this->trust->blockedBetween($userId, (int) $thread['peer_id'])) {
-            throw new ValidationFailed(['body' => 'این گفتگو به دلیل مسدودی بسته شده است.']);
+            throw new ValidationFailed(['body' => t('این گفتگو به دلیل مسدودی بسته شده است.')]);
         }
         $this->db->transaction(function (Connection $db) use ($userId, $threadId, $thread, $body): void {
             $me = $db->first('SELECT folder FROM thread_participants WHERE user_id = ? AND thread_id = ? FOR UPDATE', [$userId, $threadId]);
             if ($me === null) {
-                throw new ValidationFailed(['body' => 'دسترسی به این گفتگو ندارید.']);
+                throw new ValidationFailed(['body' => t('دسترسی به این گفتگو ندارید.')]);
             }
             $db->insert('INSERT INTO letter_messages (thread_id, sender_id, body, created_at) VALUES (?, ?, ?, NOW(3))', [$threadId, $userId, $body]);
             $db->exec('UPDATE letter_threads SET message_count = message_count + 1, last_message_at = NOW(3) WHERE id = ?', [$threadId]);

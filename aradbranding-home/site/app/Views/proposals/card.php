@@ -11,7 +11,7 @@ $thumb = media($p['thumb'] ?? null);
   </header>
   <a class="pcard-media" href="/proposals/<?= e($p['uid']) ?>" tabindex="-1" aria-hidden="true">
     <?php if ($thumb): ?><img src="<?= e($thumb) ?>" alt="" width="480" height="360" loading="lazy" decoding="async"><?php else: ?><span class="pcard-ph"><svg class="icon"><use href="#i-spark"/></svg></span><?php endif; ?>
-    <span class="pcard-type"><?= e(ProposalService::TYPES[$p['type']] ?? '') ?></span>
+    <span class="pcard-type"><?= te(ProposalService::TYPES[$p['type']] ?? '') ?></span>
   </a>
   <div class="pcard-body">
     <h3><a href="/proposals/<?= e($p['uid']) ?>"><?= e(\App\Core\Security\ContactGuard::mask((string) $p['title'])) ?></a></h3>

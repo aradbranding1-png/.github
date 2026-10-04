@@ -20,14 +20,14 @@ $countryName = $page['lang_code'] === 'fa' ? $page['country_fa'] : $page['countr
       <?php if ($isOwner): ?><a class="chip chip-gold" href="/pages" lang="fa"><?= e($labels['edit']) ?></a><?php endif; ?>
     </div>
     <?php if ($viewer && !$isOwner): ?>
-      <div class="form-actions pub-cta" lang="fa" dir="rtl">
-        <a class="btn btn-sm" href="/letters/new?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-letter"/></svg>ارسال نامه</a>
-        <a class="btn btn-ghost btn-sm" href="/proposals/send?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-send"/></svg>ارسال پیشنهاد تجاری</a>
+      <div class="form-actions pub-cta" <?= \App\Core\I18n\I18n::langAttrs() ?>>
+        <a class="btn btn-sm" href="/letters/new?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-letter"/></svg><?= te('ارسال نامه') ?></a>
+        <a class="btn btn-ghost btn-sm" href="/proposals/send?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-send"/></svg><?= te('ارسال پیشنهاد تجاری') ?></a>
       </div>
-      <div class="pub-safety" lang="fa" dir="rtl">
+      <div class="pub-safety" <?= \App\Core\I18n\I18n::langAttrs() ?>>
         <?= $this->partial('partials/report', ['type' => 'page', 'id' => $pageId, 'back' => '/p/' . $handle, 'blockUser' => $blockedByMe ? null : $ownerId]) ?>
         <form method="post" action="/blocks/<?= (int) $ownerId ?><?= $blockedByMe ? '/delete' : '' ?>"><?= csrf_field() ?><input type="hidden" name="back" value="/p/<?= e($handle) ?>">
-          <button class="report-trigger" type="submit"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg><span><?= $blockedByMe ? 'رفع مسدودی' : 'مسدودکردن' ?></span></button>
+          <button class="report-trigger" type="submit"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg><span><?= $blockedByMe ? te('رفع مسدودی') : te('مسدودکردن') ?></span></button>
         </form>
       </div>
     <?php endif; ?>
@@ -83,9 +83,9 @@ $countryName = $page['lang_code'] === 'fa' ? $page['country_fa'] : $page['countr
         <section class="pub-section span pub-reach">
           <h2><?= e($labels['contact']) ?></h2>
           <p class="muted"><?= e($labels['contact_note']) ?></p>
-          <div class="form-actions" lang="fa" dir="rtl">
-            <a class="btn btn-sm" href="/letters/new?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-letter"/></svg>ارسال نامه</a>
-            <a class="btn btn-ghost btn-sm" href="/proposals/send?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-send"/></svg>ارسال پیشنهاد تجاری</a>
+          <div class="form-actions" <?= \App\Core\I18n\I18n::langAttrs() ?>>
+            <a class="btn btn-sm" href="/letters/new?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-letter"/></svg><?= te('ارسال نامه') ?></a>
+            <a class="btn btn-ghost btn-sm" href="/proposals/send?to=<?= e($handle) ?>"><svg class="icon"><use href="#i-send"/></svg><?= te('ارسال پیشنهاد تجاری') ?></a>
           </div>
         </section>
       <?php endif; ?>

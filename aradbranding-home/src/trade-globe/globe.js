@@ -16,7 +16,29 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const DEG = Math.PI / 180;
-const FA = (n) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+// Interface language: Persian labels are the keys; other languages read their wording from #i18n-js on the page.
+const LANG = (typeof document !== 'undefined' && document.documentElement.lang) || 'fa';
+const I18N = (() => {
+  try { const el = document.getElementById('i18n-js'); return el ? JSON.parse(el.textContent) : null; } catch (e) { return null; }
+})();
+const plural = (out, p) => out.replace(/\{(\w+),\s*plural,\s*((?:[^{}]*\{[^{}]*\})+)\s*\}/g, (all, key, body) => {
+  const shown = p && p[key] !== undefined ? String(p[key]) : '';
+  const num = parseFloat(shown.replace(/[^\d.]/g, '')) || 0;
+  const forms = {};
+  body.replace(/(=?\w+)\s*\{([^{}]*)\}/g, (m, cat, text) => { forms[cat] = text; return m; });
+  let cat = 'other';
+  try { cat = new Intl.PluralRules(LANG).select(num); } catch (e) { /* old browser */ }
+  const text = forms['=' + num] !== undefined ? forms['=' + num] : (forms[cat] !== undefined ? forms[cat] : (forms.other || ''));
+  return text.split('#').join(shown);
+});
+const T = (s, p) => {
+  let out = (I18N && I18N[s]) || s;
+  if (out.indexOf(', plural,') >= 0) out = plural(out, p);
+  if (p) Object.keys(p).forEach((k) => { out = out.split(':' + k).join(p[k]); });
+  return out;
+};
+const RTL = typeof document === 'undefined' || document.documentElement.dir !== 'ltr';
+const FA = (n) => (LANG === 'fa' ? String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]) : String(n));
 
 /* ---------------------------------------------------------------- geography */
 
@@ -651,7 +673,7 @@ function init(root) {
   const airRoutes = AIR_LIST.map(([a, b]) => {
     const A = CITIES[a];
     const B = CITIES[b];
-    return addRoute(airCurve(A, B), 'air', { name: `${A[2]} ← ${B[2]}`, via: 'مسیر هوایی باری' });
+    return addRoute(airCurve(A, B), 'air', { name: `${T(A[2])} ${RTL ? '←' : '→'} ${T(B[2])}`, via: 'مسیر هوایی باری' });
   });
   // Land corridors from Iran to its neighbours (sign-in globe only), drawn in green with trucks on them.
   const landRoutes = LAND_LIST.map((r) => addRoute(seaCurve(r.pts, 1.003), 'land', r));
@@ -781,7 +803,7 @@ function init(root) {
     const icon = document.createElement('i');
     icon.setAttribute('aria-hidden', 'true');
     el.appendChild(icon);
-    el.appendChild(document.createTextNode(c.name));
+    el.appendChild(document.createTextNode(T(c.name)));
     if (labelLayer) labelLayer.appendChild(el);
     return { el, local: ll(c.at[0], c.at[1], 1.01) };
   });
@@ -817,6 +839,7 @@ function init(root) {
     const cs = getComputedStyle(stage);
     const num = (v, d) => { const n = parseFloat(cs.getPropertyValue(v)); return Number.isFinite(n) ? n : d; };
     gx = num('--gx', 0.5);
+    if (!RTL) gx = 1 - gx; // --gx is written for the right-to-left layout; left-to-right pages mirror it
     gy = num('--gy', 0.5);
     const rh = num('--grh', 0.4);
     const rw = num('--grw', 0.4);
@@ -945,13 +968,13 @@ function init(root) {
     if (!obj) { tip.hidden = true; return; }
     const d = obj.userData;
     tip.replaceChildren();
-    const add = (cls, text) => { const s = document.createElement('span'); s.className = cls; s.textContent = text; tip.appendChild(s); };
+    const add = (cls, text) => { const s = document.createElement('span'); s.className = cls; s.textContent = T(text); tip.appendChild(s); };
     if (d.type === 'ship') {
       add('tg-tip-k', 'کشتی تجاری');
       add('tg-tip-t', d.info.name);
       add('tg-tip-s', d.info.route);
       add('tg-tip-s', d.info.via);
-      add('tg-tip-m', `سرعت نمایشی ${d.info.speed} گره دریایی`);
+      add('tg-tip-m', T('سرعت نمایشی :n گره دریایی', { n: d.info.speed }));
     } else if (d.type === 'truck') {
       add('tg-tip-k', 'حمل زمینی');
       add('tg-tip-t', d.info.name);
@@ -1272,7 +1295,8 @@ function init(root) {
     try {
       const gl = renderer.getContext();
       const cs = getComputedStyle(stage);
-      const gx = parseFloat(cs.getPropertyValue('--gx')) || 0.6;
+      const gx0 = parseFloat(cs.getPropertyValue('--gx')) || 0.6;
+      const gx = RTL ? gx0 : 1 - gx0;
       const gy = parseFloat(cs.getPropertyValue('--gy')) || 0.45;
       const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
       const px = new Uint8Array(4);

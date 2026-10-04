@@ -853,3 +853,28 @@ html.drawer-open .bottom-nav, html.drawer-open .fab { display: none; }
 .panel-ui .sidebar .side-nav .nav-label, .panel-ui .sidebar .side-logout span, .drawer-panel .side-nav .nav-label, .drawer-panel .side-logout span { color: inherit; }
 .panel-ui .sidebar .side-nav a:hover, .drawer-panel .side-nav a:hover, .panel-ui .sidebar .side-logout:hover { color: #fff; }
 .panel-ui .sidebar .side-nav a[aria-current="page"], .drawer-panel .side-nav a[aria-current="page"] { color: #fff; }
+
+/* ===== «زبان‌ها» (admin/languages) ===== */
+.lang-admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.lang-admin-card { display: grid; gap: 8px; padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface-2, var(--surface)); cursor: pointer; }
+.lang-admin-card.is-on { border-color: var(--gold); }
+.lang-admin-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lang-admin-top b { font-size: 15px; }
+.lang-admin-top .chip { margin-inline-start: auto; }
+.lang-admin-bar { display: block; height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.lang-admin-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--gold), var(--gold-2, var(--gold))); }
+.lang-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; }
+.lang-filter .input { flex: 1 1 260px; }
+.lang-rows { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.lang-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 14px; padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); }
+.lang-row.is-missing { border-color: rgba(220, 120, 90, .55); }
+.lang-src p { margin: 0 0 6px; line-height: 1.9; }
+.lang-src small { display: block; font-size: 11px; overflow-wrap: anywhere; }
+.lang-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.lang-edit { display: grid; gap: 8px; }
+.lang-edit .form-actions { margin: 0; }
+@media (max-width: 820px) { .lang-row { grid-template-columns: 1fr; } }
+
+/* Left-to-right languages */
+[dir="ltr"] .side-logout { text-align: left; }
+[dir="ltr"] .side-logout .nav-label { text-align: left; flex: 1; }

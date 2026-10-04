@@ -22,7 +22,7 @@ final class ApiKeyController extends Controller
         $newKey = Session::get('member_new_api_key');
         Session::forget('member_new_api_key');
         return $this->view($request, 'account/api', [
-            'title' => 'API و کلید دسترسی',
+            'title' => t('API و کلید دسترسی'),
             'enabled' => (bool) $this->c->get(Settings::class)->get('api.enabled', true),
             'keys' => $this->c->get(ApiKeys::class)->forUser((int) $user['id']),
             'scopes' => ApiKeys::SCOPES,
@@ -37,7 +37,7 @@ final class ApiKeyController extends Controller
     {
         $user = $this->guard($request);
         if (!(bool) $this->c->get(Settings::class)->get('api.enabled', true)) {
-            return $this->redirect('/account/api', 'API فعلاً توسط مدیر سامانه غیرفعال شده است.', 'error');
+            return $this->redirect('/account/api', t('API فعلاً توسط مدیر سامانه غیرفعال شده است.'), 'error');
         }
         $keys = $this->c->get(ApiKeys::class);
         $name = trim((string) $request->input('name', ''));
@@ -45,20 +45,20 @@ final class ApiKeyController extends Controller
         $days = (int) $request->input('days', 90);
         $errors = [];
         if (mb_strlen($name) < 2 || mb_strlen($name) > 80) {
-            $errors['name'] = 'یک نام برای کلید بنویسید (مثلاً «CRM فروش»).';
+            $errors['name'] = t('یک نام برای کلید بنویسید (مثلاً «CRM فروش»).');
         }
         if ($scopes === []) {
-            $errors['scopes'] = 'دست‌کم یک دسترسی انتخاب کنید.';
+            $errors['scopes'] = t('دست‌کم یک دسترسی انتخاب کنید.');
         }
         if (!in_array($days, ApiKeys::EXPIRY_DAYS, true)) {
             $days = 90;
         }
         if ($keys->activeCount((int) $user['id']) >= ApiKeys::MAX_ACTIVE) {
-            $errors['name'] = 'حداکثر ' . fa_int(ApiKeys::MAX_ACTIVE) . ' کلید فعال می‌توانید داشته باشید؛ ابتدا یک کلید را باطل کنید.';
+            $errors['name'] = t('حداکثر :n کلید فعال می‌توانید داشته باشید؛ ابتدا یک کلید را باطل کنید.', ['n' => fa_int(ApiKeys::MAX_ACTIVE)]);
         }
         $hash = (string) $this->c->get(Connection::class)->scalar('SELECT password_hash FROM users WHERE id = ?', [$user['id']]);
         if ($errors === [] && !Password::verify((string) $request->input('password', ''), $hash)) {
-            $errors['password'] = 'رمز عبور درست نیست.';
+            $errors['password'] = t('رمز عبور درست نیست.');
         }
         if ($errors !== []) {
             return $this->index($request, $errors, 422);
@@ -66,7 +66,7 @@ final class ApiKeyController extends Controller
         $made = $keys->create((int) $user['id'], $name, $scopes, $days);
         Session::put('member_new_api_key', ['name' => $name, 'key' => $made['key']]);
         $this->c->get(Audit::class)->log('api_key.create', (int) $user['id'], 'api_key', $made['id'], 'success', $request, ['scopes' => $scopes, 'days' => $days]);
-        return $this->redirect('/account/api', 'کلید ساخته شد. همین حالا آن را کپی کنید؛ دوباره نمایش داده نمی‌شود.');
+        return $this->redirect('/account/api', t('کلید ساخته شد. همین حالا آن را کپی کنید؛ دوباره نمایش داده نمی‌شود.'));
     }
 
     public function revoke(Request $request): Response
@@ -76,7 +76,7 @@ final class ApiKeyController extends Controller
         if ($this->c->get(ApiKeys::class)->revoke($id, (int) $user['id'])) {
             $this->c->get(Audit::class)->log('api_key.revoke', (int) $user['id'], 'api_key', $id, 'success', $request);
         }
-        return $this->redirect('/account/api', 'کلید باطل شد و دیگر کار نمی‌کند.');
+        return $this->redirect('/account/api', t('کلید باطل شد و دیگر کار نمی‌کند.'));
     }
 
     /** Only the Super Admin may use the official API; everyone else gets 404. @return array<string, mixed> */

@@ -4,6 +4,32 @@
   var root = document.documentElement;
   root.classList.add('js');
 
+  // Interface language: the Persian text is the key; other languages get their wording from #i18n-js on the page.
+  var I18N = null;
+  try { var i18nEl = document.getElementById('i18n-js'); I18N = i18nEl ? JSON.parse(i18nEl.textContent) : null; } catch (e) {}
+  // ICU plural blocks in a translation: {n, plural, one {# item} other {# items}} — # is the formatted number.
+  var plural = function (out, p) {
+    return out.replace(/\{(\w+),\s*plural,\s*((?:[^{}]*\{[^{}]*\})+)\s*\}/g, function (all, key, body) {
+      var shown = p && p[key] !== undefined ? String(p[key]) : '';
+      var num = parseFloat(shown.replace(/[۰-۹]/g, function (d) { return d.charCodeAt(0) - 1776; }).replace(/[^\d.]/g, '')) || 0;
+      var forms = {};
+      body.replace(/(=?\w+)\s*\{([^{}]*)\}/g, function (m, cat, text) { forms[cat] = text; });
+      var cat = 'other';
+      try { cat = new Intl.PluralRules(root.lang).select(num); } catch (e) {}
+      var text = forms['=' + num] !== undefined ? forms['=' + num] : (forms[cat] !== undefined ? forms[cat] : (forms.other || ''));
+      return text.split('#').join(shown);
+    });
+  };
+  var T = function (s, p) {
+    var out = I18N && I18N[s] ? I18N[s] : s;
+    if (out.indexOf(', plural,') >= 0) out = plural(out, p);
+    if (p) Object.keys(p).forEach(function (k) { out = out.split(':' + k).join(p[k]); });
+    return out;
+  };
+  var NUM = root.lang === 'fa' ? 'fa-IR' : (root.lang === 'ar' ? 'ar-u-nu-latn' : (root.lang || 'en'));
+  window.sadtT = T;
+  window.sadtNum = NUM;
+
   // Theme toggle
   document.querySelectorAll('[data-theme-toggle]').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -58,13 +84,13 @@
       var file = input.files && input.files[0];
       if (!file) { restore(); return; }
       if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
-        msg.textContent = 'فقط تصاویر JPG، PNG و WebP پذیرفته می‌شوند.';
+        msg.textContent = T('فقط تصاویر JPG، PNG و WebP پذیرفته می‌شوند.');
         msg.hidden = false; input.value = ''; restore(); return;
       }
       if (maxKb && file.size > maxKb * 1024) {
-        var size = Math.ceil(file.size / 1024).toLocaleString('fa-IR');
-        msg.textContent = 'حجم این تصویر ' + size + ' کیلوبایت است. حداکثر مجاز ' +
-          maxKb.toLocaleString('fa-IR') + ' کیلوبایت است؛ تصویر را فشرده کنید و دوباره انتخاب کنید.';
+        var size = Math.ceil(file.size / 1024).toLocaleString(NUM);
+        msg.textContent = T('حجم این تصویر :size کیلوبایت است. حداکثر مجاز :max کیلوبایت است؛ تصویر را فشرده کنید و دوباره انتخاب کنید.',
+          { size: size, max: maxKb.toLocaleString(NUM) });
         msg.hidden = false; input.value = ''; restore(); return;
       }
       var current = document.getElementById(input.getAttribute('data-preview'));
@@ -91,9 +117,9 @@
       var files = Array.prototype.slice.call(input.files || []);
       var tooBig = files.filter(function (f) { return f.size > maxKb * 1024; });
       if (files.length > maxFiles) {
-        msg.textContent = 'حداکثر ' + maxFiles.toLocaleString('fa-IR') + ' تصویر می‌توانید انتخاب کنید.';
+        msg.textContent = T('حداکثر :n تصویر می‌توانید انتخاب کنید.', { n: maxFiles.toLocaleString(NUM) });
       } else if (tooBig.length) {
-        msg.textContent = 'حجم ' + tooBig.length.toLocaleString('fa-IR') + ' تصویر بیشتر از ' + maxKb.toLocaleString('fa-IR') + ' کیلوبایت است؛ آن‌ها را فشرده کنید.';
+        msg.textContent = T('حجم :n تصویر بیشتر از :max کیلوبایت است؛ آن‌ها را فشرده کنید.', { n: tooBig.length.toLocaleString(NUM), max: maxKb.toLocaleString(NUM) });
       } else { return; }
       msg.hidden = false; input.value = '';
     });
@@ -118,7 +144,7 @@
             if (!feed.querySelector('.pcard[data-id="' + card.getAttribute('data-id') + '"]')) feed.appendChild(card);
           });
           feed.setAttribute('data-more', res.data.next || '');
-          if (!res.data.next) { foot.innerHTML = '<p class="muted">به انتهای فهرست رسیدید.</p>'; io.disconnect(); }
+          if (!res.data.next) { foot.innerHTML = '<p class="muted">' + T('به انتهای فهرست رسیدید.') + '</p>'; io.disconnect(); }
         })
         .catch(function () { foot.querySelector('[data-feed-next]') && (foot.querySelector('[data-feed-next]').style.display = 'inline-flex'); })
         .finally(function () { loading = false; });
@@ -169,9 +195,9 @@
     var panel = document.createElement('div');
     panel.className = 'ss-panel';
     panel.hidden = true;
-    panel.innerHTML = '<div class="ss-search"><input type="search" class="input" autocomplete="off" placeholder="جستجو…" ' +
+    panel.innerHTML = '<div class="ss-search"><input type="search" class="input" autocomplete="off" placeholder="' + T('جستجو…') + '" ' +
       'role="combobox" aria-autocomplete="list" aria-controls="' + listId + '" aria-expanded="true"></div>' +
-      '<ul class="ss-list" role="listbox" id="' + listId + '"></ul><p class="ss-empty" hidden>موردی پیدا نشد.</p>';
+      '<ul class="ss-list" role="listbox" id="' + listId + '"></ul><p class="ss-empty" hidden>' + T('موردی پیدا نشد.') + '</p>';
     wrap.appendChild(panel);
     var input = panel.querySelector('input');
     var list = panel.querySelector('ul');
@@ -342,25 +368,25 @@
       if (box) return;
       var steps;
       if (deferred) {
-        steps = '<p class="pwa-text">با نصب، سامانه مثل یک اپلیکیشن روی صفحه اصلی گوشی شما قرار می‌گیرد؛ سریع‌تر باز می‌شود و نامه‌ها و پیشنهادها همیشه در دسترس‌اند.</p>';
+        steps = '<p class="pwa-text">' + T('با نصب، سامانه مثل یک اپلیکیشن روی صفحه اصلی گوشی شما قرار می‌گیرد؛ سریع‌تر باز می‌شود و نامه‌ها و پیشنهادها همیشه در دسترس‌اند.') + '</p>';
       } else if (iosSafari) {
-        steps = '<ol class="pwa-steps"><li>در پایین سافاری دکمه اشتراک‌گذاری <span class="pwa-ic">' + share + '</span> را بزنید.</li>' +
-          '<li>گزینه <b>Add to Home Screen</b> <span class="pwa-ic">' + plus + '</span> را انتخاب کنید.</li><li>در بالا روی <b>Add</b> بزنید.</li></ol>';
+        steps = '<ol class="pwa-steps"><li>' + T('در پایین سافاری دکمه اشتراک‌گذاری :icon را بزنید.', { icon: '<span class="pwa-ic">' + share + '</span>' }) + '</li>' +
+          '<li>' + T('گزینه <b>Add to Home Screen</b> :icon را انتخاب کنید.', { icon: '<span class="pwa-ic">' + plus + '</span>' }) + '</li><li>' + T('در بالا روی <b>Add</b> بزنید.') + '</li></ol>';
       } else if (ios) {
-        steps = '<p class="pwa-text">برای نصب، همین صفحه را در <b>Safari</b> باز کنید، سپس از دکمه اشتراک‌گذاری <span class="pwa-ic">' + share + '</span> گزینه <b>Add to Home Screen</b> را بزنید.</p>';
+        steps = '<p class="pwa-text">' + T('برای نصب، همین صفحه را در <b>Safari</b> باز کنید، سپس از دکمه اشتراک‌گذاری :icon گزینه <b>Add to Home Screen</b> را بزنید.', { icon: '<span class="pwa-ic">' + share + '</span>' }) + '</p>';
       } else {
-        steps = '<ol class="pwa-steps"><li>منوی مرورگر <span class="pwa-ic">' + dots + '</span> را باز کنید.</li>' +
-          '<li>گزینه <b>نصب برنامه</b> یا <b>Add to Home screen</b> را بزنید.</li></ol>';
+        steps = '<ol class="pwa-steps"><li>' + T('منوی مرورگر :icon را باز کنید.', { icon: '<span class="pwa-ic">' + dots + '</span>' }) + '</li>' +
+          '<li>' + T('گزینه <b>نصب برنامه</b> یا <b>Add to Home screen</b> را بزنید.') + '</li></ol>';
       }
       box = document.createElement('div');
       box.className = 'pwa-pop';
       box.setAttribute('role', 'dialog');
-      box.setAttribute('aria-label', 'نصب اپلیکیشن سامانه توسعه تجارت');
-      box.innerHTML = '<button class="pwa-x" type="button" aria-label="بستن">×</button>' +
-        '<div class="pwa-head"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="44" height="44"><div><b>اپلیکیشن سامانه توسعه تجارت</b><small>نصب رایگان، بدون نیاز به فروشگاه برنامه</small></div></div>' +
+      box.setAttribute('aria-label', T('نصب اپلیکیشن سامانه توسعه تجارت'));
+      box.innerHTML = '<button class="pwa-x" type="button" aria-label="' + T('بستن') + '">×</button>' +
+        '<div class="pwa-head"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="44" height="44"><div><b>' + T('اپلیکیشن سامانه توسعه تجارت') + '</b><small>' + T('نصب رایگان، بدون نیاز به فروشگاه برنامه') + '</small></div></div>' +
         steps +
-        '<div class="pwa-actions">' + (deferred ? '<button class="pwa-btn" type="button" data-pwa="install">نصب اپلیکیشن</button>' : '<button class="pwa-btn" type="button" data-pwa="ok">متوجه شدم</button>') +
-        '<button class="pwa-later" type="button" data-pwa="later">بعداً</button></div>';
+        '<div class="pwa-actions">' + (deferred ? '<button class="pwa-btn" type="button" data-pwa="install">' + T('نصب اپلیکیشن') + '</button>' : '<button class="pwa-btn" type="button" data-pwa="ok">' + T('متوجه شدم') + '</button>') +
+        '<button class="pwa-later" type="button" data-pwa="later">' + T('بعداً') + '</button></div>';
       document.body.appendChild(box);
       box.querySelector('.pwa-x').addEventListener('click', function () { close(3); });
       box.querySelector('[data-pwa="later"]').addEventListener('click', function () { close(3); });

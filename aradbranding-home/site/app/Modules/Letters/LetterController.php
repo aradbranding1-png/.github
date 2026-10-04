@@ -30,7 +30,7 @@ final class LetterController extends Controller
         }
         $letters = $this->c->get(LetterService::class);
         $data = [
-            'title' => 'نامه‌ها',
+            'title' => t('نامه‌ها'),
             'folderKey' => $folderKey,
             'category' => $category,
             'rows' => [],
@@ -40,7 +40,7 @@ final class LetterController extends Controller
             'lastSeen' => 0,
             'unreadByType' => $letters->unreadByType($user['id']),
             'unreadOfficial' => (int) ($user['unread_official'] ?? 0),
-            'orgName' => (string) $this->c->get(\App\Core\Settings\Settings::class)->get('org.name', 'آراد برندینگ'),
+            'orgName' => t((string) $this->c->get(\App\Core\Settings\Settings::class)->get('org.name', 'آراد برندینگ')),
         ];
 
         if ($folderKey === 'groups') {
@@ -73,7 +73,7 @@ final class LetterController extends Controller
         return $this->view($request, 'letters/official', [
             'title' => $a['subject'],
             'a' => $a,
-            'orgName' => (string) $this->c->get(\App\Core\Settings\Settings::class)->get('org.name', 'آراد برندینگ'),
+            'orgName' => t((string) $this->c->get(\App\Core\Settings\Settings::class)->get('org.name', 'آراد برندینگ')),
         ]);
     }
 
@@ -104,7 +104,7 @@ final class LetterController extends Controller
             'cards' => $cards,
             'peer' => $cards[(int) $thread['peer_id']] ?? null,
             'proposal' => $proposal,
-            'orgName' => (string) $this->c->get(\App\Core\Settings\Settings::class)->get('org.name', 'آراد برندینگ'),
+            'orgName' => t((string) $this->c->get(\App\Core\Settings\Settings::class)->get('org.name', 'آراد برندینگ')),
             'blockedByMe' => $trust->hasBlocked((int) $user['id'], (int) $thread['peer_id']),
             'blocked' => (int) $thread['type'] !== LetterService::T_OFFICIAL && $trust->blockedBetween((int) $user['id'], (int) $thread['peer_id']),
             'errors' => [],
@@ -121,14 +121,14 @@ final class LetterController extends Controller
         }
         $body = trim((string) $request->input('body', ''));
         if ($body === '' || mb_strlen($body) > 10000) {
-            return $this->redirect('/letters/' . $thread['uid'] . '#reply', 'متن پاسخ را بنویسید (حداکثر ۱۰٬۰۰۰ نویسه).', 'error');
+            return $this->redirect('/letters/' . $thread['uid'] . '#reply', t('متن پاسخ را بنویسید (حداکثر ۱۰٬۰۰۰ نویسه).'), 'error');
         }
         try {
             $letters->reply($user, $thread, $body);
         } catch (ValidationFailed $e) {
             return $this->redirect('/letters/' . $thread['uid'], reset($e->errors), 'error');
         }
-        return $this->redirect('/letters/' . $thread['uid'] . '#last', 'پاسخ ارسال شد.');
+        return $this->redirect('/letters/' . $thread['uid'] . '#last', t('پاسخ ارسال شد.'));
     }
 
     public function archive(Request $request): Response
@@ -141,7 +141,7 @@ final class LetterController extends Controller
         }
         $toArchive = (int) $thread['folder'] !== LetterService::ARCHIVE;
         $letters->setFolder($user['id'], $thread['id'], $toArchive ? LetterService::ARCHIVE : LetterService::INBOX);
-        return $this->redirect('/letters', $toArchive ? 'گفتگو بایگانی شد.' : 'گفتگو به صندوق ورودی برگشت.');
+        return $this->redirect('/letters', $toArchive ? t('گفتگو بایگانی شد.') : t('گفتگو به صندوق ورودی برگشت.'));
     }
 
     // ---------- Private letter ----------
@@ -155,7 +155,7 @@ final class LetterController extends Controller
         }
         $recipient = $to !== '' ? $this->recipient($to) : null;
         return $this->view($request, 'letters/compose', [
-            'title' => 'نامه اختصاصی',
+            'title' => t('نامه اختصاصی'),
             'recipient' => $recipient,
             'price' => $recipient ? $this->c->get(LetterService::class)->privatePrice($user, $recipient) : null,
             'balance' => $this->c->get(WalletService::class)->balance($user['id']),
@@ -170,20 +170,20 @@ final class LetterController extends Controller
         $user = $this->user($request);
         $recipient = $this->recipient((string) $request->input('to', ''));
         if ($recipient === null) {
-            return $this->compose($request, ['to' => 'تاجری با این نشانی پیدا نشد.'], 422);
+            return $this->compose($request, ['to' => t('تاجری با این نشانی پیدا نشد.')], 422);
         }
         $subject = trim((string) $request->input('subject', ''));
         $body = trim((string) $request->input('body', ''));
         $token = (string) $request->input('token', '');
         $errors = [];
         if ($subject === '' || mb_strlen($subject) > 150) {
-            $errors['subject'] = 'موضوع را بنویسید (حداکثر ۱۵۰ نویسه).';
+            $errors['subject'] = t('موضوع را بنویسید (حداکثر ۱۵۰ نویسه).');
         }
         if ($body === '' || mb_strlen($body) > 10000) {
-            $errors['body'] = 'متن نامه را بنویسید (حداکثر ۱۰٬۰۰۰ نویسه).';
+            $errors['body'] = t('متن نامه را بنویسید (حداکثر ۱۰٬۰۰۰ نویسه).');
         }
         if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
-            $errors['body'] = 'فرم منقضی شده است؛ دوباره ارسال کنید.';
+            $errors['body'] = t('فرم منقضی شده است؛ دوباره ارسال کنید.');
         }
         if ($errors !== []) {
             return $this->compose($request, $errors, 422);
@@ -193,9 +193,9 @@ final class LetterController extends Controller
         } catch (ValidationFailed $e) {
             return $this->compose($request, $e->errors, 422);
         } catch (InsufficientStars $e) {
-            return $this->redirect('/wallet?need=' . $e->missing() . '&next=' . rawurlencode('/letters/new?to=' . $recipient['handle']), 'موجودی Stars کافی نیست.', 'error');
+            return $this->redirect('/wallet?need=' . $e->missing() . '&next=' . rawurlencode('/letters/new?to=' . $recipient['handle']), t('موجودی Stars کافی نیست.'), 'error');
         }
-        return $this->redirect('/letters/' . $uid, 'نامه ارسال شد.');
+        return $this->redirect('/letters/' . $uid, t('نامه ارسال شد.'));
     }
 
     // ---------- Public letter ----------
@@ -220,7 +220,7 @@ final class LetterController extends Controller
             $prices[$kind] = $campaigns->unitPrices($kind);
         }
         return $this->view($request, 'letters/send', [
-            'title' => 'ارسال نامه',
+            'title' => t('ارسال نامه'),
             'countries' => $ref->countries(),
             'languages' => $ref->languages(),
             'categories' => $ref->categories(),
@@ -254,17 +254,17 @@ final class LetterController extends Controller
                 );
             }
             if ($proposal === null) {
-                $errors['proposal'] = 'یکی از پیشنهادهای خود را انتخاب کنید.';
+                $errors['proposal'] = t('یکی از پیشنهادهای خود را انتخاب کنید.');
             }
             if (mb_strlen($body) > 1000) {
-                $errors['body'] = 'پیام همراه حداکثر ۱۰۰۰ نویسه است.';
+                $errors['body'] = t('پیام همراه حداکثر ۱۰۰۰ نویسه است.');
             }
         } else {
             if ($subject === '' || mb_strlen($subject) > 150) {
-                $errors['subject'] = 'موضوع را بنویسید (حداکثر ۱۵۰ نویسه).';
+                $errors['subject'] = t('موضوع را بنویسید (حداکثر ۱۵۰ نویسه).');
             }
             if ($body === '' || mb_strlen($body) > 10000) {
-                $errors['body'] = 'متن نامه را بنویسید (حداکثر ۱۰٬۰۰۰ نویسه).';
+                $errors['body'] = t('متن نامه را بنویسید (حداکثر ۱۰٬۰۰۰ نویسه).');
             }
         }
         $handles = array_values(array_unique(array_filter(array_map(
@@ -298,7 +298,7 @@ final class LetterController extends Controller
         }
         $ref = $this->c->get(ReferenceData::class);
         return $this->view($request, 'letters/campaign', [
-            'title' => 'ارسال گروهی',
+            'title' => t('ارسال گروهی'),
             'campaign' => $campaign,
             'balance' => $this->c->get(WalletService::class)->balance($user['id']),
             'country' => $ref->country($campaign['filter']['country'] ?? null),
@@ -321,11 +321,11 @@ final class LetterController extends Controller
             }
             $service->confirm($user, $campaign);
         } catch (InsufficientStars $e) {
-            return $this->redirect('/wallet?need=' . $e->missing() . '&next=' . rawurlencode('/letters/public/' . $campaign['uid']), 'موجودی Stars کافی نیست.', 'error');
+            return $this->redirect('/wallet?need=' . $e->missing() . '&next=' . rawurlencode('/letters/public/' . $campaign['uid']), t('موجودی Stars کافی نیست.'), 'error');
         } catch (ValidationFailed $e) {
             return $this->redirect('/letters/public/' . $campaign['uid'], reset($e->errors), 'error');
         }
-        return $this->redirect('/letters/public/' . $campaign['uid'], 'نامه در صف ارسال قرار گرفت. پیشرفت را همین‌جا ببینید.');
+        return $this->redirect('/letters/public/' . $campaign['uid'], t('نامه در صف ارسال قرار گرفت. پیشرفت را همین‌جا ببینید.'));
     }
 
     private function recipient(string $handle): ?array

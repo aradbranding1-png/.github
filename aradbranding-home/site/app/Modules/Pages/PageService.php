@@ -82,16 +82,16 @@ final class PageService
     {
         $handle = strtolower(trim($handle));
         if (!preg_match('/^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/', $handle) || str_contains($handle, '--')) {
-            throw new ValidationFailed(['handle' => 'نشانی باید ۳ تا ۳۲ نویسه و فقط شامل حروف کوچک انگلیسی، عدد و خط تیره باشد.']);
+            throw new ValidationFailed(['handle' => t('نشانی باید ۳ تا ۳۲ نویسه و فقط شامل حروف کوچک انگلیسی، عدد و خط تیره باشد.')]);
         }
         if (in_array($handle, self::RESERVED_HANDLES, true)) {
-            throw new ValidationFailed(['handle' => 'این نشانی رزرو شده است. نشانی دیگری انتخاب کنید.']);
+            throw new ValidationFailed(['handle' => t('این نشانی رزرو شده است. نشانی دیگری انتخاب کنید.')]);
         }
         try {
             $changed = $this->db->exec('UPDATE users SET handle = ?, updated_at = NOW(3) WHERE id = ? AND handle IS NULL', [$handle, $userId]);
         } catch (PDOException $e) {
             if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
-                throw new ValidationFailed(['handle' => 'این نشانی قبلاً گرفته شده است.']);
+                throw new ValidationFailed(['handle' => t('این نشانی قبلاً گرفته شده است.')]);
             }
             throw $e;
         }
@@ -100,7 +100,7 @@ final class PageService
             if ($current === $handle) {
                 return; // same handle already saved by an earlier attempt of this form
             }
-            throw new ValidationFailed(['handle' => 'نشانی صفحه شما قبلاً تعیین شده است.']);
+            throw new ValidationFailed(['handle' => t('نشانی صفحه شما قبلاً تعیین شده است.')]);
         }
         $this->cache->forget('handle:' . $handle);
     }
@@ -136,7 +136,7 @@ final class PageService
             $this->images->delete($cover);
             $this->images->delete($avatar);
             if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
-                throw new ValidationFailed(['language_id' => 'برای این زبان قبلاً صفحه ساخته‌اید. همان صفحه را ویرایش کنید.']);
+                throw new ValidationFailed(['language_id' => t('برای این زبان قبلاً صفحه ساخته‌اید. همان صفحه را ویرایش کنید.')]);
             }
             throw $e;
         }
@@ -221,7 +221,7 @@ final class PageService
     public function addRule(int $ownerId, ?int $countryId, ?int $languageId, int $targetPageId): void
     {
         if ($countryId === null && $languageId === null) {
-            throw new ValidationFailed(['rule' => 'حداقل کشور یا زبان را انتخاب کنید.']);
+            throw new ValidationFailed(['rule' => t('حداقل کشور یا زبان را انتخاب کنید.')]);
         }
         $this->upsertRule($ownerId, $countryId, $languageId, $targetPageId);
     }

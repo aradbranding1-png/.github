@@ -21,9 +21,9 @@ $c = ' lang="' . e((string) ($p['lang_code'] ?? 'fa')) . '" dir="auto"';
   <?php if ($cover): ?><div class="pdetail-cover"><img src="<?= e($cover) ?>" alt="" width="1200" height="900"></div><?php endif; ?>
   <div class="pdetail-main">
     <div class="pub-meta">
-      <span class="chip chip-gold"><?= e(ProposalService::TYPES[(int) $p['type']] ?? '') ?></span>
-      <?php if ($category): ?><span class="chip"><?= e($category['name_fa']) ?></span><?php endif; ?>
-      <?php if ($status !== ProposalService::PUBLISHED): ?><span class="chip"><?= e(ProposalService::STATUS_LABELS[$status] ?? '') ?></span><?php endif; ?>
+      <span class="chip chip-gold"><?= te(ProposalService::TYPES[(int) $p['type']] ?? '') ?></span>
+      <?php if ($category): ?><span class="chip"><?= te($category['name_fa']) ?></span><?php endif; ?>
+      <?php if ($status !== ProposalService::PUBLISHED): ?><span class="chip"><?= te(ProposalService::STATUS_LABELS[$status] ?? '') ?></span><?php endif; ?>
     </div>
     <h1 class="pdetail-title"<?= $c ?>><?= e($p['title']) ?></h1>
     <p class="pdetail-summary"<?= $c ?>><?= e($p['summary']) ?></p>
@@ -31,27 +31,27 @@ $c = ' lang="' . e((string) ($p['lang_code'] ?? 'fa')) . '" dir="auto"';
     <a class="owner-row" href="<?= $p['handle'] ? '/p/' . e($p['handle']) : '#' ?>">
       <?php $oa = media($p['owner_avatar']); ?>
       <?php if ($oa): ?><img class="avatar" src="<?= e($oa) ?>" alt=""><?php else: ?><span class="avatar"><?= e(initials($p['first_name'], $p['last_name'])) ?></span><?php endif; ?>
-      <span class="grow"><b><?= e($owner) ?></b><span class="muted"><?= flag($p['country_code']) ?> <?= e($p['country_fa']) ?><?= $p['business_verified_at'] ? ' · تأییدشده' : '' ?></span></span>
-      <?php if ($p['handle']): ?><span class="btn btn-ghost btn-sm">صفحه تجاری</span><?php endif; ?>
+      <span class="grow"><b><?= e($owner) ?></b><span class="muted"><?= flag($p['country_code']) ?> <?= te($p['country_fa']) ?><?= $p['business_verified_at'] ? t(' · تأییدشده') : '' ?></span></span>
+      <?php if ($p['handle']): ?><span class="btn btn-ghost btn-sm"><?= te('صفحه تجاری') ?></span><?php endif; ?>
     </a>
 
-    <?php if ($p['body']): ?><section class="pub-section"><h2>توضیحات</h2><div class="prose"<?= $c ?>><?= rich_text($p['body']) ?></div></section><?php endif; ?>
+    <?php if ($p['body']): ?><section class="pub-section"><h2><?= te('توضیحات') ?></h2><div class="prose"<?= $c ?>><?= rich_text($p['body']) ?></div></section><?php endif; ?>
 
     <section class="pub-section">
-      <h2>مشخصات</h2>
+      <h2><?= te('مشخصات') ?></h2>
       <dl class="specs">
-        <?php foreach (['product' => 'محصول / خدمت', 'quantity' => 'مقدار', 'target_markets' => 'بازار هدف'] as $k => $label): if (!empty($p[$k])): ?>
-          <div><dt><?= e($label) ?></dt><dd<?= $c ?>><?= e($p[$k]) ?></dd></div>
+        <?php foreach (['product' => t('محصول / خدمت'), 'quantity' => t('مقدار'), 'target_markets' => t('بازار هدف')] as $k => $label): if (!empty($p[$k])): ?>
+          <div><dt><?= te($label) ?></dt><dd<?= $c ?>><?= e($p[$k]) ?></dd></div>
         <?php endif; endforeach; ?>
-        <div><dt>کشور</dt><dd><?= flag($p['country_code']) ?> <?= e($p['country_fa']) ?></dd></div>
-        <?php if ($p['published_at']): ?><div><dt>انتشار</dt><dd><?= e(fa_date((string) $p['published_at'], false)) ?></dd></div><?php endif; ?>
+        <div><dt><?= te('کشور') ?></dt><dd><?= flag($p['country_code']) ?> <?= te($p['country_fa']) ?></dd></div>
+        <?php if ($p['published_at']): ?><div><dt><?= te('انتشار') ?></dt><dd><?= e(fa_date((string) $p['published_at'], false)) ?></dd></div><?php endif; ?>
       </dl>
     </section>
 
-    <?php if ($p['terms']): ?><section class="pub-section"><h2>شرایط</h2><div class="prose"<?= $c ?>><?= rich_text($p['terms']) ?></div></section><?php endif; ?>
+    <?php if ($p['terms']): ?><section class="pub-section"><h2><?= te('شرایط') ?></h2><div class="prose"<?= $c ?>><?= rich_text($p['terms']) ?></div></section><?php endif; ?>
 
     <?php if ($gallery): ?>
-      <section class="gallery" aria-label="تصاویر">
+      <section class="gallery" aria-label="<?= te('تصاویر') ?>">
         <?php foreach ($gallery as $g): ?><span class="gallery-item"><img src="<?= e(media($g)) ?>" alt="" loading="lazy" decoding="async" draggable="false"></span><?php endforeach; ?>
       </section>
     <?php endif; ?>
@@ -60,10 +60,10 @@ $c = ' lang="' . e((string) ($p['lang_code'] ?? 'fa')) . '" dir="auto"';
 
     <div class="pdetail-actions">
       <?php if ($isOwner): ?>
-        <a class="btn" href="/proposals/<?= e($p['uid']) ?>/edit">ویرایش</a>
-        <span class="muted"><svg class="icon inline-icon"><use href="#i-eye"/></svg> <?= fa_int((int) $p['view_count']) ?> بازدید · <?= fa_int((int) $p['send_count']) ?> ارسال</span>
+        <a class="btn" href="/proposals/<?= e($p['uid']) ?>/edit"><?= te('ویرایش') ?></a>
+        <span class="muted"><svg class="icon inline-icon"><use href="#i-eye"/></svg> <?= te(':n بازدید', ['n' => fa_int((int) $p['view_count'])]) ?> · <?= te(':n ارسال', ['n' => fa_int((int) $p['send_count'])]) ?></span>
       <?php elseif ($p['handle']): ?>
-        <a class="btn" href="/letters/new?to=<?= e($p['handle']) ?>"><svg class="icon"><use href="#i-letter"/></svg>با من ارتباط بگیرید</a>
+        <a class="btn" href="/letters/new?to=<?= e($p['handle']) ?>"><svg class="icon"><use href="#i-letter"/></svg><?= te('با من ارتباط بگیرید') ?></a>
       <?php endif; ?>
       <?php if (!$isOwner): ?><?= $this->partial('partials/report', ['type' => 'proposal', 'id' => (int) $p['id'], 'back' => '/proposals/' . $p['uid'], 'blockUser' => (int) $p['user_id']]) ?><?php endif; ?>
     </div>

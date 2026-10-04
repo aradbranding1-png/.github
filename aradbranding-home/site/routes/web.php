@@ -22,6 +22,7 @@ use App\Modules\Notifications\NotificationController;
 
 return static function (Router $r): void {
     $r->get('/', [HomeController::class, 'index'], ['session:optional']);
+    $r->get('/lang/{code:[a-z]{2}}', [\App\Modules\System\LocaleController::class, 'switch'], ['session:optional']);
 
     // Guests
     $r->group('', ['session', 'guest'], static function (Router $r): void {
@@ -153,6 +154,11 @@ return static function (Router $r): void {
         $r->post('/updates', [\App\Modules\Admin\ReleaseNotesController::class, 'store'], ['can:updates.manage']);
         $r->post('/updates/{id:\d+}/toggle', [\App\Modules\Admin\ReleaseNotesController::class, 'toggle'], ['can:updates.manage']);
         $r->post('/admin/settings', [SettingsController::class, 'update'], ['can:settings.manage']);
+        $r->get('/admin/languages', [\App\Modules\Admin\LanguagesController::class, 'index'], ['can:i18n.manage']);
+        $r->post('/admin/languages/settings', [\App\Modules\Admin\LanguagesController::class, 'settings'], ['can:i18n.manage']);
+        $r->post('/admin/languages/translate', [\App\Modules\Admin\LanguagesController::class, 'save'], ['can:i18n.manage']);
+        $r->post('/admin/languages/reset', [\App\Modules\Admin\LanguagesController::class, 'reset'], ['can:i18n.manage']);
+        $r->post('/admin/languages/misses/clear', [\App\Modules\Admin\LanguagesController::class, 'clearMisses'], ['can:i18n.manage']);
         $r->get('/admin/home', [\App\Modules\Admin\HomeAdminController::class, 'show'], ['can:settings.manage']);
         $r->post('/admin/home', [\App\Modules\Admin\HomeAdminController::class, 'update'], ['can:settings.manage']);
         $r->post('/admin/home/reset', [\App\Modules\Admin\HomeAdminController::class, 'reset'], ['can:settings.manage']);

@@ -18,7 +18,7 @@ final class SafetyController extends Controller
         $user = $this->user($request);
         $trust = $this->c->get(TrustService::class);
         return $this->view($request, 'account/safety', [
-            'title' => 'حریم و امنیت',
+            'title' => t('حریم و امنیت'),
             'blocked' => $trust->blockedList((int) $user['id']),
             'reports' => $trust->mine((int) $user['id']),
         ]);
@@ -37,11 +37,11 @@ final class SafetyController extends Controller
         } catch (ValidationFailed $e) {
             return $this->redirect($back, (string) reset($e->errors), 'error');
         }
-        $msg = $new ? 'گزارش شما ثبت شد. تیم آراد برندینگ آن را بررسی می‌کند و نتیجه را به شما خبر می‌دهد.' : 'گزارش قبلی شما به‌روز شد.';
+        $msg = $new ? t('گزارش شما ثبت شد. تیم آراد برندینگ آن را بررسی می‌کند و نتیجه را به شما خبر می‌دهد.') : t('گزارش قبلی شما به‌روز شد.');
         if ((string) $request->input('block', '') === '1') {
             $target = $trust->target((int) $user['id'], $type, $id);
             if ($target !== null && $trust->block((int) $user['id'], $target['user_id'])) {
-                $msg .= ' این تاجر مسدود شد.';
+                $msg .= t(' این تاجر مسدود شد.');
             }
         }
         $this->c->get(Audit::class)->log('trust.report', (int) $user['id'], 'report', $id, 'success', $request, ['type' => $type, 'new' => $new]);
@@ -55,10 +55,10 @@ final class SafetyController extends Controller
         $other = (int) $request->param('id');
         $exists = $this->c->get(\App\Core\Db\Connection::class)->scalar('SELECT 1 FROM users WHERE id = ? AND deleted_at IS NULL', [$other]);
         if ($exists === null || $other === (int) $user['id']) {
-            return $this->redirect(self::back($request), 'این تاجر پیدا نشد.', 'error');
+            return $this->redirect(self::back($request), t('این تاجر پیدا نشد.'), 'error');
         }
         $this->c->get(TrustService::class)->block((int) $user['id'], $other);
-        return $this->redirect(self::back($request), 'مسدود شد. دیگر نمی‌توانید با این تاجر نامه یا پیشنهاد ردوبدل کنید و نامه‌های عمومی‌اش به شما نمی‌رسد.');
+        return $this->redirect(self::back($request), t('مسدود شد. دیگر نمی‌توانید با این تاجر نامه یا پیشنهاد ردوبدل کنید و نامه‌های عمومی‌اش به شما نمی‌رسد.'));
     }
 
     /** POST /blocks/{id}/delete */
@@ -66,7 +66,7 @@ final class SafetyController extends Controller
     {
         $user = $this->user($request);
         $this->c->get(TrustService::class)->unblock((int) $user['id'], (int) $request->param('id'));
-        return $this->redirect(self::back($request), 'رفع مسدودی انجام شد.');
+        return $this->redirect(self::back($request), t('رفع مسدودی انجام شد.'));
     }
 
     /** Same-site path only. */

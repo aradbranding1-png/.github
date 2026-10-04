@@ -14,6 +14,7 @@ $items = [
     'audit' => ['/admin/audit', 'رویدادهای امنیتی', 'eye', $has('audit.view')],
     'settings' => ['/admin/settings', 'تنظیمات', 'gear', $has('settings.manage')],
     'home' => ['/admin/home', 'صفحه اصلی سایت', 'home', $has('settings.manage')],
+    'languages' => ['/admin/languages', 'زبان‌ها', 'compass', $has('i18n.manage')],
     'api' => ['/admin/api', 'اتصال API', 'route', $has('settings.manage')],
     'backups' => ['/admin/backups', 'نسخه‌های پشتیبان', 'archive', $has('backup.manage')],
     'update' => ['/admin/system-update', 'بروزرسانی سامانه', 'route', $has('updates.manage')],

@@ -22,15 +22,15 @@ final class DashboardController extends Controller
         $proposals = (int) $db->scalar('SELECT COUNT(*) FROM proposals WHERE user_id = ? AND deleted_at IS NULL', [$user['id']]);
 
         return $this->view($request, 'dashboard/index', [
-            'title' => 'داشبورد',
+            'title' => t('داشبورد'),
             'counters' => $counters,
             'balance' => $this->c->get(\App\Modules\Wallet\WalletService::class)->balance($user['id']),
             'pages' => $pages,
             'steps' => [
-                ['done' => $user['avatar_path'] !== null, 'label' => 'تصویر پروفایل را اضافه کنید.', 'href' => '/account'],
-                ['done' => $pages !== [], 'label' => 'اولین صفحه تجاری خود را بسازید.', 'href' => '/pages/new'],
-                ['done' => count($pages) > 1, 'label' => 'صفحه را به زبان دوم هم بسازید.', 'href' => '/pages/new'],
-                ['done' => $proposals > 0, 'label' => 'اولین پیشنهاد تجاری خود را ثبت کنید.', 'href' => '/proposals/new'],
+                ['done' => $user['avatar_path'] !== null, 'label' => t('تصویر پروفایل را اضافه کنید.'), 'href' => '/account'],
+                ['done' => $pages !== [], 'label' => t('اولین صفحه تجاری خود را بسازید.'), 'href' => '/pages/new'],
+                ['done' => count($pages) > 1, 'label' => t('صفحه را به زبان دوم هم بسازید.'), 'href' => '/pages/new'],
+                ['done' => $proposals > 0, 'label' => t('اولین پیشنهاد تجاری خود را ثبت کنید.'), 'href' => '/proposals/new'],
             ],
         ]);
     }

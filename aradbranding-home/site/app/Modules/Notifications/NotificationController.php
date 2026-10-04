@@ -17,7 +17,7 @@ final class NotificationController extends Controller
         $user = $this->user($request);
         $cursor = $request->query('cursor');
         $list = $this->c->get(NotificationService::class)->list($user['id'], is_string($cursor) ? $cursor : null);
-        return $this->view($request, 'notifications/index', ['title' => 'اعلان‌ها', 'list' => $list]);
+        return $this->view($request, 'notifications/index', ['title' => t('اعلان‌ها'), 'list' => $list]);
     }
 
     /**

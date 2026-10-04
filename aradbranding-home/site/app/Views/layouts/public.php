@@ -13,6 +13,8 @@ $schema = [
     'address' => ['@type' => 'PostalAddress', 'addressCountry' => $page['country_code']],
 ];
 if ($page['avatar_path']) { $schema['logo'] = $baseUrl . media($page['avatar_path']); }
+// The site name follows the page's language when the site speaks it (this part is cached publicly, so not the visitor's).
+$brandLang = isset(\App\Core\I18n\I18n::LOCALES[$page['lang_code']]) ? (string) $page['lang_code'] : 'fa';
 ?>
 <!doctype html>
 <html lang="<?= e($page['lang_code']) ?>" dir="<?= e($page['direction']) ?>">
@@ -37,14 +39,14 @@ if ($page['avatar_path']) { $schema['logo'] = $baseUrl . media($page['avatar_pat
 <body>
 <?= $this->partial('partials/icons') ?>
 <header class="pub-top">
-  <a class="brand" href="/" dir="rtl" lang="fa">
+  <a class="brand" href="/" dir="<?= e(\App\Core\I18n\I18n::LOCALES[$brandLang]['dir']) ?>" lang="<?= e($brandLang) ?>">
     <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
-    <span class="brand-name">سامانه توسعه تجارت</span>
+    <span class="brand-name"><?= e(\App\Core\I18n\I18n::lookup('سامانه توسعه تجارت', $brandLang)) ?></span>
   </a>
   <div class="form-actions">
     <button class="icon-btn" type="button" data-theme-toggle aria-label="Theme"><svg class="icon"><use href="#i-theme"/></svg></button>
     <?php if ($viewer): ?>
-      <a class="btn btn-ghost btn-sm" href="/dashboard" lang="fa">داشبورد</a>
+      <a class="btn btn-ghost btn-sm" href="/dashboard" lang="<?= e(locale()) ?>"><?= te('داشبورد') ?></a>
     <?php else: ?>
       <a class="btn btn-sm" href="/login?next=<?= e(rawurlencode('/p/' . $handle . '/' . $page['lang_code'])) ?>"><?= e($labels['login']) ?></a>
     <?php endif; ?>

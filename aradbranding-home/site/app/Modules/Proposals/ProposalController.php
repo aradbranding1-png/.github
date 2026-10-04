@@ -35,7 +35,7 @@ final class ProposalController extends Controller
         $user = $this->user($request);
         $data = $this->feedData($request, $user);
         return $this->view($request, 'proposals/feed', $data + [
-            'title' => 'پیشنهادهای تجاری',
+            'title' => t('پیشنهادهای تجاری'),
             'categories' => $this->c->get(ReferenceData::class)->categories(),
             'countries' => $this->c->get(ReferenceData::class)->countries(),
             'hasInterests' => $this->interests($user['id']) !== [],
@@ -123,7 +123,7 @@ final class ProposalController extends Controller
         foreach ($rows as &$r) {
             $r['uid'] = strtolower(Ulid::toString($r['public_id']));
         }
-        return $this->view($request, 'proposals/mine', ['title' => 'پیشنهادهای من', 'rows' => $rows]);
+        return $this->view($request, 'proposals/mine', ['title' => t('پیشنهادهای من'), 'rows' => $rows]);
     }
 
     public function create(Request $request): Response
@@ -140,9 +140,9 @@ final class ProposalController extends Controller
                 $service = $this->c->get(ProposalService::class);
                 $uid = $service->create($user, $d, ['cover' => $request->file('cover'), 'gallery' => $request->fileList('gallery', 4)]);
                 if ($request->input('publish')) {
-                    return $this->publishOrWallet($this->find($uid), 'پیشنهاد منتشر شد.');
+                    return $this->publishOrWallet($this->find($uid), t('پیشنهاد منتشر شد.'));
                 }
-                return $this->redirect('/proposals/mine', 'پیش‌نویس ذخیره شد.');
+                return $this->redirect('/proposals/mine', t('پیش‌نویس ذخیره شد.'));
             } catch (ValidationFailed $e) {
                 $errors = $e->errors;
             }
@@ -153,7 +153,7 @@ final class ProposalController extends Controller
     public function edit(Request $request): Response
     {
         $p = $this->owned($request);
-        $old = $p + ['tags_text' => implode('، ', json_decode((string) ($p['tags'] ?? '[]'), true) ?: [])];
+        $old = $p + ['tags_text' => implode(t('، '), json_decode((string) ($p['tags'] ?? '[]'), true) ?: [])];
         return $this->form($request, $p, $old, []);
     }
 
@@ -164,7 +164,7 @@ final class ProposalController extends Controller
         if ($errors === []) {
             try {
                 $this->c->get(ProposalService::class)->update($p, $d, ['cover' => $request->file('cover'), 'gallery' => $request->fileList('gallery', 4)]);
-                return $this->redirect('/proposals/' . $p['uid'] . '/edit', 'تغییرات ذخیره شد.');
+                return $this->redirect('/proposals/' . $p['uid'] . '/edit', t('تغییرات ذخیره شد.'));
             } catch (ValidationFailed $e) {
                 $errors = $e->errors;
             }
@@ -174,19 +174,19 @@ final class ProposalController extends Controller
 
     public function publish(Request $request): Response
     {
-        return $this->publishOrWallet($this->owned($request), 'پیشنهاد منتشر شد.');
+        return $this->publishOrWallet($this->owned($request), t('پیشنهاد منتشر شد.'));
     }
 
     public function unpublish(Request $request): Response
     {
         $this->c->get(ProposalService::class)->unpublish($this->owned($request));
-        return $this->redirect('/proposals/mine', 'پیشنهاد از فید خارج شد.');
+        return $this->redirect('/proposals/mine', t('پیشنهاد از فید خارج شد.'));
     }
 
     public function destroy(Request $request): Response
     {
         $this->c->get(ProposalService::class)->delete($this->owned($request));
-        return $this->redirect('/proposals/mine', 'پیشنهاد حذف شد.');
+        return $this->redirect('/proposals/mine', t('پیشنهاد حذف شد.'));
     }
 
     // ---------- Send to a trader ----------
@@ -204,7 +204,7 @@ final class ProposalController extends Controller
         }
         $price = $this->c->get(Pricing::class)->price('proposal_send', (int) $user['country_id'] === (int) $recipient['country_id']);
         return $this->view($request, 'proposals/send', [
-            'title' => 'ارسال پیشنهاد',
+            'title' => t('ارسال پیشنهاد'),
             'recipient' => $recipient,
             'proposals' => $proposals,
             'price' => $price,
@@ -223,10 +223,10 @@ final class ProposalController extends Controller
         $message = trim((string) $request->input('message', ''));
         $token = (string) $request->input('token', '');
         if ($proposal === null || (int) $proposal['user_id'] !== (int) $user['id']) {
-            return $this->sendForm($request, ['proposal' => 'یکی از پیشنهادهای منتشرشده خود را انتخاب کنید.'], 422);
+            return $this->sendForm($request, ['proposal' => t('یکی از پیشنهادهای منتشرشده خود را انتخاب کنید.')], 422);
         }
         if (mb_strlen($message) > 1000 || !preg_match('/^[a-f0-9]{32}$/', $token)) {
-            return $this->sendForm($request, ['message' => 'پیام حداکثر ۱۰۰۰ نویسه است.'], 422);
+            return $this->sendForm($request, ['message' => t('پیام حداکثر ۱۰۰۰ نویسه است.')], 422);
         }
         try {
             if ((int) $proposal['status'] !== ProposalService::PUBLISHED) {
@@ -238,9 +238,9 @@ final class ProposalController extends Controller
             return $this->sendForm($request, $e->errors, 422);
         } catch (InsufficientStars $e) {
             return $this->redirect('/wallet?need=' . $e->missing() . '&next=' . rawurlencode('/proposals/send?to=' . $recipient['handle']),
-                'موجودی Stars کافی نیست.', 'error');
+                t('موجودی Stars کافی نیست.'), 'error');
         }
-        return $this->redirect('/p/' . $recipient['handle'], 'پیشنهاد شما برای ' . $recipient['first_name'] . ' ارسال شد.');
+        return $this->redirect('/p/' . $recipient['handle'], t('پیشنهاد شما برای :name ارسال شد.', ['name' => $recipient['first_name']]));
     }
 
     public function received(Request $request): Response
@@ -277,7 +277,7 @@ final class ProposalController extends Controller
         foreach ($rows as &$r) {
             $r['uid'] = strtolower(Ulid::toString($r['public_id']));
         }
-        return $this->view($request, 'proposals/received', ['title' => 'پیشنهادهای دریافتی', 'rows' => $rows, 'next' => $next]);
+        return $this->view($request, 'proposals/received', ['title' => t('پیشنهادهای دریافتی'), 'rows' => $rows, 'next' => $next]);
     }
 
     // ---------- helpers ----------
@@ -291,7 +291,7 @@ final class ProposalController extends Controller
             $this->c->get(ProposalService::class)->publish($p);
         } catch (InsufficientStars $e) {
             return $this->redirect('/wallet?need=' . $e->missing() . '&next=' . rawurlencode('/proposals/mine'),
-                'پیشنهاد به‌صورت پیش‌نویس ذخیره شد. برای انتشار ' . fa_num($e->required) . ' Star لازم است.', 'error');
+                t('پیشنهاد به‌صورت پیش‌نویس ذخیره شد. برای انتشار :n Star لازم است.', ['n' => fa_num($e->required)]), 'error');
         } catch (ValidationFailed $e) {
             return $this->redirect('/proposals/mine', (string) reset($e->errors), 'error');
         }
@@ -316,10 +316,10 @@ final class ProposalController extends Controller
             'remove_gallery' => ['bool'],
         ], self::LABELS);
         if (!isset($errors['type']) && !isset(ProposalService::TYPES[$d['type']])) {
-            $errors['type'] = 'نوع پیشنهاد را انتخاب کنید.';
+            $errors['type'] = t('نوع پیشنهاد را انتخاب کنید.');
         }
         if (!isset($errors['category_id']) && $this->c->get(ReferenceData::class)->category($d['category_id']) === null) {
-            $errors['category_id'] = 'دسته را انتخاب کنید.';
+            $errors['category_id'] = t('دسته را انتخاب کنید.');
         }
         $tags = array_values(array_unique(array_filter(array_map(
             static fn (string $t): string => mb_substr(trim($t), 0, 30),
@@ -390,7 +390,7 @@ final class ProposalController extends Controller
     private function form(Request $request, ?array $p, array $old, array $errors, int $status = 200): Response
     {
         return $this->view($request, 'proposals/form', [
-            'title' => $p === null ? 'پیشنهاد تجاری جدید' : 'ویرایش پیشنهاد',
+            'title' => $p === null ? t('پیشنهاد تجاری جدید') : t('ویرایش پیشنهاد'),
             'p' => $p,
             'old' => $old,
             'errors' => $errors,

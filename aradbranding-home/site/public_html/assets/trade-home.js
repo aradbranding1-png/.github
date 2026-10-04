@@ -3,7 +3,9 @@
   'use strict';
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var digits = '۰۱۲۳۴۵۶۷۸۹';
+  var NUM = window.sadtNum || 'fa-IR';
   function fa(n) {
+    if (NUM !== 'fa-IR') return Number(n).toLocaleString(NUM);
     return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '٬').replace(/\d/g, function (d) { return digits[d]; });
   }
 
@@ -94,7 +96,7 @@
   // Diagnostics for TVs and other odd browsers: open the home page with ?globe=debug.
   if (globeRoot && /[?&]globe=debug\b/.test(location.search)) {
     setTimeout(function () {
-      var info = ['نسخه کره: 1.18.5'];
+      var info = ['نسخه کره: 1.19.0'];
       var gl2 = null, gl1 = null, vendor = '';
       try { gl2 = document.createElement('canvas').getContext('webgl2'); } catch (e) { /* ignore */ }
       try { gl1 = document.createElement('canvas').getContext('webgl') || document.createElement('canvas').getContext('experimental-webgl'); } catch (e) { /* ignore */ }

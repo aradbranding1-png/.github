@@ -623,3 +623,28 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
    whole globe on those chips. Panels get a slightly denser background instead. */
 .tg-lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 .tg-lowfx .tg-card { background: linear-gradient(180deg, rgba(10, 30, 52, .94), rgba(4, 14, 28, .92)); }
+
+/* ===== Left-to-right languages (en, tr, fr, ru): mirror what this file places with physical left/right
+   (kept physical for old TV browsers). Persian and Arabic use the rules above unchanged. ===== */
+[dir="ltr"] .tg-poster { left: calc((1 - var(--gx)) * 100%); }
+[dir="ltr"] .th-search .icon { right: auto; left: 12px; }
+[dir="ltr"] .th-search input { padding: 0 12px 0 38px; }
+[dir="ltr"] .tg-card::before { right: auto; left: -1px; }
+[dir="ltr"] .tg-card { padding: 9px 14px 9px 12px; }
+[dir="ltr"] .th-rail { right: auto; left: 28px; }
+[dir="ltr"] .th-stat + .th-stat::before { right: auto; left: 0; }
+[dir="ltr"] .th-field select { background-position: right 10px center; }
+[dir="ltr"] .th-opps li a:hover { transform: translateX(3px); }
+[dir="ltr"] .th-banner::before { background: linear-gradient(90deg, rgba(2, 9, 20, .92) 0%, rgba(2, 9, 20, .55) 45%, rgba(2, 9, 20, .1) 100%); }
+[dir="ltr"] .th-steps li + li::after { left: auto; right: calc(100% - 8px); }
+[dir="ltr"] .th-mk-prev { right: auto; left: -10px; }
+[dir="ltr"] .th-mk-next { left: auto; right: -10px; }
+@media (max-width: 640px) { [dir="ltr"] .th-mk-prev { left: -4px; } [dir="ltr"] .th-mk-next { right: -4px; } }
+/* The arrow icon points "forward" for right-to-left text; flip it for left-to-right. */
+[dir="ltr"] .th-btn > .th-ic, [dir="ltr"] .th-go .th-ic, [dir="ltr"] .th-opps-h a .th-ic, [dir="ltr"] .th-menu nav a .th-ic,
+[dir="ltr"] .th-opp-t .th-ic, [dir="ltr"] .auth-submit .th-ic, [dir="ltr"] .th-mk-prev .th-ic { transform: scaleX(-1); }
+[dir="ltr"] .th-mk-next .th-ic, [dir="ltr"] .auth-back .th-ic { transform: none; }
+/* Other languages run longer than the Persian headline: let the subtitle wrap instead of widening the hero. */
+html:not([lang="fa"]) .th-h1-sub { white-space: normal; }
+html:not([lang="fa"]) .th-hero-copy { min-width: 0; }
+html:not([lang="fa"]) .th-hero-copy > * { max-width: 100%; }

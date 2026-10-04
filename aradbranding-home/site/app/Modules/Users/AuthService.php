@@ -76,10 +76,10 @@ final class AuthService
             if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
                 $msg = $e->getMessage();
                 if (str_contains($msg, 'uq_email')) {
-                    throw new ValidationFailed(['email' => 'با این ایمیل قبلاً حساب ساخته شده است. وارد شوید.']);
+                    throw new ValidationFailed(['email' => t('با این ایمیل قبلاً حساب ساخته شده است. وارد شوید.')]);
                 }
                 if (str_contains($msg, 'uq_phone')) {
-                    throw new ValidationFailed(['phone' => 'این شماره تلفن قبلاً ثبت شده است.']);
+                    throw new ValidationFailed(['phone' => t('این شماره تلفن قبلاً ثبت شده است.')]);
                 }
             }
             throw $e;
@@ -109,7 +109,7 @@ final class AuthService
             $exact = array_values(array_filter($rows, static fn (array $r): bool => (int) $r['exact'] === 1));
             $row = count($exact) === 1 ? $exact[0] : (count($rows) === 1 ? $rows[0] : null);
         }
-        $generic = 'ایمیل/شماره موبایل یا رمز عبور درست نیست.';
+        $generic = t('ایمیل/شماره موبایل یا رمز عبور درست نیست.');
 
         if ($row === null) {
             Password::dummyVerify($password);
@@ -120,7 +120,7 @@ final class AuthService
 
         if ((int) $row['is_locked'] === 1) {
             $this->log($userId, $email, $ip, 'locked');
-            return ['ok' => false, 'error' => 'به دلیل تلاش‌های ناموفق زیاد، ورود به این حساب ' . fa_num(self::LOCK_MINUTES) . ' دقیقه قفل شده است.'];
+            return ['ok' => false, 'error' => t('به دلیل تلاش‌های ناموفق زیاد، ورود به این حساب :n دقیقه قفل شده است.', ['n' => fa_num(self::LOCK_MINUTES)])];
         }
 
         if (!Password::verify($password, (string) $row['password_hash'])) {
@@ -151,9 +151,9 @@ final class AuthService
             $this->log($userId, $email, $ip, 'blocked');
             $why = trim((string) ($row['status_reason'] ?? ''));
             $msg = (int) $row['status'] === Auth::STATUS_SUSPENDED
-                ? 'این حساب' . ($row['suspended_until'] ? ' تا ' . fa_date((string) $row['suspended_until']) : '') . ' معلق شده است.'
-                : 'این حساب مسدود شده است.';
-            return ['ok' => false, 'error' => $msg . ($why !== '' ? ' دلیل: ' . $why . '.' : '') . ' برای پیگیری با پشتیبانی آراد برندینگ تماس بگیرید.'];
+                ? ($row['suspended_until'] ? t('این حساب تا :date معلق شده است.', ['date' => fa_date((string) $row['suspended_until'])]) : t('این حساب معلق شده است.'))
+                : t('این حساب مسدود شده است.');
+            return ['ok' => false, 'error' => $msg . ($why !== '' ? ' ' . t('دلیل: :reason.', ['reason' => $why]) : '') . ' ' . t('برای پیگیری با پشتیبانی آراد برندینگ تماس بگیرید.')];
         }
 
         $rehash = Password::needsRehash((string) $row['password_hash']) ? Password::hash($password) : null;
@@ -171,7 +171,7 @@ final class AuthService
     {
         $hash = (string) $this->db->scalar('SELECT password_hash FROM users WHERE id = ?', [$userId]);
         if (!Password::verify($current, $hash)) {
-            return 'رمز عبور فعلی درست نیست.';
+            return t('رمز عبور فعلی درست نیست.');
         }
         $this->db->exec('UPDATE users SET password_hash = ?, updated_at = NOW(3) WHERE id = ?', [Password::hash($new), $userId]);
         // Sign out every other device.

@@ -1,3 +1,4 @@
+<?= \App\Core\I18n\I18n::jsDict() ?>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0A1430">
@@ -9,4 +10,4 @@
 <link rel="icon" type="image/png" href="/favicon.png?v=5">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=5">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="توسعه تجارت">
+<meta name="apple-mobile-web-app-title" content="<?= te('توسعه تجارت') ?>">

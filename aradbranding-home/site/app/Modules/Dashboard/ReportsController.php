@@ -19,13 +19,14 @@ final class ReportsController extends Controller
     public const RANGES = [7, 30, 90];
 
     /** Events a user causes (user_id) or receives (subject_user_id), with their Persian names. */
+    /** sent: what the member did; got: what someone did to them (:name = that trader). Persian sources for t(). */
     public const EVENTS = [
-        'letter_sent' => ['sent' => 'نامه ارسال کردید', 'got' => 'برای شما نامه فرستاد'],
-        'letter_replied' => ['sent' => 'به نامه پاسخ دادید', 'got' => 'به نامه شما پاسخ داد'],
-        'proposal_sent' => ['sent' => 'پیشنهاد تجاری فرستادید', 'got' => 'برای شما پیشنهاد تجاری فرستاد'],
-        'proposal_viewed' => ['sent' => 'پیشنهاد تجاری دیدید', 'got' => 'پیشنهاد تجاری شما را دید'],
-        'page_viewed' => ['sent' => 'صفحه تجاری کامل را باز کردید', 'got' => 'صفحه تجاری شما را کامل دید'],
-        'connection_created' => ['sent' => 'ارتباط تجاری تازه ساختید', 'got' => 'با شما ارتباط تجاری ساخت'],
+        'letter_sent' => ['sent' => 'نامه ارسال کردید', 'got' => ':name برای شما نامه فرستاد'],
+        'letter_replied' => ['sent' => 'به نامه پاسخ دادید', 'got' => ':name به نامه شما پاسخ داد'],
+        'proposal_sent' => ['sent' => 'پیشنهاد تجاری فرستادید', 'got' => ':name برای شما پیشنهاد تجاری فرستاد'],
+        'proposal_viewed' => ['sent' => 'پیشنهاد تجاری دیدید', 'got' => ':name پیشنهاد تجاری شما را دید'],
+        'page_viewed' => ['sent' => 'صفحه تجاری کامل را باز کردید', 'got' => ':name صفحه تجاری شما را کامل دید'],
+        'connection_created' => ['sent' => 'ارتباط تجاری تازه ساختید', 'got' => ':name با شما ارتباط تجاری ساخت'],
         'stars_spent' => ['sent' => 'Stars خرج کردید', 'got' => ''],
     ];
 
@@ -130,7 +131,7 @@ final class ReportsController extends Controller
         }
 
         return $this->view($request, 'dashboard/reports', [
-            'title' => 'گزارش‌های من',
+            'title' => t('گزارش‌های من'),
             'days' => $days,
             'step' => $step,
             'buckets' => array_map(static fn (\DateTimeImmutable $d): string => $d->format('Y-m-d'), $buckets),

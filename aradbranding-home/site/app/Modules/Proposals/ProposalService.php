@@ -215,10 +215,10 @@ final class ProposalService
     public function send(array $sender, array $proposal, array $recipient, ?string $message, string $token): int
     {
         if ((int) $proposal['status'] !== self::PUBLISHED) {
-            throw new ValidationFailed(['proposal' => 'فقط پیشنهادهای منتشرشده را می‌توانید ارسال کنید.']);
+            throw new ValidationFailed(['proposal' => t('فقط پیشنهادهای منتشرشده را می‌توانید ارسال کنید.')]);
         }
         if ((int) $recipient['id'] === (int) $sender['id']) {
-            throw new ValidationFailed(['proposal' => 'نمی‌توانید برای خودتان پیشنهاد بفرستید.']);
+            throw new ValidationFailed(['proposal' => t('نمی‌توانید برای خودتان پیشنهاد بفرستید.')]);
         }
         $this->trust->assertCanAct($sender, 'proposal');
         try {
@@ -228,7 +228,7 @@ final class ProposalService
         }
         $exists = $this->db->scalar('SELECT 1 FROM proposal_sends WHERE proposal_id = ? AND recipient_id = ?', [$proposal['id'], $recipient['id']]);
         if ($exists !== null) {
-            throw new ValidationFailed(['proposal' => 'این پیشنهاد را قبلاً برای این تاجر فرستاده‌اید.']);
+            throw new ValidationFailed(['proposal' => t('این پیشنهاد را قبلاً برای این تاجر فرستاده‌اید.')]);
         }
         $price = $this->pricing->price('proposal_send', (int) $sender['country_id'] === (int) $recipient['country_id']);
         $sendId = 0;
@@ -248,14 +248,14 @@ final class ProposalService
                         (int) $sender['id'],
                         (int) $recipient['id'],
                         (string) $proposal['title'],
-                        $message ?? ('پیشنهاد «' . $proposal['title'] . '» را برای شما فرستادم.'),
+                        $message ?? t('پیشنهاد «:title» را برای شما فرستادم.', ['title' => $proposal['title']]),
                         (int) $proposal['id']
                     );
                     $this->outbox->record('proposal_sent', (int) $sender['id'], (int) $recipient['id'], (int) $proposal['id']);
                 });
         } catch (\PDOException $e) {
             if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
-                throw new ValidationFailed(['proposal' => 'این پیشنهاد را قبلاً برای این تاجر فرستاده‌اید.']);
+                throw new ValidationFailed(['proposal' => t('این پیشنهاد را قبلاً برای این تاجر فرستاده‌اید.')]);
             }
             throw $e;
         }

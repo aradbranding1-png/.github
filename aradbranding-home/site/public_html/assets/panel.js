@@ -1,6 +1,8 @@
 /* Panel shell: notifications dropdown and the mobile drawer. Both are <details>, so they open without JS too. */
 (function () {
   'use strict';
+  var T = window.sadtT || function (s) { return s; };
+  var NUM = window.sadtNum || 'fa-IR';
   var pops = Array.prototype.slice.call(document.querySelectorAll('.notif, .nav-drawer, .fab, .profile, .theme-pick'));
 
   function closeOthers(keep) {
@@ -65,7 +67,7 @@
   document.querySelectorAll('[data-copy]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var text = btn.getAttribute('data-copy');
-      var done = function () { btn.textContent = 'کپی شد'; setTimeout(function () { btn.textContent = 'کپی'; }, 1800); };
+      var done = function () { btn.textContent = T('کپی شد'); setTimeout(function () { btn.textContent = T('کپی'); }, 1800); };
       if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
     });
   });
@@ -106,14 +108,14 @@
       var seen = {};
       box.value.split(/[\s,،]+/).forEach(function (h) { h = h.replace(/^.*\/p\/([^\/?#]+).*$/i, '$1').replace(/^@/, '').toLowerCase(); if (h) seen[h] = 1; });
       var n = Object.keys(seen).length;
-      out.textContent = n ? n.toLocaleString('fa-IR') + ' نفر' + (n > 200 ? ' (بیش از ۲۰۰ نفر؛ فقط ۲۰۰ نفر اول در نظر گرفته می‌شوند)' : '') : '';
+      out.textContent = n ? T(':n نفر', { n: n.toLocaleString(NUM) }) + (n > 200 ? ' ' + T('(بیش از ۲۰۰ نفر؛ فقط ۲۰۰ نفر اول در نظر گرفته می‌شوند)') : '') : '';
     };
     box.addEventListener('input', count);
     count();
   });
 
   // Report bars: widths come from data-w (CSP: no inline styles in the markup).
-  document.querySelectorAll('.rp-track i[data-w], .fin-share i[data-w]').forEach(function (i) {
+  document.querySelectorAll('.rp-track i[data-w], .fin-share i[data-w], .lang-admin-bar i[data-w]').forEach(function (i) {
     i.style.width = Math.max(0, Math.min(100, parseInt(i.getAttribute('data-w'), 10) || 0)) + '%';
   });
 
@@ -142,7 +144,7 @@
         })
         .catch(function () {
           loadedAt = 0;
-          body.innerHTML = '<div class="np-empty"><p>دریافت اعلان‌ها ممکن نشد.</p></div>';
+          body.innerHTML = '<div class="np-empty"><p>' + T('دریافت اعلان‌ها ممکن نشد.') + '</p></div>';
         });
     });
   }
@@ -155,7 +157,10 @@
   });
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var digits = '۰۱۲۳۴۵۶۷۸۹';
-  var fa = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '٬').replace(/\d/g, function (d) { return digits[d]; }); };
+  var fa = function (n) {
+    if (NUM !== 'fa-IR') return Number(n).toLocaleString(NUM);
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '٬').replace(/\d/g, function (d) { return digits[d]; });
+  };
   if (!reduced) {
     document.querySelectorAll('.ad-kpi [data-count]').forEach(function (el) {
       var target = parseInt(el.getAttribute('data-count'), 10) || 0;
@@ -172,15 +177,15 @@
   }
 
   // Theme menu: automatic (light by day, dark at night) / light / dark.
-  var labels = { system: 'خودکار (روز روشن، شب تیره)', light: 'روشن', dark: 'تیره' };
+  var labels = { system: T('خودکار (روز روشن، شب تیره)'), light: T('روشن'), dark: T('تیره') };
   var root = document.documentElement;
   var pick = document.querySelector('.theme-pick');
   var paint = function () {
     if (!pick) return;
     var m = root.getAttribute('data-theme-mode') || 'system';
     var sum = pick.querySelector('summary');
-    sum.setAttribute('aria-label', 'حالت نمایش: ' + labels[m]);
-    sum.setAttribute('title', 'حالت نمایش: ' + labels[m]);
+    sum.setAttribute('aria-label', T('حالت نمایش: :mode', { mode: labels[m] }));
+    sum.setAttribute('title', T('حالت نمایش: :mode', { mode: labels[m] }));
     pick.querySelectorAll('[data-theme-set]').forEach(function (b) {
       b.setAttribute('aria-checked', b.getAttribute('data-theme-set') === m ? 'true' : 'false');
     });

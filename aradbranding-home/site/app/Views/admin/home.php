@@ -51,6 +51,9 @@ $rows = static function (string $list, array $items, array $cols, int $blank = 2
                     $row[$keep] = $tpl[$keep];
                 }
             }
+            if (isset($row['source'])) {
+                $row['source'] = 'manual';
+            }
             foreach (['lat', 'lon'] as $num) {
                 if (isset($row[$num])) {
                     $row[$num] = '';
@@ -66,6 +69,7 @@ $rows = static function (string $list, array $items, array $cols, int $blank = 2
                 'icon' => $select([$list, $k, $field], (string) $v, $label, HomeContent::ICONS),
                 'art' => $select([$list, $k, $field], (string) $v, $label, HomeContent::ARTS),
                 'metric' => $select([$list, $k, $field], (string) $v, $label, HomeContent::METRICS),
+                'source' => $select([$list, $k, $field], (string) $v, $label, HomeContent::SOURCES),
                 'mode' => $select([$list, $k, $field], (string) $v, $label, ['sea' => 'دریایی', 'air' => 'هوایی']),
                 'bool' => '<div class="field hp-bool">' . $check([$list, $k, $field], (bool) $v, $label) . '</div>',
                 'num' => $text([$list, $k, $field], $v === '' ? '' : (string) $v, $label, 'ltr'),
@@ -149,10 +153,11 @@ $h = $home['hero'];
   <details class="panel form hp-sec">
     <summary><h2>نوار آمار</h2><span class="muted">آمار واقعی یا مقادیر ثابت</span></summary>
     <h3>وقتی «نمایش آمار عمومی» روشن است (اعداد واقعی سامانه)</h3>
-    <?= $rows('stats_live', $home['stats_live'], ['metric' => ['آمار', 'metric'], 'icon' => ['نماد', 'icon'], 'label' => ['عنوان', 'text']], 0) ?>
-    <h3>وقتی آمار عمومی خاموش است (مقادیر ثابت)</h3>
-    <p class="hint">اگر مقدار عدد باشد با شمارنده متحرک نمایش داده می‌شود؛ می‌توانید متن هم بنویسید (مثلاً «رایگان»).</p>
-    <?= $rows('stats_static', $home['stats_static'], ['icon' => ['نماد', 'icon'], 'value' => ['مقدار', 'text'], 'label' => ['عنوان', 'text']], 0) ?>
+    <p class="hint">«حداقل نمایش» اختیاری است: تا وقتی عدد واقعی کمتر از آن باشد، همین حداقل نمایش داده می‌شود و پس از آن عدد واقعی. برای سایت تازه‌راه‌اندازی‌شده مفید است.</p>
+    <?= $rows('stats_live', $home['stats_live'], ['metric' => ['آمار', 'metric'], 'icon' => ['نماد', 'icon'], 'label' => ['عنوان', 'text'], 'min' => ['حداقل نمایش', 'num']], 0) ?>
+    <h3>وقتی آمار عمومی خاموش است</h3>
+    <p class="hint">«منبع عدد» تعیین می‌کند عدد از کجا بیاید: از داده‌های واقعی سامانه (مثلاً تعداد کشورهای قابل انتخاب، زبان‌های صفحه تجاری یا انواع فرصت تجاری، که خودکار به‌روز می‌شوند) یا «دستی» که همان «مقدار» نوشته‌شده نمایش داده می‌شود. با «حداقل نمایش»، تا وقتی عدد واقعی کمتر است همان حداقل نمایش داده می‌شود. اگر مقدار عدد باشد با شمارنده متحرک نمایش داده می‌شود؛ در حالت دستی می‌توانید متن هم بنویسید (مثلاً «رایگان»). برای علامت + جلوی عدد، مقدار را با + شروع کنید.</p>
+    <?= $rows('stats_static', $home['stats_static'], ['icon' => ['نماد', 'icon'], 'source' => ['منبع عدد', 'source'], 'value' => ['مقدار (حالت دستی)', 'text'], 'min' => ['حداقل نمایش', 'num'], 'label' => ['عنوان', 'text']], 0) ?>
   </details>
 
   <details class="panel form hp-sec">

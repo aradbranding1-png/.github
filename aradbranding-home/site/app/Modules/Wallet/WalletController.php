@@ -27,7 +27,7 @@ final class WalletController extends Controller
         $buyEnabled = (bool) $this->c->get(\App\Core\Settings\Settings::class)->get('payments.purchase_enabled', false);
 
         return $this->view($request, 'wallet/index', [
-            'title' => 'کیف پول Stars',
+            'title' => t('کیف پول Stars'),
             'balance' => $wallet->balance($user['id']),
             'history' => $wallet->history($user['id'], is_string($before) && ctype_digit($before) ? (int) $before : null),
             'packages' => $pricing->packages(),
@@ -44,7 +44,7 @@ final class WalletController extends Controller
     {
         $user = $this->user($request);
         if (!(bool) $this->c->get(\App\Core\Settings\Settings::class)->get('payments.purchase_enabled', false)) {
-            return $this->redirect('/wallet', 'خرید Stars در حال حاضر فعال نیست.', 'error');
+            return $this->redirect('/wallet', t('خرید Stars در حال حاضر فعال نیست.'), 'error');
         }
         $result = $this->c->get(PaymentService::class)->start(
             $user,

@@ -26,7 +26,7 @@ final class AccountController extends Controller
         $ref = $this->c->get(ReferenceData::class);
         $profile = $db->first('SELECT * FROM user_profiles WHERE user_id = ?', [$user['id']]) ?? [];
         return $this->view($request, 'account/show', [
-            'title' => 'حساب کاربری',
+            'title' => t('حساب کاربری'),
             'profile' => $profile,
             'countries' => $ref->countries(),
             'languages' => $ref->languages(),
@@ -55,11 +55,11 @@ final class AccountController extends Controller
             'bio' => ['max:2000'],
             'trade_role' => ['max:20'],
             'remove_avatar' => ['bool'],
-        ], ['first_name' => 'نام', 'last_name' => 'نام خانوادگی', 'phone' => 'شماره تلفن', 'phone_cc' => 'کد کشور',
-            'city' => 'شهر', 'company_name' => 'نام شرکت', 'business_area' => 'حوزه فعالیت', 'bio' => 'درباره من']);
+        ], ['first_name' => t('نام'), 'last_name' => t('نام خانوادگی'), 'phone' => t('شماره تلفن'), 'phone_cc' => t('کد کشور'),
+            'city' => t('شهر'), 'company_name' => t('نام شرکت'), 'business_area' => t('حوزه فعالیت'), 'bio' => t('درباره من')]);
 
         if (!isset(TradeRoles::TRADE[(string) ($d['trade_role'] ?? '')])) {
-            $errors['trade_role'] = 'نقش تجاری را از فهرست انتخاب کنید.';
+            $errors['trade_role'] = t('نقش تجاری را از فهرست انتخاب کنید.');
         }
         // Profile text is seen by other traders; it may not carry off-platform contact details.
         foreach (['city', 'company_name', 'business_area', 'bio'] as $field) {
@@ -68,10 +68,10 @@ final class AccountController extends Controller
             }
         }
         if (!isset($errors['country_id']) && $ref->country($d['country_id']) === null) {
-            $errors['country_id'] = 'کشور را از فهرست انتخاب کنید.';
+            $errors['country_id'] = t('کشور را از فهرست انتخاب کنید.');
         }
         if (!isset($errors['language_id']) && $ref->language($d['language_id']) === null) {
-            $errors['language_id'] = 'زبان را از فهرست انتخاب کنید.';
+            $errors['language_id'] = t('زبان را از فهرست انتخاب کنید.');
         }
 
         $images = $this->c->get(ImageUploader::class);
@@ -108,7 +108,7 @@ final class AccountController extends Controller
         } catch (\PDOException $e) {
             $images->delete($newAvatar);
             if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
-                return $this->show($request, ['phone' => 'این شماره تلفن قبلاً ثبت شده است.'], 'profile', 422);
+                return $this->show($request, ['phone' => t('این شماره تلفن قبلاً ثبت شده است.')], 'profile', 422);
             }
             throw $e;
         }
@@ -116,7 +116,7 @@ final class AccountController extends Controller
             $images->delete($user['avatar_path']);
         }
         $this->c->get(Cache::class)->bump('owner:' . $user['id']);
-        return $this->redirect('/account', 'پروفایل ذخیره شد.');
+        return $this->redirect('/account', t('پروفایل ذخیره شد.'));
     }
 
     public function updatePassword(Request $request): Response
@@ -126,13 +126,13 @@ final class AccountController extends Controller
             'current_password' => ['required'],
             'password' => ['required', 'min:8', 'max:128'],
             'password_confirmation' => ['required', 'same:password'],
-        ], ['current_password' => 'رمز عبور فعلی', 'password' => 'رمز عبور جدید', 'password_confirmation' => 'تکرار رمز عبور']);
+        ], ['current_password' => t('رمز عبور فعلی'), 'password' => t('رمز عبور جدید'), 'password_confirmation' => t('تکرار رمز عبور')]);
 
         if ($errors === []) {
             $error = $this->c->get(AuthService::class)->changePassword($user['id'], $d['current_password'], $d['password']);
             if ($error === null) {
                 Session::regenerate();
-                return $this->redirect('/account?tab=security', 'رمز عبور تغییر کرد. سایر دستگاه‌ها از حساب خارج شدند.');
+                return $this->redirect('/account?tab=security', t('رمز عبور تغییر کرد. سایر دستگاه‌ها از حساب خارج شدند.'));
             }
             $errors['current_password'] = $error;
         }
@@ -148,7 +148,7 @@ final class AccountController extends Controller
             static fn (int $id): bool => isset($valid[$id])
         )));
         if (count($ids) > 5) {
-            return $this->show($request, ['interests' => 'حداکثر ۵ دسته انتخاب کنید.'], 'interests', 422);
+            return $this->show($request, ['interests' => t('حداکثر ۵ دسته انتخاب کنید.')], 'interests', 422);
         }
         $this->c->get(Connection::class)->transaction(function (Connection $db) use ($user, $ids): void {
             $db->exec('DELETE FROM user_interests WHERE user_id = ?', [$user['id']]);
@@ -156,6 +156,6 @@ final class AccountController extends Controller
                 $db->exec('INSERT INTO user_interests (user_id, category_id) VALUES (?, ?)', [$user['id'], $id]);
             }
         });
-        return $this->redirect('/account?tab=interests', 'علاقه‌مندی‌ها ذخیره شد. فید «برای شما» بر اساس آن‌ها چیده می‌شود.');
+        return $this->redirect('/account?tab=interests', t('علاقه‌مندی‌ها ذخیره شد. فید «برای شما» بر اساس آن‌ها چیده می‌شود.'));
     }
 }

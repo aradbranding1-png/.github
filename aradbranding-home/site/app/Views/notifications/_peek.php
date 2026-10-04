@@ -1,6 +1,6 @@
 <?php /** Top-bar notifications dropdown body (fetched from /notifications/peek). @var array $rows */ ?>
 <?php if ($rows === []): ?>
-  <div class="np-empty"><svg class="icon"><use href="#i-bell"/></svg><p>اعلان تازه‌ای ندارید.</p></div>
+  <div class="np-empty"><svg class="icon"><use href="#i-bell"/></svg><p><?= te('اعلان تازه‌ای ندارید.') ?></p></div>
 <?php else: ?>
   <ul class="np-list">
     <?php foreach ($rows as $n): $unread = (int) $n['is_read'] === 0; ?>

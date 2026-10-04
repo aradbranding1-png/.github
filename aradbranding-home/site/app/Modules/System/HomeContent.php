@@ -23,6 +23,22 @@ final class HomeContent
         'prod-saffron' => 'زعفران', 'prod-dates' => 'خرما', 'prod-pistachio' => 'پسته', 'prod-petro' => 'پتروشیمی', 'prod-carpet' => 'فرش',
     ];
     public const METRICS = ['users' => 'اعضا', 'countries' => 'کشورها', 'pages' => 'صفحه‌های تجاری', 'proposals' => 'پیشنهادهای فعال', 'connections' => 'ارتباط‌های تجاری'];
+    /**
+     * Where a figure of the stats strip comes from. "manual" shows the typed value as it is; every other source is
+     * counted from the data (cached 10 minutes). With a minimum, the larger of the real count and the minimum is shown,
+     * so a new site can start with a respectable figure that turns real as soon as the data passes it.
+     */
+    public const SOURCES = [
+        'manual' => 'دستی (همان مقدار نوشته‌شده)',
+        'countries' => 'تعداد کشورها و مناطق قابل انتخاب',
+        'languages' => 'تعداد زبان‌های صفحه تجاری',
+        'proposal_types' => 'تعداد انواع فرصت تجاری',
+        'users' => 'تعداد اعضا',
+        'active_countries' => 'تعداد کشورهایی که عضو دارند',
+        'pages' => 'صفحه‌های تجاری منتشرشده',
+        'proposals' => 'پیشنهادهای فعال در فید',
+        'connections' => 'ارتباط‌های تجاری',
+    ];
     public const SECTIONS = [
         'rail' => 'ستون آمار کنار کره', 'cards' => 'کارت‌های کشور روی کره', 'stats' => 'نوار آمار', 'finder' => 'جستجوی بازار',
         'markets' => 'کارت‌های بازار', 'opps' => 'فرصت‌های تجاری', 'modules' => 'بخش‌های سامانه', 'banner' => 'بنر تجارت بین‌المللی',
@@ -106,16 +122,16 @@ final class HomeContent
                 ['icon' => 'm-anchor', 'label' => 'بنادر و هاب‌ها', 'value' => '{nodes} گره'],
             ],
             'stats_live' => [
-                ['metric' => 'users', 'icon' => 'm-people', 'label' => 'تاجر عضو'],
-                ['metric' => 'countries', 'icon' => 'm-globe', 'label' => 'کشور فعال'],
-                ['metric' => 'proposals', 'icon' => 'm-box', 'label' => 'فرصت تجاری فعال'],
-                ['metric' => 'connections', 'icon' => 'm-chart', 'label' => 'ارتباط تجاری'],
+                ['metric' => 'users', 'icon' => 'm-people', 'label' => 'تاجر عضو', 'min' => ''],
+                ['metric' => 'countries', 'icon' => 'm-globe', 'label' => 'کشور فعال', 'min' => ''],
+                ['metric' => 'proposals', 'icon' => 'm-box', 'label' => 'فرصت تجاری فعال', 'min' => ''],
+                ['metric' => 'connections', 'icon' => 'm-chart', 'label' => 'ارتباط تجاری', 'min' => ''],
             ],
             'stats_static' => [
-                ['icon' => 'm-globe', 'value' => '243', 'label' => 'کشور و منطقه قابل انتخاب'],
-                ['icon' => 'm-page', 'value' => '27', 'label' => 'زبان برای صفحه تجاری'],
-                ['icon' => 'm-box', 'value' => '6', 'label' => 'نوع فرصت تجاری'],
-                ['icon' => 'm-star', 'value' => 'رایگان', 'label' => 'عضویت و ساخت صفحه'],
+                ['icon' => 'm-globe', 'value' => '243', 'label' => 'کشور و منطقه قابل انتخاب', 'source' => 'countries', 'min' => ''],
+                ['icon' => 'm-page', 'value' => '27', 'label' => 'زبان برای صفحه تجاری', 'source' => 'languages', 'min' => ''],
+                ['icon' => 'm-box', 'value' => '6', 'label' => 'نوع فرصت تجاری', 'source' => 'proposal_types', 'min' => ''],
+                ['icon' => 'm-star', 'value' => 'رایگان', 'label' => 'عضویت و ساخت صفحه', 'source' => 'manual', 'min' => ''],
             ],
             'finder' => [
                 'title' => 'بازار بعدی خود را پیدا کنید',
@@ -208,6 +224,9 @@ final class HomeContent
                 $base[$k] = self::merge($v, $over[$k]);
             } elseif (is_array($v) && array_is_list($v) && is_array($over[$k])) {
                 $tpl = $v[0] ?? [];
+                if (isset($tpl['source'])) {
+                    $tpl['source'] = 'manual'; // a stat saved before sources existed keeps the value the admin typed
+                }
                 $base[$k] = array_values(array_map(static fn ($row) => is_array($row) ? self::merge($tpl, $row) : $tpl, $over[$k]));
             } elseif (!is_array($v) && !is_array($over[$k])) {
                 $base[$k] = $over[$k];
@@ -275,6 +294,8 @@ final class HomeContent
                     $field === 'icon' => isset(self::ICONS[$s]) ? $s : (string) $default,
                     $field === 'art' => isset(self::ARTS[$s]) ? $s : (string) $default,
                     $field === 'metric' => isset(self::METRICS[$s]) ? $s : (string) $default,
+                    $field === 'source' => isset(self::SOURCES[$s]) ? $s : 'manual',
+                    $field === 'min' => ctype_digit($m = str_replace([',', '٬'], '', self::digits($s))) ? (string) min((int) $m, 100_000_000) : '',
                     $field === 'mode' => $s === 'air' ? 'air' : 'sea',
                     default => $s,
                 };
@@ -286,7 +307,7 @@ final class HomeContent
     private static function isEmptyRow(array $row, array $tpl): bool
     {
         foreach ($row as $field => $v) {
-            if (is_string($v) && $v !== '' && !in_array($field, ['icon', 'art', 'metric', 'mode'], true)) {
+            if (is_string($v) && $v !== '' && !in_array($field, ['icon', 'art', 'metric', 'mode', 'source', 'min'], true)) {
                 return false;
             }
         }
@@ -315,7 +336,8 @@ final class HomeContent
     /** Text with the live paid-features phrase filled in ({paid} and sentence-start {paid_cap}). */
     public static function fill(string $text, string $paid): string
     {
-        return strtr($text, ['{paid_cap}' => $paid, '{paid}' => $paid]);
+        $cap = \App\Core\I18n\I18n::isSource() ? $paid : mb_strtoupper(mb_substr($paid, 0, 1)) . mb_substr($paid, 1);
+        return strtr($text, ['{paid_cap}' => $cap, '{paid}' => $paid]);
     }
 
     private static function digits(string $s): string

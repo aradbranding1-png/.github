@@ -82,10 +82,10 @@ final class NotificationService
         }
         foreach ($rows as &$r) {
             $d = json_decode((string) ($r['data'] ?? '{}'), true) ?: [];
-            $r['text'] = strtr(self::TEXT[$r['type']] ?? '', [
-                ':name' => (string) ($d['name'] ?? ''),
-                ':subject' => (string) ($d['subject'] ?? ''),
-                ':n' => fa_int((int) ($d['n'] ?? 0)),
+            $r['text'] = t(self::TEXT[$r['type']] ?? '', [
+                'name' => (string) ($d['name'] ?? ''),
+                'subject' => (string) ($d['subject'] ?? ''),
+                'n' => fa_int((int) ($d['n'] ?? 0)),
             ]);
         }
         return ['rows' => $rows, 'next' => $next];

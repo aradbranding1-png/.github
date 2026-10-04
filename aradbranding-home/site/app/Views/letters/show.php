@@ -14,16 +14,16 @@ $count = count($messages['rows']);
 <div class="thread">
   <header class="thread-head panel">
     <div class="grow">
-      <span class="chip"><?= e(LetterService::TYPE_LABELS[(int) $thread['type']] ?? '') ?></span>
+      <span class="chip"><?= te(LetterService::TYPE_LABELS[(int) $thread['type']] ?? '') ?></span>
       <h2><?= e($thread['subject']) ?></h2>
-      <?php if ($peer): ?><p class="muted">گفتگو با <?= e($name($peer)) ?><?php if (!($officialThread && (int) $peer['id'] === (int) $thread['created_by'])): ?> <?= flag($peer['country_code']) ?><?php if ($peer['handle']): ?> · <a href="/p/<?= e($peer['handle']) ?>">صفحه تجاری</a><?php endif; ?><?php endif; ?></p><?php endif; ?>
+      <?php if ($peer): ?><p class="muted"><?= te('گفتگو با :name', ['name' => $name($peer)]) ?><?php if (!($officialThread && (int) $peer['id'] === (int) $thread['created_by'])): ?> <?= flag($peer['country_code']) ?><?php if ($peer['handle']): ?> · <a href="/p/<?= e($peer['handle']) ?>"><?= te('صفحه تجاری') ?></a><?php endif; ?><?php endif; ?></p><?php endif; ?>
     </div>
     <form method="post" action="/letters/<?= e($thread['uid']) ?>/archive"><?= csrf_field() ?>
-      <button class="btn btn-ghost btn-sm" type="submit"><svg class="icon"><use href="#i-archive"/></svg><?= $archived ? 'خروج از بایگانی' : 'بایگانی' ?></button>
+      <button class="btn btn-ghost btn-sm" type="submit"><svg class="icon"><use href="#i-archive"/></svg><?= $archived ? t('خروج از بایگانی') : t('بایگانی') ?></button>
     </form>
     <?php if (!$officialThread && $peer): ?>
       <form method="post" action="/blocks/<?= (int) $peer['id'] ?><?= $blockedByMe ? '/delete' : '' ?>"><?= csrf_field() ?><input type="hidden" name="back" value="/letters/<?= e($thread['uid']) ?>">
-        <button class="btn btn-quiet btn-sm" type="submit"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg><?= $blockedByMe ? 'رفع مسدودی' : 'مسدودکردن' ?></button>
+        <button class="btn btn-quiet btn-sm" type="submit"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg><?= $blockedByMe ? t('رفع مسدودی') : t('مسدودکردن') ?></button>
       </form>
     <?php endif; ?>
   </header>
@@ -31,20 +31,20 @@ $count = count($messages['rows']);
   <?php if ($proposal): ?>
     <a class="owner-row" href="/proposals/<?= e($proposal['uid']) ?>">
       <?php if ($proposal['thumb_path']): ?><img class="thumb-sm" src="<?= e(media($proposal['thumb_path'])) ?>" alt=""><?php endif; ?>
-      <span class="grow"><b><?= e($proposal['title']) ?></b><span class="muted">مشاهده پیشنهاد</span></span>
+      <span class="grow"><b><?= e($proposal['title']) ?></b><span class="muted"><?= te('مشاهده پیشنهاد') ?></span></span>
     </a>
   <?php endif; ?>
 
-  <?php if ($messages['older']): ?><div class="form-actions form-actions-center"><a class="btn btn-quiet btn-sm" href="/letters/<?= e($thread['uid']) ?>?before=<?= e($messages['older']) ?>">پیام‌های قبلی</a></div><?php endif; ?>
+  <?php if ($messages['older']): ?><div class="form-actions form-actions-center"><a class="btn btn-quiet btn-sm" href="/letters/<?= e($thread['uid']) ?>?before=<?= e($messages['older']) ?>"><?= te('پیام‌های قبلی') ?></a></div><?php endif; ?>
 
   <ol class="messages">
     <?php foreach ($messages['rows'] as $i => $m): $mine = (int) $m['sender_id'] === (int) $user['id']; $author = $cards[(int) $m['sender_id']] ?? null; ?>
       <li class="msg<?= $mine ? ' mine' : '' ?>"<?= $i === $count - 1 ? ' id="last"' : '' ?>>
-        <div class="msg-meta"><b><?= $mine ? 'شما' : e($name($author)) ?></b><span><?= e(fa_date($m['created_at'])) ?></span>
-          <?php if (!$mine && !$officialThread && $m['hidden_at'] === null): ?><?= $this->partial('partials/report', ['type' => 'message', 'id' => (int) $m['id'], 'back' => '/letters/' . $thread['uid'], 'blockUser' => $blockedByMe ? null : (int) $m['sender_id'], 'label' => 'گزارش این نامه', 'compact' => true]) ?><?php endif; ?>
+        <div class="msg-meta"><b><?= $mine ? t('شما') : e($name($author)) ?></b><span><?= e(fa_date($m['created_at'])) ?></span>
+          <?php if (!$mine && !$officialThread && $m['hidden_at'] === null): ?><?= $this->partial('partials/report', ['type' => 'message', 'id' => (int) $m['id'], 'back' => '/letters/' . $thread['uid'], 'blockUser' => $blockedByMe ? null : (int) $m['sender_id'], 'label' => t('گزارش این نامه'), 'compact' => true]) ?><?php endif; ?>
         </div>
         <?php if ($m['hidden_at'] !== null): ?>
-          <div class="msg-body msg-hidden">این پیام به دلیل نقض قوانین آراد برندینگ توسط تیم بررسی پنهان شد.</div>
+          <div class="msg-body msg-hidden"><?= te('این پیام به دلیل نقض قوانین آراد برندینگ توسط تیم بررسی پنهان شد.') ?></div>
         <?php else: ?>
           <div class="msg-body"><?= nl2br(e((string) $m['body']), false) ?></div>
         <?php endif; ?>
@@ -53,13 +53,13 @@ $count = count($messages['rows']);
   </ol>
 
   <?php if ($blocked): ?>
-  <div class="panel reply-closed" id="reply"><?= $blockedByMe ? 'این تاجر را مسدود کرده‌اید؛ برای پاسخ، ابتدا رفع مسدودی کنید.' : 'امکان پاسخ در این گفتگو وجود ندارد.' ?></div>
+  <div class="panel reply-closed" id="reply"><?= $blockedByMe ? t('این تاجر را مسدود کرده‌اید؛ برای پاسخ، ابتدا رفع مسدودی کنید.') : t('امکان پاسخ در این گفتگو وجود ندارد.') ?></div>
   <?php else: ?>
   <form class="panel form reply" method="post" action="/letters/<?= e($thread['uid']) ?>/reply" id="reply">
     <?= csrf_field() ?>
-    <label for="f-body">پاسخ <span class="muted">(رایگان)</span></label>
+    <label for="f-body"><?= te('پاسخ') ?> <span class="muted"><?= te('(رایگان)') ?></span></label>
     <textarea class="textarea" id="f-body" name="body" rows="4" maxlength="10000" required></textarea>
-    <div class="form-actions"><button class="btn" type="submit"><svg class="icon"><use href="#i-send"/></svg>ارسال پاسخ</button></div>
+    <div class="form-actions"><button class="btn" type="submit"><svg class="icon"><use href="#i-send"/></svg><?= te('ارسال پاسخ') ?></button></div>
   </form>
   <?php endif; ?>
 </div>

@@ -28,7 +28,7 @@ final class PageController extends Controller
         $service = $this->c->get(PageService::class);
         $ref = $this->c->get(ReferenceData::class);
         return $this->view($request, 'pages/index', [
-            'title' => 'پیج‌های من',
+            'title' => t('پیج‌های من'),
             'pages' => $service->listForOwner($user['id']),
             'rules' => $service->rules($user['id']),
             'countries' => $ref->countries(),
@@ -52,7 +52,7 @@ final class PageController extends Controller
         [$d, $errors] = $this->validate($request, true);
 
         if (!isset($errors['language_id']) && $this->c->get(ReferenceData::class)->language($d['language_id']) === null) {
-            $errors['language_id'] = 'زبان را از فهرست انتخاب کنید.';
+            $errors['language_id'] = t('زبان را از فهرست انتخاب کنید.');
         }
         if ($user['handle'] === null && $errors === []) {
             try {
@@ -64,7 +64,7 @@ final class PageController extends Controller
         if ($errors === []) {
             try {
                 $service->create($user, $d, ['cover' => $request->file('cover'), 'avatar' => $request->file('avatar')]);
-                return $this->redirect('/pages', $d['publish'] ? 'صفحه منتشر شد.' : 'پیش‌نویس صفحه ذخیره شد.');
+                return $this->redirect('/pages', $d['publish'] ? t('صفحه منتشر شد.') : t('پیش‌نویس صفحه ذخیره شد.'));
             } catch (ValidationFailed $e) {
                 $errors = $e->errors;
             }
@@ -93,7 +93,7 @@ final class PageController extends Controller
         if ($errors === []) {
             try {
                 $this->c->get(PageService::class)->update($page, $d, ['cover' => $request->file('cover'), 'avatar' => $request->file('avatar')]);
-                return $this->redirect('/pages/' . $page['uid'] . '/edit', 'تغییرات ذخیره شد.');
+                return $this->redirect('/pages/' . $page['uid'] . '/edit', t('تغییرات ذخیره شد.'));
             } catch (ValidationFailed $e) {
                 $errors = $e->errors;
             }
@@ -107,18 +107,18 @@ final class PageController extends Controller
         $page = $this->owned($request);
         $status = (int) $page['status'];
         if (!in_array($status, [PageRouter::STATUS_DRAFT, PageRouter::STATUS_PUBLISHED], true)) {
-            return $this->redirect('/pages', 'وضعیت این صفحه را مدیر سامانه تعیین کرده است و از اینجا تغییر نمی‌کند.', 'error');
+            return $this->redirect('/pages', t('وضعیت این صفحه را مدیر سامانه تعیین کرده است و از اینجا تغییر نمی‌کند.'), 'error');
         }
         $on = $status !== PageRouter::STATUS_PUBLISHED;
         $this->c->get(PageService::class)->setPublished($page, $on);
-        return $this->redirect('/pages', $on ? 'صفحه فعال شد و برای تجار نمایش داده می‌شود.' : 'صفحه غیرفعال شد و تا روشن‌کردن دوباره نمایش داده نمی‌شود.');
+        return $this->redirect('/pages', $on ? t('صفحه فعال شد و برای تجار نمایش داده می‌شود.') : t('صفحه غیرفعال شد و تا روشن‌کردن دوباره نمایش داده نمی‌شود.'));
     }
 
     public function makeDefault(Request $request): Response
     {
         $page = $this->owned($request);
         $this->c->get(PageService::class)->setDefault($page);
-        return $this->redirect('/pages', 'صفحه پیش‌فرض تغییر کرد.');
+        return $this->redirect('/pages', t('صفحه پیش‌فرض تغییر کرد.'));
     }
 
     public function addRule(Request $request): Response
@@ -134,13 +134,13 @@ final class PageController extends Controller
 
         $errors = [];
         if ($page === null) {
-            $errors['rule'] = 'صفحه مقصد را انتخاب کنید.';
+            $errors['rule'] = t('صفحه مقصد را انتخاب کنید.');
         } elseif (($country !== null && $ref->country($country) === null) || ($language !== null && $ref->language($language) === null)) {
-            $errors['rule'] = 'کشور یا زبان معتبر نیست.';
+            $errors['rule'] = t('کشور یا زبان معتبر نیست.');
         } else {
             try {
                 $service->addRule($user['id'], $country, $language, (int) $page['id']);
-                return $this->redirect('/pages#routing', 'قانون نمایش ذخیره شد.');
+                return $this->redirect('/pages#routing', t('قانون نمایش ذخیره شد.'));
             } catch (ValidationFailed $e) {
                 $errors = $e->errors;
             }
@@ -152,7 +152,7 @@ final class PageController extends Controller
     {
         $user = $this->user($request);
         $this->c->get(PageService::class)->deleteRule($user['id'], (int) $request->param('rule'));
-        return $this->redirect('/pages#routing', 'قانون حذف شد.');
+        return $this->redirect('/pages#routing', t('قانون حذف شد.'));
     }
 
     /** @return array{0: array<string, mixed>, 1: array<string, string>} */
@@ -196,7 +196,7 @@ final class PageController extends Controller
     private function form(Request $request, ?array $page, array $old, array $errors, array $usedLanguages = [], int $status = 200): Response
     {
         return $this->view($request, 'pages/form', [
-            'title' => $page === null ? 'ساخت صفحه جدید' : 'ویرایش صفحه',
+            'title' => $page === null ? t('ساخت صفحه جدید') : t('ویرایش صفحه'),
             'page' => $page,
             'old' => $old,
             'errors' => $errors,

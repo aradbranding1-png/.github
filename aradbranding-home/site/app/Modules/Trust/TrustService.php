@@ -60,20 +60,20 @@ final class TrustService
     public function report(int $reporterId, int $type, int $targetId, string $reason, string $details): bool
     {
         if (!isset(self::REASONS[$reason])) {
-            throw new ValidationFailed(['reason' => 'دلیل گزارش را انتخاب کنید.']);
+            throw new ValidationFailed(['reason' => t('دلیل گزارش را انتخاب کنید.')]);
         }
         $details = trim($details);
         if (mb_strlen($details) > 1000) {
-            throw new ValidationFailed(['details' => 'توضیح حداکثر ۱۰۰۰ نویسه است.']);
+            throw new ValidationFailed(['details' => t('توضیح حداکثر ۱۰۰۰ نویسه است.')]);
         }
         $target = $this->target($reporterId, $type, $targetId);
         if ($target === null) {
-            throw new ValidationFailed(['reason' => 'این مورد پیدا نشد یا امکان گزارش آن را ندارید.']);
+            throw new ValidationFailed(['reason' => t('این مورد پیدا نشد یا امکان گزارش آن را ندارید.')]);
         }
         $existing = $this->db->first('SELECT id, status FROM abuse_reports WHERE reporter_id = ? AND target_type = ? AND target_id = ?', [$reporterId, $type, $targetId]);
         if ($existing !== null) {
             if ((int) $existing['status'] !== self::OPEN) {
-                throw new ValidationFailed(['reason' => 'این مورد را قبلاً گزارش کرده‌اید و بررسی شده است.']);
+                throw new ValidationFailed(['reason' => t('این مورد را قبلاً گزارش کرده‌اید و بررسی شده است.')]);
             }
             $this->db->exec('UPDATE abuse_reports SET reason = ?, details = ? WHERE id = ?', [$reason, $details !== '' ? $details : null, $existing['id']]);
             return false;
@@ -81,7 +81,7 @@ final class TrustService
         $limit = max(1, (int) $this->settings->get('trust.daily_reports', 20));
         $today = (int) $this->db->scalar('SELECT COUNT(*) FROM abuse_reports WHERE reporter_id = ? AND created_at > NOW(3) - INTERVAL 1 DAY', [$reporterId]);
         if ($today >= $limit) {
-            throw new ValidationFailed(['reason' => 'در ۲۴ ساعت حداکثر ' . fa_int($limit) . ' گزارش می‌توانید ثبت کنید.']);
+            throw new ValidationFailed(['reason' => t('در ۲۴ ساعت حداکثر :n گزارش می‌توانید ثبت کنید.', ['n' => fa_int($limit)])]);
         }
         $this->db->exec(
             'INSERT IGNORE INTO abuse_reports (public_id, reporter_id, target_type, target_id, target_user_id, target_at, reason, details, status, created_at)
@@ -218,7 +218,7 @@ final class TrustService
     public function assertCanAct(array $user, string $field = 'body'): void
     {
         if ((int) ($user['status'] ?? 1) === Auth::STATUS_RESTRICTED) {
-            throw new ValidationFailed([$field => 'حساب شما محدود شده است و فعلاً امکان ارسال یا انتشار ندارید. برای پیگیری با پشتیبانی آراد برندینگ تماس بگیرید.']);
+            throw new ValidationFailed([$field => t('حساب شما محدود شده است و فعلاً امکان ارسال یا انتشار ندارید. برای پیگیری با پشتیبانی آراد برندینگ تماس بگیرید.')]);
         }
     }
 
@@ -227,8 +227,8 @@ final class TrustService
     {
         if ($this->blockedBetween($senderId, $recipientId)) {
             throw new ValidationFailed(['to' => $this->hasBlocked($senderId, $recipientId)
-                ? 'این تاجر را مسدود کرده‌اید. برای ارسال، ابتدا از «حریم و امنیت» رفع مسدودی کنید.'
-                : 'امکان ارسال برای این تاجر وجود ندارد.']);
+                ? t('این تاجر را مسدود کرده‌اید. برای ارسال، ابتدا از «حریم و امنیت» رفع مسدودی کنید.')
+                : t('امکان ارسال برای این تاجر وجود ندارد.')]);
         }
     }
 }

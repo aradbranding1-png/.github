@@ -75,25 +75,25 @@ final class CampaignService
     public function quote(array $sender, int $kind, string $subject, string $body, array $filter, ?array $proposal = null): string
     {
         if (!isset(self::KINDS[$kind])) {
-            throw new ValidationFailed(['kind' => 'نوع ارسال را انتخاب کنید.']);
+            throw new ValidationFailed(['kind' => t('نوع ارسال را انتخاب کنید.')]);
         }
         if ($kind === LetterService::T_PROPOSAL) {
             if ($proposal === null) {
-                throw new ValidationFailed(['proposal' => 'یکی از پیشنهادهای خود را انتخاب کنید.']);
+                throw new ValidationFailed(['proposal' => t('یکی از پیشنهادهای خود را انتخاب کنید.')]);
             }
             $filter['proposal_id'] = (int) $proposal['id'];
             $subject = (string) $proposal['title'];
-            $body = $body !== '' ? $body : 'پیشنهاد «' . $proposal['title'] . '» را برای شما فرستادم.';
+            $body = $body !== '' ? $body : t('پیشنهاد «:title» را برای شما فرستادم.', ['title' => $proposal['title']]);
         }
         $aud = $this->audience($sender, $filter);
         $max = max(1, (int) $this->settings->get('letters.public_max_recipients', 10000));
         if ($aud['total'] === 0) {
             throw new ValidationFailed(['filter' => $kind === LetterService::T_PROPOSAL
-                ? 'گیرنده‌ای پیدا نشد (یا این پیشنهاد قبلاً برای همه آن‌ها ارسال شده است).'
-                : 'با این فیلترها هیچ گیرنده‌ای پیدا نشد.']);
+                ? t('گیرنده‌ای پیدا نشد (یا این پیشنهاد قبلاً برای همه آن‌ها ارسال شده است).')
+                : t('با این فیلترها هیچ گیرنده‌ای پیدا نشد.')]);
         }
         if ($aud['total'] > $max) {
-            throw new ValidationFailed(['filter' => 'تعداد گیرندگان (' . fa_int($aud['total']) . ') بیشتر از سقف ' . fa_int($max) . ' نفر است. فیلتر را محدودتر کنید.']);
+            throw new ValidationFailed(['filter' => t('تعداد گیرندگان (:n) بیشتر از سقف :max نفر است. فیلتر را محدودتر کنید.', ['n' => fa_int($aud['total']), 'max' => fa_int($max)])]);
         }
         $prices = $this->unitPrices($kind);
         $cost = $aud['domestic'] * $prices['domestic'] + ($aud['total'] - $aud['domestic']) * $prices['international'];
@@ -121,7 +121,7 @@ final class CampaignService
             [$sender['id'], self::DELIVERING, self::COMPLETED]
         );
         if ($today >= $daily) {
-            throw new ValidationFailed(['filter' => 'در ۲۴ ساعت حداکثر ' . fa_int($daily) . ' نامه عمومی می‌توانید بفرستید.']);
+            throw new ValidationFailed(['filter' => t('در ۲۴ ساعت حداکثر :n نامه عمومی می‌توانید بفرستید.', ['n' => fa_int($daily)])]);
         }
         $id = (int) $campaign['id'];
         $reason = self::KINDS[(int) $campaign['kind']]['action'] ?? 'public_letter';

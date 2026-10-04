@@ -11,22 +11,26 @@ $cards = [
     ['CN', 'چین', 33.5, 106.0], ['TR', 'ترکیه', 39.0, 35.0],
     ['IQ', 'عراق', 33.0, 43.5, true], ['AF', 'افغانستان', 34.0, 66.0, true],
 ];
+foreach ($cards as &$card) {
+    $card[1] = \App\Core\I18n\I18n::countryName($card[0], $card[1]);
+}
+unset($card);
 ?>
 <!doctype html>
-<html lang="fa" dir="rtl" data-theme="dark">
+<html <?= \App\Core\I18n\I18n::htmlAttrs() ?> data-theme="dark">
 <head>
-<?= $this->partial('partials/head') ?>
+<?= \App\Core\I18n\I18n::headScript() ?><?= $this->partial('partials/head') ?>
 <link rel="stylesheet" href="<?= e(asset('trade-home.css')) ?>">
 <link rel="stylesheet" href="<?= e(asset('auth.css')) ?>">
 <script src="<?= e(asset('auth.js')) ?>" defer></script>
 <script type="module" src="<?= e(asset('trade-globe.js')) ?>"></script>
-<title><?= e($title ?? '') ?> · سامانه توسعه تجارت</title>
+<title><?= e($title ?? '') ?> · <?= te('سامانه توسعه تجارت') ?></title>
 <meta name="robots" content="noindex">
 </head>
 <body class="th auth<?= $isRegister ? ' auth-register' : '' ?>">
 <?= $this->partial('partials/icons') ?>
 <?= $this->partial('public/_trade_sprite') ?>
-<a class="skip" href="#auth-card">پرش به فرم</a>
+<a class="skip" href="#auth-card"><?= te('پرش به فرم') ?></a>
 
 <div class="auth-bg" aria-hidden="true"></div>
 
@@ -37,7 +41,7 @@ $cards = [
     <div class="tg-labels"></div>
     <div class="tg-cards">
       <?php foreach ($cards as $card): [$code, $name, $lat, $lon] = $card; $secondary = !empty($card[4]); ?>
-      <span class="tg-card<?= $code === 'IR' ? ' is-home' : '' ?><?= $secondary ? ' is-secondary is-land' : '' ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= $secondary ? 'مسیر حمل زمینی از ایران' : 'بازار هدف' ?>">
+      <span class="tg-card<?= $code === 'IR' ? ' is-home' : '' ?><?= $secondary ? ' is-secondary is-land' : '' ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= $secondary ? te('مسیر حمل زمینی از ایران') : te('بازار هدف') ?>">
         <svg class="th-flag" viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-<?= e($code) ?>"/></svg>
         <span class="tg-card-t"><b><?= e($name) ?></b></span>
       </span>
@@ -48,18 +52,19 @@ $cards = [
 </section>
 
 <header class="auth-top">
-  <a class="auth-brand" href="/" aria-label="سامانه توسعه تجارت · صفحه اصلی">
+  <a class="auth-brand" href="/" aria-label="<?= te('سامانه توسعه تجارت · صفحه اصلی') ?>">
     <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
-    <span class="th-brand-name">سامانه توسعه تجارت<small>شبکه بین‌المللی تجار</small></span>
+    <span class="th-brand-name"><?= te('سامانه توسعه تجارت') ?><small><?= te('شبکه بین‌المللی تجار') ?></small></span>
   </a>
-  <a class="auth-back" href="/">بازگشت به سایت<svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-arrow"/></svg></a>
+  <?= $this->partial('partials/lang_switch', ['variant' => 'auth']) ?>
+  <a class="auth-back" href="/"><?= te('بازگشت به سایت') ?><svg class="th-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-arrow"/></svg></a>
 </header>
 
 <main class="auth-main">
   <div class="auth-card" id="auth-card">
     <div class="auth-card-brand">
       <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
-      <span class="th-brand-name">سامانه توسعه تجارت<small>شبکه بین‌المللی تجار</small></span>
+      <span class="th-brand-name"><?= te('سامانه توسعه تجارت') ?><small><?= te('شبکه بین‌المللی تجار') ?></small></span>
     </div>
     <?= $this->partial('partials/flash', ['flashes' => $flashes ?? []]) ?>
     <?= $content ?>
@@ -67,7 +72,7 @@ $cards = [
 </main>
 
 <footer class="auth-foot">
-  <p class="auth-slogan"><span>تجارت جهانی،</span><b>یک قدم نزدیک‌تر</b></p>
+  <p class="auth-slogan"><span><?= te('تجارت جهانی،') ?></span><b><?= te('یک قدم نزدیک‌تر') ?></b></p>
 </footer>
 </body>
 </html>

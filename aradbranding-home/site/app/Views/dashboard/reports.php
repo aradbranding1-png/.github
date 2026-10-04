@@ -8,6 +8,12 @@
 use App\Modules\Dashboard\ReportsController;
 
 $fmtDay = static function (string $ymd, bool $long = false): string {
+    if (!\App\Core\I18n\I18n::isSource() && class_exists(\IntlDateFormatter::class)) {
+        $loc = \App\Core\I18n\I18n::intl();
+        $pattern = (new \IntlDatePatternGenerator($loc))->getBestPattern($long ? 'dMMMM' : 'dMMM');
+        $f = new \IntlDateFormatter($loc, \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, 'UTC', \IntlDateFormatter::GREGORIAN, $pattern);
+        return (string) $f->format(new \DateTimeImmutable($ymd, new \DateTimeZone('UTC')));
+    }
     if (class_exists(\IntlDateFormatter::class)) {
         $f = new \IntlDateFormatter('fa_IR@calendar=persian', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, 'UTC', \IntlDateFormatter::TRADITIONAL, $long ? 'd MMMM' : 'd MMM');
         return (string) $f->format(new \DateTimeImmutable($ymd, new \DateTimeZone('UTC')));
@@ -28,7 +34,7 @@ $nice = static function (int $max): int {
     }
     return $max;
 };
-$period = $step > 1 ? 'هفته منتهی به ' : '';
+$period = $step > 1 ? t('هفته منتهی به') . ' ' : '';
 
 /** Grouped vertical bars. $set = list of [label, class, values]. */
 $bars = function (array $set, string $unit) use ($buckets, $fmtDay, $nice, $period): string {
@@ -108,41 +114,41 @@ $area = function (array $vals, string $cls, string $label) use ($buckets, $fmtDa
 };
 
 $kpis = [
-    ['label' => 'بازدید صفحه‌های شما', 'value' => (int) ($counters['page_views_received'] ?? 0), 'icon' => 'eye', 'tone' => 'blue'],
-    ['label' => 'بازدید پیشنهادهای شما', 'value' => (int) ($counters['proposal_views_received'] ?? 0), 'icon' => 'spark', 'tone' => 'gold'],
-    ['label' => 'ارتباط‌های تجاری', 'value' => (int) ($counters['connections'] ?? 0), 'icon' => 'chat', 'tone' => 'green'],
-    ['label' => 'نامه‌های ارسالی', 'value' => (int) ($counters['letters_sent'] ?? 0), 'icon' => 'letter', 'tone' => 'violet'],
-    ['label' => 'پیشنهادهای منتشرشده', 'value' => (int) ($content['live_proposals'] ?? 0), 'icon' => 'send', 'tone' => 'blue'],
-    ['label' => 'موجودی Stars', 'value' => (int) ($wallet['balance'] ?? 0), 'icon' => 'star', 'tone' => 'gold'],
+    ['label' => t('بازدید صفحه‌های شما'), 'value' => (int) ($counters['page_views_received'] ?? 0), 'icon' => 'eye', 'tone' => 'blue'],
+    ['label' => t('بازدید پیشنهادهای شما'), 'value' => (int) ($counters['proposal_views_received'] ?? 0), 'icon' => 'spark', 'tone' => 'gold'],
+    ['label' => t('ارتباط‌های تجاری'), 'value' => (int) ($counters['connections'] ?? 0), 'icon' => 'chat', 'tone' => 'green'],
+    ['label' => t('نامه‌های ارسالی'), 'value' => (int) ($counters['letters_sent'] ?? 0), 'icon' => 'letter', 'tone' => 'violet'],
+    ['label' => t('پیشنهادهای منتشرشده'), 'value' => (int) ($content['live_proposals'] ?? 0), 'icon' => 'send', 'tone' => 'blue'],
+    ['label' => t('موجودی Stars'), 'value' => (int) ($wallet['balance'] ?? 0), 'icon' => 'star', 'tone' => 'gold'],
 ];
 $breakdown = [
-    ['نامه‌های ارسالی', $t('sent:letter_sent'), 'c1'],
-    ['پاسخ‌های شما', $t('sent:letter_replied'), 'c1'],
-    ['نامه‌های دریافتی', $t('got:letter_sent') + $t('got:letter_replied'), 'c2'],
-    ['پیشنهاد ارسالی', $t('sent:proposal_sent'), 'c1'],
-    ['پیشنهاد دریافتی', $t('got:proposal_sent'), 'c2'],
-    ['بازدید پیشنهادهای شما', $t('got:proposal_viewed'), 'c2'],
-    ['صفحه‌های شما که کامل دیده شد', $t('got:page_viewed'), 'c2'],
-    ['ارتباط تازه', $t('sent:connection_created') + $t('got:connection_created'), 'c3'],
+    [t('نامه‌های ارسالی'), $t('sent:letter_sent'), 'c1'],
+    [t('پاسخ‌های شما'), $t('sent:letter_replied'), 'c1'],
+    [t('نامه‌های دریافتی'), $t('got:letter_sent') + $t('got:letter_replied'), 'c2'],
+    [t('پیشنهاد ارسالی'), $t('sent:proposal_sent'), 'c1'],
+    [t('پیشنهاد دریافتی'), $t('got:proposal_sent'), 'c2'],
+    [t('بازدید پیشنهادهای شما'), $t('got:proposal_viewed'), 'c2'],
+    [t('صفحه‌های شما که کامل دیده شد'), $t('got:page_viewed'), 'c2'],
+    [t('ارتباط تازه'), $t('sent:connection_created') + $t('got:connection_created'), 'c3'],
 ];
 $bmax = max(1, ...array_column($breakdown, 1));
-$rangeLabel = ['7' => '۷ روز', '30' => '۳۰ روز', '90' => '۹۰ روز'];
+$rangeLabel = ['7' => t(':n روز', ['n' => fa_num(7)]), '30' => t(':n روز', ['n' => fa_num(30)]), '90' => t(':n روز', ['n' => fa_num(90)])];
 $icon = static fn (string $id): string => '<svg class="icon"><use href="#i-' . e($id) . '"/></svg>';
 ?>
 <div class="rp">
   <section class="rp-head">
     <div>
-      <h2>گزارش‌های من</h2>
-      <p class="muted">همه کارهایی که در سامانه انجام داده‌اید و بازخوردی که گرفته‌اید، در <?= e($rangeLabel[(string) $days]) ?> اخیر.</p>
+      <h2><?= te('گزارش‌های من') ?></h2>
+      <p class="muted"><?= te('همه کارهایی که در سامانه انجام داده‌اید و بازخوردی که گرفته‌اید، در :range اخیر.', ['range' => $rangeLabel[(string) $days]]) ?></p>
     </div>
-    <nav class="rp-range" aria-label="بازه گزارش">
+    <nav class="rp-range" aria-label="<?= te('بازه گزارش') ?>">
       <?php foreach (ReportsController::RANGES as $r): ?>
         <a href="/reports?days=<?= $r ?>"<?= $r === $days ? ' aria-current="true"' : '' ?>><?= e($rangeLabel[(string) $r]) ?></a>
       <?php endforeach; ?>
     </nav>
   </section>
 
-  <section class="rp-kpis" aria-label="خلاصه">
+  <section class="rp-kpis" aria-label="<?= te('خلاصه') ?>">
     <?php foreach ($kpis as $k): ?>
       <div class="rp-kpi rp-<?= e($k['tone']) ?>">
         <span class="rp-kpi-ic"><?= $icon($k['icon']) ?></span>
@@ -155,39 +161,39 @@ $icon = static fn (string $id): string => '<svg class="icon"><use href="#i-' . e
   <div class="rp-grid-2">
     <section class="rp-card">
       <header>
-        <h3>نامه‌ها</h3>
-        <ul class="rp-legend"><li><i class="c1"></i>ارسالی <b><?= e(fa_int($sum($series['sent']))) ?></b></li><li><i class="c2"></i>دریافتی <b><?= e(fa_int($sum($series['got']))) ?></b></li></ul>
+        <h3><?= te('نامه‌ها') ?></h3>
+        <ul class="rp-legend"><li><i class="c1"></i><?= te('ارسالی') ?> <b><?= e(fa_int($sum($series['sent']))) ?></b></li><li><i class="c2"></i><?= te('دریافتی') ?> <b><?= e(fa_int($sum($series['got']))) ?></b></li></ul>
       </header>
-      <?= $sum($series['sent']) + $sum($series['got']) > 0 ? $bars([['ارسالی', 'c1', $series['sent']], ['دریافتی', 'c2', $series['got']]], 'نامه') : '<p class="rp-empty">در این بازه نامه‌ای ارسال یا دریافت نشده است.</p>' ?>
+      <?= $sum($series['sent']) + $sum($series['got']) > 0 ? $bars([[t('ارسالی'), 'c1', $series['sent']], [t('دریافتی'), 'c2', $series['got']]], t('نامه')) : '<p class="rp-empty">' . te('در این بازه نامه‌ای ارسال یا دریافت نشده است.') . '</p>' ?>
     </section>
     <section class="rp-card">
       <header>
-        <h3>بازدید پیشنهادهای شما</h3>
-        <ul class="rp-legend"><li>مجموع <b><?= e(fa_int($sum($series['views']))) ?></b></li></ul>
+        <h3><?= te('بازدید پیشنهادهای شما') ?></h3>
+        <ul class="rp-legend"><li><?= te('مجموع') ?> <b><?= e(fa_int($sum($series['views']))) ?></b></li></ul>
       </header>
-      <?= $sum($series['views']) > 0 ? $area($series['views'], 'c2', 'بازدید') : '<p class="rp-empty">هنوز کسی در این بازه پیشنهادهای شما را ندیده است. <a href="/proposals/new">ثبت پیشنهاد تجاری</a></p>' ?>
+      <?= $sum($series['views']) > 0 ? $area($series['views'], 'c2', t('بازدید')) : '<p class="rp-empty">' . te('هنوز کسی در این بازه پیشنهادهای شما را ندیده است.') . ' <a href="/proposals/new">' . te('ثبت پیشنهاد تجاری') . '</a></p>' ?>
     </section>
     <section class="rp-card">
       <header>
-        <h3>گردش Stars</h3>
-        <ul class="rp-legend"><li><i class="c3"></i>افزایش <b><?= e(fa_int($sum($series['in']))) ?></b></li><li><i class="c4"></i>کاهش <b><?= e(fa_int($sum($series['out']))) ?></b></li></ul>
+        <h3><?= te('گردش Stars') ?></h3>
+        <ul class="rp-legend"><li><i class="c3"></i><?= te('افزایش') ?> <b><?= e(fa_int($sum($series['in']))) ?></b></li><li><i class="c4"></i><?= te('کاهش') ?> <b><?= e(fa_int($sum($series['out']))) ?></b></li></ul>
       </header>
-      <?= $sum($series['in']) + $sum($series['out']) > 0 ? $bars([['افزایش', 'c3', $series['in']], ['کاهش', 'c4', $series['out']]], 'Star') : '<p class="rp-empty">در این بازه تراکنشی ثبت نشده است. <a href="/wallet">کیف پول</a></p>' ?>
+      <?= $sum($series['in']) + $sum($series['out']) > 0 ? $bars([[t('افزایش'), 'c3', $series['in']], [t('کاهش'), 'c4', $series['out']]], 'Star') : '<p class="rp-empty">' . te('در این بازه تراکنشی ثبت نشده است.') . ' <a href="/wallet">' . te('کیف پول') . '</a></p>' ?>
     </section>
     <section class="rp-card">
-      <header><h3>خلاصه فعالیت</h3></header>
+      <header><h3><?= te('خلاصه فعالیت') ?></h3></header>
       <ul class="rp-hbars">
         <?php foreach ($breakdown as [$label, $v, $cls]): ?>
-          <li><span><?= e($label) ?></span><span class="rp-track"><i class="<?= e($cls) ?>" data-w="<?= (int) round($v / $bmax * 100) ?>"></i></span><b><?= e(fa_int($v)) ?></b></li>
+          <li><span><?= te($label) ?></span><span class="rp-track"><i class="<?= e($cls) ?>" data-w="<?= (int) round($v / $bmax * 100) ?>"></i></span><b><?= e(fa_int($v)) ?></b></li>
         <?php endforeach; ?>
       </ul>
     </section>
   </div>
 
   <section class="rp-card">
-    <header><h3>رویدادهای اخیر</h3></header>
+    <header><h3><?= te('رویدادهای اخیر') ?></h3></header>
     <?php if ($recent === []): ?>
-      <p class="rp-empty">هنوز رویدادی ثبت نشده است. با <a href="/discover">کشف تجار</a> شروع کنید.</p>
+      <p class="rp-empty"><?= th('هنوز رویدادی ثبت نشده است. با :link شروع کنید.', ['link' => '<a href="/discover">' . te('کشف تجار') . '</a>']) ?></p>
     <?php else: ?>
       <ol class="rp-feed">
         <?php foreach ($recent as $r):
@@ -195,7 +201,7 @@ $icon = static fn (string $id): string => '<svg class="icon"><use href="#i-' . e
             if ($ev === null) { continue; }
             $mine = (int) $r['mine'] === 1;
             $who = $names[(int) $r['other']] ?? '';
-            $text = $mine ? $ev['sent'] . ($who !== '' ? ' (' . $who . ')' : '') : ($who !== '' ? $who : 'یک تاجر') . ' ' . $ev['got'];
+            $text = $mine ? t($ev['sent']) . ($who !== '' ? ' (' . $who . ')' : '') : ($ev['got'] === '' ? '' : t($ev['got'], ['name' => $who !== '' ? $who : t('یک تاجر')]));
             if ($text === '' || (!$mine && $ev['got'] === '')) { continue; } ?>
           <li class="<?= $mine ? 'is-mine' : 'is-got' ?>"><i aria-hidden="true"></i><span><?= e($text) ?>.</span><time><?= e(fa_date($r['created_at'])) ?></time></li>
         <?php endforeach; ?>
