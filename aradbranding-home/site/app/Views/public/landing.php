@@ -107,12 +107,11 @@ if ($stats !== null) {
     }
 }
 
-$searchHref = static function (string $q, string $code) use ($countryIds): string {
-    $params = ['type' => 'proposals', 'q' => $q];
-    if (isset($countryIds[$code])) {
-        $params['country'] = $countryIds[$code];
-    }
-    return '/search?' . http_build_query($params);
+// An opportunity card opens the proposals for its product. The product goes to the product filter (not the
+// trader/company name field); the card's country is the target market, not where the proposals come from, so it is
+// not used as a country filter (that would hide every matching proposal).
+$searchHref = static function (string $q, string $code): string {
+    return '/search?' . http_build_query(['type' => 'proposals', 'product' => $q]);
 };
 $chipCodes = array_values(array_filter(explode(',', $home['countries']['codes'])));
 $finderCodes = array_values(array_unique(array_merge(array_column($markets, 'code'), $chipCodes)));
@@ -293,7 +292,7 @@ $h = $home['hero'];
         </div>
       </div>
       <form class="th-finder-f" method="get" action="/search">
-        <label class="th-field"><span><?= te('محصول یا کالا') ?></span><input type="search" name="q" placeholder="<?= te('مثلاً زعفران، خرما، فولاد…') ?>" enterkeyhint="search"></label>
+        <label class="th-field"><span><?= te('محصول یا کالا') ?></span><input type="search" name="product" maxlength="60" placeholder="<?= te('مثلاً زعفران، خرما، فولاد…') ?>" enterkeyhint="search"></label>
         <div class="th-field"><span aria-hidden="true"><?= te('کشور') ?></span>
           <select name="country" aria-label="<?= te('کشور') ?>">
             <option value="0"><?= te('همه کشورها') ?></option>
