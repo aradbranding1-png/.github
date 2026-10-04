@@ -48,6 +48,7 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/automation_functions.php';
+if (isset($pdo)) automation_letter_numbers_v1($pdo); else automation_letter_numbers_v1(db());
 require_once __DIR__ . '/includes/services_functions.php';
 $user = require_login();
 $pdo  = db();
@@ -842,7 +843,7 @@ require_once __DIR__ . '/includes/layout_top.php';
 
       <table class="alv-print-meta">
         <tr>
-          <td><span class="label">شماره:</span><span class="value" dir="ltr"><?= e($letter['letter_number'] ?? '—') ?></span></td>
+          <td><span class="label">شماره:</span><span class="value" dir="ltr" style="white-space:nowrap"><?= e(to_persian_digits((string) ($letter['letter_number'] ?? '—'))) ?></span></td>
           <td><span class="label">تاریخ:</span><span class="value"><?= e(to_jalali(substr($letter['created_at'], 0, 10))) ?></span></td>
           <td><span class="label">پیوست:</span><span class="value"><?= !empty($attachments) ? 'دارد' : 'ندارد' ?></span></td>
         </tr>
@@ -969,7 +970,7 @@ require_once __DIR__ . '/includes/layout_top.php';
         </div>
       </div>
       <div class="text-muted small mb-3">
-        شماره: <span dir="ltr"><?= e($letter['letter_number'] ?? '—') ?></span> ·
+        شماره: <span dir="ltr" style="white-space:nowrap"><?= e(to_persian_digits((string) ($letter['letter_number'] ?? '—'))) ?></span> ·
         فرستنده: <?= e($letter['sender_name']) ?> (<?= e($letter['sender_position_title'] ?? '—') ?>) ·
         تاریخ: <?= to_jalali(substr($letter['created_at'], 0, 10)) ?>
         <?php if ($letter['deadline_at']): ?> · مهلت اقدام: <?= to_jalali($letter['deadline_at']) ?><?php endif; ?>

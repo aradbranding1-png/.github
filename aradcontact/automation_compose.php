@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/automation_functions.php';
+if (isset($pdo)) automation_letter_numbers_v1($pdo); else automation_letter_numbers_v1(db());
 $user = require_login();
 $pdo  = db();
 

@@ -909,3 +909,32 @@ function automation_mark_read(PDO $pdo, int $letterId, int $userId): void
     $pdo->prepare("UPDATE letter_declarations SET status = 'مشاهده شد', seen_at = NOW() WHERE letter_id = ? AND user_id = ? AND status <> 'مشاهده شد'")
         ->execute([$letterId, $userId]);
 }
+
+/**
+ * یک‌بار: شماره‌ی نامه‌های قبلی (مثلاً «L-20261003-5941» یا «DR-777») ← فقط عدد.
+ * به ترتیبِ ثبت (id) از ۱ به بعد، بدونِ تکرارِ شماره‌های عددیِ موجود؛ نامه‌های جدید از بزرگ‌ترین عدد + ۱ ادامه می‌دهند.
+ */
+function automation_letter_numbers_v1(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $flag = __DIR__ . '/../storage/.automation_letter_numbers_v1';
+    if (is_file($flag)) return;
+    try {
+        $used = [];
+        foreach ($pdo->query("SELECT letter_number FROM letters WHERE letter_number REGEXP '^[0-9]+$'")->fetchAll(PDO::FETCH_COLUMN) ?: [] as $n) $used[(int) $n] = true;
+        $rows = $pdo->query("SELECT id FROM letters WHERE letter_number IS NOT NULL AND letter_number <> '' AND letter_number NOT REGEXP '^[0-9]+$' ORDER BY id")->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $up = $pdo->prepare('UPDATE letters SET letter_number = ? WHERE id = ?');
+        $next = 1;
+        foreach ($rows as $id) {
+            while (isset($used[$next])) $next++;
+            $up->execute([(string) $next, (int) $id]);
+            $used[$next] = true;
+        }
+        @file_put_contents($flag, date('c') . ' ' . count($rows));
+    } catch (Throwable $e) {
+        error_log('automation_letter_numbers_v1: ' . $e->getMessage());
+    }
+}
+
