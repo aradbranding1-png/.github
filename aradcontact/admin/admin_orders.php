@@ -68,7 +68,7 @@ if ($ready) {
     }
     $base = 'FROM sales_orders o LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN users s ON s.id = o.seller_user_id WHERE ' . implode(' AND ', $where);
     // «فروش» (یک تعریف در همه‌ی گزارش‌ها — includes/sales_credit.php): رویدادهای تأییدشده (تأییدِ سفارش + هر قسط/پرداختِ تأییدشده)
-    // در «روزِ تأییدِ مالی»ِ خودشان، خالص (بدونِ مالیات). بازه‌ی تاریخ روی همین روزِ تأیید اعمال می‌شود؛ بقیه‌ی فیلترها روی سفارش.
+    // در «روزِ واریز» (تاریخِ فیش)، خالص (بدونِ مالیات). بازه‌ی تاریخ روی همین روزِ واریز اعمال می‌شود؛ بقیه‌ی فیلترها روی سفارش.
     require_once __DIR__ . '/../includes/sales_credit.php';
     $__evW = ['1=1']; $__evP = [];
     if ($method !== '') { $__evW[] = 'o.payment_method = ?'; $__evP[] = $method; }
@@ -531,7 +531,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
     <?php endif; ?>
     <div class="row g-3">
       <div class="col-lg-12">
-        <div class="card p-3"><h6 class="fw-bold mb-2">فروشِ تأییدشده به تفکیکِ روز</h6><canvas id="chDay" height="90"></canvas></div>
+        <div class="card p-3"><h6 class="fw-bold mb-2">فروشِ تأییدشده به تفکیکِ روزِ واریز</h6><canvas id="chDay" height="90"></canvas></div>
       </div>
       <?php $__grand = array_sum(array_map(static fn($t) => $t['amt'], $report['by_team'])); ?>
       <div class="col-lg-12">
@@ -570,7 +570,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <div class="col-lg-6">
         <div class="card p-3 h-100">
           <h6 class="fw-bold mb-1">فروش به تفکیکِ کارشناس</h6>
-          <div class="small text-muted mb-2">مبلغ‌ها <b>خالص (بدونِ مالیات)</b>؛ فروش = پیش‌پرداختِ تأییدشده در روزِ تأییدِ سفارش + هر قسط/پرداختِ بعدی در روزِ تأییدِ همان پرداخت. روی تعداد یا مبلغِ هر کارشناس بزنید تا سفارش‌هایش را ببینید. «مشترک» یعنی مالی عددِ آن سفارش را بینِ چند کارشناس تقسیم کرده و این‌جا فقط سهمِ همین نفر آمده.</div>
+          <div class="small text-muted mb-2">مبلغ‌ها <b>خالص (بدونِ مالیات)</b>؛ فروش = پیش‌پرداختِ تأییدشده در روزِ واریز (طبقِ فیش) + هر قسط/پرداختِ بعدی در روزِ واریزِ همان پرداخت. روی تعداد یا مبلغِ هر کارشناس بزنید تا سفارش‌هایش را ببینید. «مشترک» یعنی مالی عددِ آن سفارش را بینِ چند کارشناس تقسیم کرده و این‌جا فقط سهمِ همین نفر آمده.</div>
           <table class="table table-sm mb-0"><thead class="table-light"><tr><th>کارشناس</th><th>واحد</th><th>تیم</th><th>تعداد</th><th class="text-end">مبلغ</th></tr></thead><tbody>
             <?php if (!$report['by_seller']): ?><tr><td colspan="5" class="text-center text-muted py-3">فروشِ تأییدشده‌ای در این بازه نیست.</td></tr><?php endif; ?>
             <?php $__umap = tsr_user_team_map($pdo); ?>

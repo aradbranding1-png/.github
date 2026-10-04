@@ -126,14 +126,19 @@ function sales_has_legacy_col(PDO $pdo): bool
  */
 function sales_user_events_sql(PDO $pdo, string $orderWhere = '1=1'): string
 {
-    $ev = "SELECT o.id order_id, o.decided_at at, 'order' kind, 0 payment_id, COALESCE(o.confirmed_amount, o.total_amount) gross,
+    // تاریخِ فروش = تاریخِ واریز (طبقِ فیش)، نه تاریخِ تأییدِ مالی؛ اگر تاریخِ واریز ثبت نشده، تاریخِ تأیید
+    $orderAt = sales_payments_ready($pdo)
+        ? "COALESCE(CAST((SELECT MAX(pi.paid_at) FROM sales_order_payments pi WHERE pi.order_id = o.id AND pi.kind = 'initial') AS DATETIME), CAST(o.payment_date AS DATETIME), o.decided_at)"
+        : "COALESCE(CAST(o.payment_date AS DATETIME), o.decided_at)";
+    $ev = "SELECT o.id order_id, $orderAt at, 'order' kind, 0 payment_id, COALESCE(o.confirmed_amount, o.total_amount) gross,
                 " . sales_net_sql('COALESCE(o.confirmed_amount, o.total_amount)') . " net
-           FROM sales_orders o WHERE o.status = 'approved' AND o.decided_at BETWEEN ? AND ?";
+           FROM sales_orders o WHERE o.status = 'approved' AND $orderAt BETWEEN ? AND ?";
     if (sales_payments_ready($pdo)) {
+        $payAt = "COALESCE(CAST(p.paid_at AS DATETIME), p.decided_at)";
         $ev .= " UNION ALL
-           SELECT o.id, p.decided_at, 'payment', p.id, p.amount, " . sales_net_sql('p.amount') . "
+           SELECT o.id, $payAt, 'payment', p.id, p.amount, " . sales_net_sql('p.amount') . "
            FROM sales_order_payments p JOIN sales_orders o ON o.id = p.order_id
-           WHERE o.status = 'approved' AND p.status = 'confirmed' AND p.kind = 'extra' AND p.decided_at BETWEEN ? AND ?"
+           WHERE o.status = 'approved' AND p.status = 'confirmed' AND p.kind = 'extra' AND $payAt BETWEEN ? AND ?"
            . (sales_has_legacy_col($pdo) ? ' AND COALESCE(o.is_legacy, 0) = 0' : '');
     }
     $credit = sales_credit_uid_sql($pdo);
