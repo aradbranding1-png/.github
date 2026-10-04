@@ -89,6 +89,20 @@ if ($ready) {
         }
     }
 
+    // در «گزارش فروش» کارتِ «تأیید و ثبت شد» همان تعریفِ جدول‌های پایینِ صفحه را دارد (جمعِ هر پرداختِ تأییدشده در روزِ واریزش
+    // داخلِ بازه، خالص) تا عددِ بالا با «جمعِ فروشِ تیم» یکی باشد؛ تعداد = سفارش‌هایی که در این بازه پولِ تأییدشده داشته‌اند
+    if ($view === 'report' && isset($counts['approved'])) {
+        try {
+            $__ks = $pdo->prepare("SELECT COUNT(DISTINCT x.order_id) cnt, COALESCE(SUM(x.net), 0) amt FROM ($__evSql) x WHERE 1=1 $__evUidSql");
+            $__ks->execute($__evParams);
+            $__k = $__ks->fetch(PDO::FETCH_ASSOC) ?: ['cnt' => 0, 'amt' => 0];
+            $counts['approved'] = (int) $__k['cnt'];
+            $sums['approved'] = (int) $__k['amt'];
+        } catch (Throwable $e) {
+            error_log('admin_orders approved kpi: ' . $e->getMessage());
+        }
+    }
+
     $sellers = $pdo->query('SELECT DISTINCT u.id, u.full_name, u.mobile FROM sales_orders o JOIN users u ON u.id = o.seller_user_id ORDER BY u.full_name')->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
     $listSql = "SELECT o.*, c.full_name AS customer_name, c.mobile AS customer_mobile, s.full_name AS seller_name, s.role AS seller_role,
@@ -451,6 +465,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
         <a class="kpi <?= $status === $k ? 'active' : '' ?>" href="?<?= e(http_build_query($q2)) ?>">
           <div class="d-flex justify-content-between"><span class="small text-muted"><i class="fa-solid <?= e($m['icon']) ?>"></i> <?= e($m['label']) ?></span><span class="n text-<?= e($m['color']) ?>"><?= to_persian_digits((string) $counts[$k]) ?></span></div>
           <div class="a"><?= format_toman($sums[$k]) ?></div>
+          <?php if ($view === 'report' && $k === 'approved'): ?><div class="text-muted" style="font-size:11px">فروشِ خالص به روزِ واریز در این بازه — همان جمعِ جدول‌های پایین</div><?php endif; ?>
         </a>
       </div>
     <?php endforeach; ?>
