@@ -10,7 +10,7 @@ function scr_ready(PDO $pdo): bool
     static $ok = null;
     if ($ok !== null) return $ok;
     $flag = __DIR__ . '/../storage/.sales_credit_splits_v1';
-    if (is_file($flag)) { scr_cleanup_tiny_v2($pdo); return $ok = true; }
+    if (is_file($flag)) { scr_cleanup_tiny_v2($pdo); scr_payment_col_v3($pdo); return $ok = true; }
     try {
         $pdo->exec("CREATE TABLE IF NOT EXISTS sales_order_credit_splits (
             id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -28,7 +28,25 @@ function scr_ready(PDO $pdo): bool
     if (!is_dir(dirname($flag))) @mkdir(dirname($flag), 0755, true);
     @file_put_contents($flag, (string) time());
     scr_cleanup_tiny_v2($pdo);
+    scr_payment_col_v3($pdo);
     return $ok = true;
+}
+
+/**
+ * یک‌بار: ستونِ payment_id — تفکیکِ جداگانه برای هر قسط/پرداختِ بعدی.
+ * payment_id = NULL ← تفکیکِ پیش‌پرداخت (سفارش)؛ پرداختی که تفکیکِ خودش را ندارد به همان نسبتِ پیش‌پرداخت تقسیم می‌شود.
+ */
+function scr_payment_col_v3(PDO $pdo): void
+{
+    $flag = __DIR__ . '/../storage/.sales_credit_splits_payment_v3';
+    if (is_file($flag)) return;
+    try {
+        try { $pdo->query('SELECT payment_id FROM sales_order_credit_splits LIMIT 0'); }
+        catch (Throwable $e) { $pdo->exec('ALTER TABLE sales_order_credit_splits ADD COLUMN payment_id INT UNSIGNED NULL DEFAULT NULL AFTER order_id, ADD KEY idx_scs_payment (payment_id)'); }
+        @file_put_contents($flag, (string) time());
+    } catch (Throwable $e) {
+        error_log('scr_payment_col_v3: ' . $e->getMessage());
+    }
 }
 
 /** سهمِ کمتر از این مبلغ (تومان) «بدونِ سهم» حساب می‌شود — قبلاً فرم صفر را نمی‌پذیرفت و برای «سهم ندارد» ۱ تومان وارد می‌شد */
@@ -144,15 +162,23 @@ function sales_user_events_sql(PDO $pdo, string $orderWhere = '1=1'): string
     $credit = sales_credit_uid_sql($pdo);
     $snapJoin = sales_snapshots_ready($pdo) ? ' LEFT JOIN ps_order_snapshots snap ON snap.order_id = o.id' : '';
     if (scr_ready($pdo)) {
+        // تفکیک: پرداختی که تفکیکِ خودش را دارد ← همان؛ وگرنه تفکیکِ پیش‌پرداختِ سفارش (payment_id = NULL) به همان نسبت
+        $hasPay = scr_has_payment_col($pdo);
+        $skey = $hasPay
+            ? "CASE WHEN ev.kind = 'payment' AND EXISTS (SELECT 1 FROM sales_order_credit_splits s2 WHERE s2.payment_id = ev.payment_id) THEN ev.payment_id ELSE 0 END"
+            : '0';
+        $spKey = $hasPay ? 'COALESCE(sp.payment_id, 0)' : '0';
+        $tSel = $hasPay ? 'order_id, COALESCE(payment_id, 0) pk, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id, COALESCE(payment_id, 0)'
+                        : 'order_id, 0 pk, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id';
         return "SELECT ev.order_id, COALESCE(sp.user_id, $credit) uid, ev.at, ev.kind, ev.payment_id,
                     CASE WHEN sp.user_id IS NULL THEN ev.gross ELSE ROUND(sp.amount * ev.gross / NULLIF(t.tot, 0)) END gross,
                     CASE WHEN sp.user_id IS NULL THEN ev.net ELSE ROUND(sp.amount * ev.net / NULLIF(t.tot, 0)) END net,
                     CASE WHEN sp.user_id IS NULL THEN 0 ELSE 1 END shared
-                FROM ($ev) ev
+                FROM (SELECT e0.*, " . str_replace('ev.', 'e0.', $skey) . " skey FROM ($ev) e0) ev
                 JOIN sales_orders o ON o.id = ev.order_id
                 LEFT JOIN customers c ON c.id = o.customer_id$snapJoin
-                LEFT JOIN sales_order_credit_splits sp ON sp.order_id = o.id
-                LEFT JOIN (SELECT order_id, SUM(amount) tot FROM sales_order_credit_splits GROUP BY order_id) t ON t.order_id = o.id
+                LEFT JOIN sales_order_credit_splits sp ON sp.order_id = o.id AND $spKey = ev.skey
+                LEFT JOIN (SELECT $tSel) t ON t.order_id = o.id AND t.pk = ev.skey
                 WHERE ($orderWhere)";
     }
     return "SELECT ev.order_id, $credit uid, ev.at, ev.kind, ev.payment_id, ev.gross, ev.net, 0 shared
@@ -212,10 +238,21 @@ function scr_order_amount(array $order): int
     return ($order['confirmed_amount'] ?? null) !== null ? (int) $order['confirmed_amount'] : (int) ($order['total_amount'] ?? 0);
 }
 
-function scr_get(PDO $pdo, int $orderId): array
+function scr_has_payment_col(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try { $pdo->query('SELECT payment_id FROM sales_order_credit_splits LIMIT 0'); return $ok = true; }
+    catch (Throwable $e) { return $ok = false; }
+}
+
+/** تفکیکِ پیش‌پرداخت (payment = null) یا تفکیکِ یک قسط/پرداختِ بعدی */
+function scr_get(PDO $pdo, int $orderId, ?int $paymentId = null): array
 {
     if (!scr_ready($pdo)) return [];
-    $st = $pdo->prepare('SELECT s.*, u.full_name, u.role FROM sales_order_credit_splits s LEFT JOIN users u ON u.id = s.user_id WHERE s.order_id = ? ORDER BY s.id');
+    $pw = scr_has_payment_col($pdo) ? ($paymentId ? ' AND s.payment_id = ' . (int) $paymentId : ' AND s.payment_id IS NULL') : '';
+    if ($paymentId && $pw === '') return [];
+    $st = $pdo->prepare('SELECT s.*, u.full_name, u.role FROM sales_order_credit_splits s LEFT JOIN users u ON u.id = s.user_id WHERE s.order_id = ?' . $pw . ' ORDER BY s.id');
     $st->execute([$orderId]);
     return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
@@ -239,17 +276,23 @@ function scr_parse_post(array $post): array
  * ذخیره‌ی تفکیک. قواعد: هر نفر یک‌بار، مبلغِ هر نفر > ۰، جمعِ همه دقیقاً = عددِ فروشِ سفارش.
  * یک ردیف (یا خالی) = «فروشِ مشترک نیست» ← تفکیک پاک می‌شود و کلِ عدد به نامِ ثبت‌کننده می‌ماند.
  */
-function scr_save(PDO $pdo, array $order, array $rows, int $userId): array
+function scr_save(PDO $pdo, array $order, array $rows, int $userId, ?array $payment = null): array
 {
     if (!scr_ready($pdo)) return ['ok' => false, 'message' => 'ماژولِ فروشِ مشترک آماده نیست.'];
     $orderId = (int) $order['id'];
-    $total = scr_order_amount($order);
-    // یک نفر با کلِ مبلغ: اگر همان ثبت‌کننده است ← «مشترک نیست»؛ اگر کسِ دیگری است ← کلِ عددِ فروش به نامِ او
-    if (!$rows || (count($rows) === 1 && (int) $rows[0]['user_id'] === (int) ($order['seller_user_id'] ?? 0))) {
-        $had = (bool) scr_get($pdo, $orderId);
-        $pdo->prepare('DELETE FROM sales_order_credit_splits WHERE order_id = ?')->execute([$orderId]);
+    $paymentId = $payment ? (int) $payment['id'] : null;
+    if ($paymentId && !scr_has_payment_col($pdo)) return ['ok' => false, 'message' => 'ماژولِ فروشِ مشترکِ اقساط آماده نیست.'];
+    $total = $payment ? (int) $payment['amount'] : scr_order_amount($order);
+    $scope = $paymentId ? 'order_id = ? AND payment_id = ' . $paymentId : (scr_has_payment_col($pdo) ? 'order_id = ? AND payment_id IS NULL' : 'order_id = ?');
+    $what = $paymentId ? 'پرداختِ ' . number_format($total) . ' تومانی' : 'سفارش';
+    // پیش‌پرداخت: یک نفر = همان ثبت‌کننده ← «مشترک نیست». قسط: خالی ← همان نسبتِ پیش‌پرداخت (تفکیکِ جداگانه حذف می‌شود)
+    if (!$rows || (!$paymentId && count($rows) === 1 && (int) $rows[0]['user_id'] === (int) ($order['seller_user_id'] ?? 0))) {
+        $had = (bool) scr_get($pdo, $orderId, $paymentId);
+        $pdo->prepare('DELETE FROM sales_order_credit_splits WHERE ' . $scope)->execute([$orderId]);
         if ($had && function_exists('orders_add_history')) {
-            orders_add_history($pdo, $orderId, $userId, 'note', null, null, 'تفکیکِ فروشِ مشترک حذف شد؛ کلِ عددِ فروش به نامِ ثبت‌کننده‌ی سفارش است.');
+            orders_add_history($pdo, $orderId, $userId, 'note', null, null, $paymentId
+                ? 'تفکیکِ جداگانه‌ی ' . $what . ' حذف شد؛ این پرداخت به همان نسبتِ پیش‌پرداخت حساب می‌شود.'
+                : 'تفکیکِ فروشِ مشترک حذف شد؛ کلِ عددِ فروش به نامِ ثبت‌کننده‌ی سفارش است.');
         }
         return ['ok' => true, 'message' => $had ? 'تفکیکِ فروش حذف شد.' : ''];
     }
@@ -269,24 +312,29 @@ function scr_save(PDO $pdo, array $order, array $rows, int $userId): array
         $sum += $r['amount'];
     }
     if ($sum !== $total) {
-        return ['ok' => false, 'message' => 'جمعِ مبالغِ تفکیک (' . number_format($sum) . ' تومان) باید دقیقاً برابرِ عددِ فروشِ سفارش (' . number_format($total) . ' تومان) باشد.'];
+        return ['ok' => false, 'message' => 'جمعِ مبالغِ تفکیک (' . number_format($sum) . ' تومان) باید دقیقاً برابرِ عددِ فروشِ ' . $what . ' (' . number_format($total) . ' تومان) باشد.'];
     }
     $pdo->beginTransaction();
     try {
-        $pdo->prepare('DELETE FROM sales_order_credit_splits WHERE order_id = ?')->execute([$orderId]);
-        $ins = $pdo->prepare('INSERT INTO sales_order_credit_splits (order_id, user_id, amount, created_by, created_at) VALUES (?,?,?,?,?)');
+        $pdo->prepare('DELETE FROM sales_order_credit_splits WHERE ' . $scope)->execute([$orderId]);
+        $ins = scr_has_payment_col($pdo)
+            ? $pdo->prepare('INSERT INTO sales_order_credit_splits (order_id, payment_id, user_id, amount, created_by, created_at) VALUES (?,?,?,?,?,?)')
+            : $pdo->prepare('INSERT INTO sales_order_credit_splits (order_id, user_id, amount, created_by, created_at) VALUES (?,?,?,?,?)');
         $now = date('Y-m-d H:i:s');
-        foreach ($rows as $r) $ins->execute([$orderId, $r['user_id'], $r['amount'], $userId, $now]);
+        foreach ($rows as $r) {
+            if (scr_has_payment_col($pdo)) $ins->execute([$orderId, $paymentId, $r['user_id'], $r['amount'], $userId, $now]);
+            else $ins->execute([$orderId, $r['user_id'], $r['amount'], $userId, $now]);
+        }
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         return ['ok' => false, 'message' => 'ذخیره‌ی تفکیک ناموفق بود.'];
     }
     if (function_exists('orders_add_history')) {
-        orders_add_history($pdo, $orderId, $userId, 'note', null, null, 'فروشِ مشترک (فقط گزارشِ فروش، بدونِ اثر بر سهم عملکرد): ' . implode(' | ', $names) . ' تومان');
+        orders_add_history($pdo, $orderId, $userId, 'note', null, null, 'فروشِ مشترک' . ($paymentId ? ' — ' . $what : '') . ' (فقط گزارشِ فروش، بدونِ اثر بر سهم عملکرد): ' . implode(' | ', $names) . ' تومان');
     }
     return ['ok' => true, 'message' => count($rows) === 1
-        ? 'کلِ عددِ فروشِ این سفارش به نامِ ' . $names[0] . ' تومان ثبت شد (سهم عملکرد تغییری نکرد).'
+        ? 'کلِ عددِ فروشِ ' . ($paymentId ? 'این پرداخت' : 'این سفارش') . ' به نامِ ' . $names[0] . ' تومان ثبت شد (سهم عملکرد تغییری نکرد).'
         : 'تفکیکِ عددِ فروش بینِ ' . to_persian_digits((string) count($rows)) . ' کارشناس ذخیره شد (سهم عملکرد تغییری نکرد).'];
 }
 
@@ -307,17 +355,18 @@ function scr_staff(PDO $pdo): array
  * ویرایشگرِ تفکیک (داخلِ یک <form>): ردیف‌های «کارشناس + مبلغ» با جمعِ زنده.
  * $amountInputId: فیلدی که عددِ فروش از آن خوانده می‌شود (مثلاً مبلغِ تأییدی در فرمِ تصمیمِ مالی)
  */
-function scr_editor_html(PDO $pdo, array $order, string $amountInputId = ''): string
+function scr_editor_html(PDO $pdo, array $order, string $amountInputId = '', ?array $payment = null): string
 {
-    $splits = scr_get($pdo, (int) $order['id']);
+    $splits = scr_get($pdo, (int) $order['id'], $payment ? (int) $payment['id'] : null);
     $rows = $splits ?: [['user_id' => (int) $order['seller_user_id'], 'amount' => 0]];
     $maxRows = 6;
     $staff = scr_staff($pdo);
-    $total = scr_order_amount($order);
-    $uid = 'scr' . (int) $order['id'];
+    $total = $payment ? (int) $payment['amount'] : scr_order_amount($order);
+    $uid = 'scr' . (int) $order['id'] . ($payment ? 'p' . (int) $payment['id'] : '');
     ob_start(); ?>
     <details class="border rounded-3 p-2 mb-2" style="background:#f5f3ff" id="<?= $uid ?>" <?= $splits ? 'open' : '' ?>>
-      <summary class="small fw-bold" style="color:#6d28d9"><i class="fa-solid fa-people-group"></i> فروشِ مشترک؟ تفکیکِ عددِ فروش بینِ چند کارشناس <span class="fw-normal text-muted">(فقط گزارشِ فروش — سهم عملکرد تغییر نمی‌کند)</span></summary>
+      <summary class="small fw-bold" style="color:#6d28d9"><i class="fa-solid fa-people-group"></i> <?= $payment ? 'فروشِ مشترکِ همین پرداخت (' . e(number_format($total)) . ' تومان)' : 'فروشِ مشترک؟ تفکیکِ عددِ فروش بینِ چند کارشناس' ?> <span class="fw-normal text-muted">(فقط گزارشِ فروش — سهم عملکرد تغییر نمی‌کند)</span></summary>
+      <?php if ($payment): ?><div class="small text-muted mt-2">اگر خالی بماند، این پرداخت به همان نسبتِ تفکیکِ پیش‌پرداخت تقسیم می‌شود (اگر پیش‌پرداخت مشترک نیست، به نامِ ثبت‌کننده‌ی سفارش). برای «کلِ این قسط به نامِ یک نفر»، فقط همان یک نفر را با کلِ مبلغ بنویسید.</div><?php endif; ?>
       <div class="small text-muted mt-2 mb-2">ردیفِ اول ثبت‌کننده‌ی سفارش است. هر کس سهمی ندارد (حتی ثبت‌کننده)، مبلغش را <b>خالی یا ۰</b> بگذارید — نه ۱ تومان. اگر کلِ فروش به نامِ کسِ دیگری است، فقط برای همان یک نفر کلِ مبلغ را بنویسید. جمعِ مبالغ باید دقیقاً برابرِ عددِ فروش باشد.</div>
       <?php for ($i = 0; $i < $maxRows; $i++): $r = $rows[$i] ?? null; ?>
         <div class="d-flex gap-2 mb-1 scr-row" <?= $r === null && $i > 1 ? 'style="display:none!important"' : '' ?>>

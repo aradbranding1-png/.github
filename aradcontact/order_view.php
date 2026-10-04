@@ -60,6 +60,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash_set('danger', 'این سفارش هشدارِ «واریزیِ تکراری» دارد. اول در کادرِ قرمز مشخص کنید یک واریزی است یا دو واریزیِ جدا (یا تیکِ «بررسی کردم» را بزنید).');
         redirect('order_view.php?id=' . $orderId . '#dup-check');
     }
+    if ($action === 'sales_split_payment' && $canDecide) {
+        // فروشِ مشترکِ یک قسط/پرداختِ بعدی (جدا از تفکیکِ پیش‌پرداخت)
+        $__pid = (int) ($_POST['payment_id'] ?? 0);
+        $__p = null;
+        foreach (fin_payments($pdo, $orderId) as $__pp) if ((int) $__pp['id'] === $__pid) $__p = $__pp;
+        if (!$__p || $__p['kind'] !== 'extra' || $__p['status'] !== 'confirmed') {
+            flash_set('danger', 'این پرداخت پیدا نشد یا هنوز تأیید نشده است.');
+        } else {
+            $r = scr_save($pdo, $order, scr_parse_post($_POST), (int) $user['id'], $__p);
+            flash_set($r['ok'] ? 'success' : 'danger', $r['message'] !== '' ? $r['message'] : 'تغییری نبود.');
+        }
+        redirect('order_view.php?id=' . $orderId . '#pay-splits');
+    }
     if ($action === 'sales_split' && $canDecide) {
         $r = scr_save($pdo, $order, scr_parse_post($_POST), (int) $user['id']);
         flash_set($r['ok'] ? 'success' : 'danger', $r['message'] !== '' ? $r['message'] : 'تغییری نبود.');
@@ -638,6 +651,23 @@ require_once __DIR__ . '/includes/layout_top.php';
             </tbody>
           </table>
         </div>
+        <?php
+        // فروشِ مشترکِ اقساط: هر قسط/پرداختِ بعدیِ تأییدشده تفکیکِ خودش را می‌تواند داشته باشد
+        $__extraPays = ($canDecide && $order['status'] === 'approved' && scr_ready($pdo))
+            ? array_values(array_filter($payments, static fn($p) => $p['kind'] === 'extra' && $p['status'] === 'confirmed')) : [];
+        if ($__extraPays): ?>
+          <div id="pay-splits" class="mb-2">
+            <div class="small fw-bold mb-1" style="color:#6d28d9"><i class="fa-solid fa-people-group"></i> فروشِ مشترکِ اقساط / پرداخت‌های بعدی</div>
+            <?php foreach ($__extraPays as $__ep): ?>
+              <form method="post" class="mb-1">
+                <?= csrf_field() ?><input type="hidden" name="action" value="sales_split_payment"><input type="hidden" name="payment_id" value="<?= (int) $__ep['id'] ?>">
+                <div class="small text-muted">پرداختِ <?= $__ep['paid_at'] ? to_jalali((string) $__ep['paid_at']) : to_jalali((string) $__ep['created_at']) ?></div>
+                <?= scr_editor_html($pdo, $order, '', $__ep) ?>
+                <button class="btn btn-sm py-0" style="background:#6d28d9;color:#fff"><i class="fa-solid fa-floppy-disk"></i> ذخیره‌ی تفکیکِ این پرداخت</button>
+              </form>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
         <?php if ($order['status'] === 'approved' && ($isSeller || $canDecide || $canCollect) && !(($user['role'] ?? '') === 'leader' && !$canDecide)): ?>
           <button class="btn btn-sm btn-success" type="button" data-bs-toggle="collapse" data-bs-target="#payAdd"><i class="fa-solid fa-plus"></i> ثبتِ پرداختِ جدید (قسط / مانده)</button>
           <form method="post" enctype="multipart/form-data" class="collapse border rounded-3 p-3 mt-2" id="payAdd" style="background:#f7fdf9">
