@@ -63,6 +63,14 @@ final class HomeContent
         return is_array($saved) ? self::retire(self::merge(self::defaults(), $saved)) : self::defaults();
     }
 
+    /**
+     * Rows of the old globe rail: they counted the lines drawn on the globe, not world trade. A saved copy of one is
+     * replaced, row by row, with the fact in the same place of the new default rail.
+     */
+    private const RETIRED_RAIL = [
+        'پوشش جهانی|۲۴۳ کشور' => 0, 'مسیرهای دریایی|{sea} مسیر' => 1, 'مسیرهای هوایی باری|{air} مسیر' => 2, 'بنادر و هاب‌ها|{nodes} گره' => 3,
+    ];
+
     /** Old default texts that are no longer true; a saved copy of one is shown with its current wording. */
     private const RETIRED = [
         'شماره تماس، ایمیل و راه‌های ارتباطی فقط در بخش کامل صفحه و برای تجار واردشده نمایش داده می‌شود. در معرفی عمومی و پیشنهادها اجازه درج اطلاعات تماس داده نمی‌شود.'
@@ -71,6 +79,13 @@ final class HomeContent
 
     private static function retire(array $content): array
     {
+        $rail = self::defaults()['rail'];
+        foreach ($content['rail'] ?? [] as $i => $row) {
+            $old = self::RETIRED_RAIL[($row['label'] ?? '') . '|' . ($row['value'] ?? '')] ?? null;
+            if ($old !== null) {
+                $content['rail'][$i] = $rail[$old];
+            }
+        }
         array_walk_recursive($content, static function (&$v): void {
             if (is_string($v) && isset(self::RETIRED[$v])) {
                 $v = self::RETIRED[$v];
@@ -116,10 +131,11 @@ final class HomeContent
                 'hint' => 'بکشید تا بچرخد · دوبار کلیک برای بزرگنمایی · نمایش تصویری مسیرهای تجارت جهانی',
             ],
             'rail' => [
-                ['icon' => 'm-globe', 'label' => 'پوشش جهانی', 'value' => '۲۴۳ کشور'],
-                ['icon' => 'm-ship', 'label' => 'مسیرهای دریایی', 'value' => '{sea} مسیر'],
-                ['icon' => 'm-plane', 'label' => 'مسیرهای هوایی باری', 'value' => '{air} مسیر'],
-                ['icon' => 'm-anchor', 'label' => 'بنادر و هاب‌ها', 'value' => '{nodes} گره'],
+                // Fixed facts about world trade (WTO, UNCTAD Review of Maritime Transport 2025); editable at /admin/home.
+                ['icon' => 'm-globe', 'label' => 'اعضای سازمان تجارت جهانی', 'value' => '۱۶۶ کشور'],
+                ['icon' => 'm-chart', 'label' => 'تجارت کالای جهان در ۲۰۲۴', 'value' => '۲۴٫۴ تریلیون دلار'],
+                ['icon' => 'm-ship', 'label' => 'سهم دریا از حجم تجارت جهان', 'value' => 'بیش از ۸۰٪'],
+                ['icon' => 'm-anchor', 'label' => 'بار دریایی جهان در ۲۰۲۴', 'value' => '۱۲٫۷ میلیارد تن'],
             ],
             'stats_live' => [
                 ['metric' => 'users', 'icon' => 'm-people', 'label' => 'تاجر عضو', 'min' => ''],
