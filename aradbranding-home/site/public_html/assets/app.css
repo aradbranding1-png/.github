@@ -1094,3 +1094,9 @@ html[lang="ru"] body, html[lang="ru"] .th { font-family: var(--font); }
 /* Other languages: Vazirmatn's ss01 turns Latin digits into Persian ones — only Persian pages keep it. */
 html:not([lang="fa"]) body, html:not([lang="fa"]) .th, html:not([lang="fa"]) input, html:not([lang="fa"]) textarea,
 html:not([lang="fa"]) select, html:not([lang="fa"]) button { font-feature-settings: normal; }
+/* Other languages: the browser's own "Choose file / No file chosen" text is wider than Persian, so the picker
+   wraps under the preview on narrow phones instead of widening the page. */
+html:not([lang="fa"]) .image-pick { flex-wrap: wrap; min-width: 0; }
+html:not([lang="fa"]) .image-pick > *, html:not([lang="fa"]) .field, html:not([lang="fa"]) .form .row > * { min-width: 0; }
+html:not([lang="fa"]) input[type=file] { max-width: 100%; min-width: 0; }
+@media (max-width: 480px) { html:not([lang="fa"]) .image-pick > .stack, html:not([lang="fa"]) .image-pick > input[type=file] { flex: 1 1 100%; } }

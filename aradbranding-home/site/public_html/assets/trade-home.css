@@ -648,3 +648,38 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
 html:not([lang="fa"]) .th-h1-sub { white-space: normal; }
 html:not([lang="fa"]) .th-hero-copy { min-width: 0; }
 html:not([lang="fa"]) .th-hero-copy > * { max-width: 100%; }
+/* Long product names in other languages ("Réseau de développement du commerce"): the brand gives way to the buttons,
+   wrapping onto at most two lines instead of pushing «Sign up» off the screen. */
+html:not([lang="fa"]) .th-brand { flex: 0 1 auto; min-width: 0; }
+html:not([lang="fa"]) .th-brand-name { min-width: 0; overflow: hidden; }
+html:not([lang="fa"]) .th-actions { flex-shrink: 0; }
+@media (max-width: 640px) {
+  html:not([lang="fa"]) .th-brand-name { font-size: 12.5px; line-height: 1.25; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+  html:not([lang="fa"]) .th-brand .th-mark { flex: none; }
+}
+@media (min-width: 641px) and (max-width: 1100px) {
+  html:not([lang="fa"]) .th-brand-name { font-size: 14px; }
+}
+@media (max-width: 640px) {
+  html:not([lang="fa"]) .th-head-in { gap: 8px; }
+  html:not([lang="fa"]) .th-brand { gap: 8px; }
+  html:not([lang="fa"]) .th-brand-name { font-size: 11.5px; letter-spacing: -.01em; }
+  html:not([lang="fa"]) .th-actions > .th-btn-gold { padding: 0 11px; font-size: 13px; }
+  html:not([lang="fa"]) .th-actions { gap: 6px; }
+}
+@media (max-width: 600px) {
+  /* The header language menu is hidden on phones (the list in the ☰ menu replaces it); take it out of the flex row
+     so it leaves no gap, exactly like the old «FA» label. */
+  .th-actions > .lang-pick { display: none; }
+  html:not([lang="fa"]) .th-brand-name { max-width: calc(100vw - 252px); }
+}
+/* Longer result-type labels (Возможности, Opportunités…) must not widen the market finder on phones. */
+html:not([lang="fa"]) .th-finder, html:not([lang="fa"]) .th-finder-f, html:not([lang="fa"]) .th-finder-f > * { min-width: 0; }
+@media (max-width: 600px) {
+  html:not([lang="fa"]) .th-seg label span { white-space: normal; text-align: center; font-size: 12px; padding-inline: 4px; gap: 4px; line-height: 1.25; overflow-wrap: anywhere; }
+  html:not([lang="fa"]) .th-seg label span .th-ic { width: 13px; height: 13px; flex: none; }
+}
+html:not([lang="fa"]) .th-discover > *, html:not([lang="fa"]) .th-field select { min-width: 0; max-width: 100%; }
+html:not([lang="fa"]) .th-opps-h { flex-wrap: wrap; row-gap: 6px; }
+html:not([lang="fa"]) .th-opps-h h2, html:not([lang="fa"]) .th-opps li a, html:not([lang="fa"]) .th-opp-t { min-width: 0; }
+html:not([lang="fa"]) .th-opp-t b, html:not([lang="fa"]) .th-opp-t small { overflow-wrap: anywhere; }
