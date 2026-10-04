@@ -85,7 +85,7 @@ function sd_default_metrics(): array
         102 => ['تعداد رایزنی', 'تعداد مذاکره', 'تعداد قرارداد تجارت', 'تعداد انجام عملیات بازرگانی', 'تماس با تاجر', 'ارتباط با تاجر در فضای مجازی'],
         107 => ['شروع مذاکره با مشتری داخلی', 'شروع مذاکره با مشتری خارجی', 'پیگیری مذاکره موجود داخلی', 'پیگیری مذاکره موجود خارجی',
                 'تجارت انجام شده داخلی', 'تجارت انجام شده خارجی', 'ارتباط با تاجران', 'مذاکره مجازی', 'میتینگ خارجی', 'میتینگ B', 'ارتباط با نمایندگان خارجی'],
-        115 => ['تعداد تولید محتوا تجارتخانه', 'تعداد تولید محتوا سایت تاجر', 'تعداد راه‌اندازی سایت', 'تیک', 'نظارت محتوا',
+        115 => ['تعداد تولید محتوا تجارتخانه', 'تعداد تولید محتوا سایت تاجر', 'تعداد راه‌اندازی سایت', 'تیکت', 'نظارت محتوا',
                 'تولید محتوا تجارتخانه معوقه', 'تولید محتوا سایت تاجر معوقه', 'طراحی سایت معوقه'],
         112 => ['میتینگ استخدام', 'میتینگ B', 'پیگیری نماینده خارجی', 'پاسخگویی تیکت', 'تماس با تاجر', 'انتصاب سمت', 'جلسه حضوری برای استخدام'],
         104 => ['تاجر به تامین رسید', 'بار ارسال شده', 'تامین واقعی جدید انجام شده', 'استعلام لجستیک داده شده', 'میتینگ استخدام',
@@ -135,6 +135,19 @@ function sd_c1_cleanup_v3(PDO $pdo): void
     }
 }
 
+/** یک‌بار: غلطِ تایپیِ نامِ شاخص («تیک» ← «تیکت»)؛ عددهای ثبت‌شده دست نمی‌خورند (به id وصل‌اند) */
+function sd_metric_typo_v1(PDO $pdo): void
+{
+    $flag = __DIR__ . '/../storage/.supervisor_daily_typo_v1';
+    if (is_file($flag)) return;
+    try {
+        $pdo->exec("UPDATE team_metrics SET metric_name = 'تیکت' WHERE metric_name = 'تیک'");
+        @file_put_contents($flag, date('c'));
+    } catch (Throwable $e) {
+        error_log('sd_metric_typo_v1: ' . $e->getMessage());
+    }
+}
+
 function sd_seed_metrics(PDO $pdo): void
 {
     $has = $pdo->prepare('SELECT COUNT(*) FROM team_metrics WHERE team_id = ?');
@@ -180,6 +193,7 @@ function sd_metrics(PDO $pdo, int $teamId, bool $activeOnly = true): array
 {
     if (!sd_ready($pdo) || $teamId <= 0) return [];
     sd_c1_cleanup_v3($pdo);
+    sd_metric_typo_v1($pdo);
     $st = $pdo->prepare('SELECT * FROM team_metrics WHERE team_id = ?' . ($activeOnly ? ' AND is_active = 1' : '') . ' ORDER BY sort_order, id');
     $st->execute([$teamId]);
     return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
