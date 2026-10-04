@@ -483,7 +483,7 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
   .tg-stage { --grh: .42; --grw: .43; }
   .tg-card { min-width: 0; padding: 7px 10px; gap: 8px; border-radius: 12px; }
   .tg-card-t b { font-size: 12.5px; }
-  .tg-card-t small { font-size: 10px; }
+  .tg-card-t small { font-size: 10px; max-width: 132px; overflow: hidden; text-overflow: ellipsis; }
   .tg-card .th-flag { width: 22px; height: 14px; }
   .tg-label { font-size: 11px; }
   .tg-label i { width: 24px; height: 24px; background-size: 14px; }

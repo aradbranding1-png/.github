@@ -59,29 +59,8 @@ $marketNote = static function (string $code) use ($marketStat): string {
 };
 $cardMarkets = array_values(array_filter($markets, static fn (array $m): bool => $m['card']));
 $globeMarkets = array_values(array_filter($markets, static fn (array $m): bool => $m['globe']));
-// Every country reached by a route drawn on the globe also gets a flag card (unless the admin already listed it).
-$routeCountries = [
-    ['IQ', 'عراق', 33.0, 43.5, 'مسیر زمینی از ایران'], ['AF', 'افغانستان', 34.0, 66.0, 'مسیر زمینی از ایران'],
-    ['KE', 'کنیا', 0.3, 37.9, 'دریایی + زمینی از ایران'], ['NG', 'نیجریه', 9.1, 8.7, 'دریایی + زمینی از ایران'],
-    ['US', 'آمریکا', 39.5, -98.0, 'مسیر دریایی از آفریقا'], ['CA', 'کانادا', 56.0, -106.0, 'مسیر دریایی از آفریقا'],
-    ['ES', 'اسپانیا', 40.2, -3.7, 'بازار هدف'], ['FR', 'فرانسه', 46.6, 2.4, 'بازار هدف'],
-    ['MA', 'مراکش', 31.8, -7.1, 'بازار هدف'], ['MR', 'موریتانی', 20.3, -10.3, 'بازار هدف'], ['NE', 'نیجر', 17.6, 8.1, 'بازار هدف'],
-    ['MX', 'مکزیک', 23.6, -102.5, 'بازار هدف'], ['PE', 'پرو', -9.2, -75.0, 'بازار هدف'], ['AR', 'آرژانتین', -34.6, -64.0, 'بازار هدف'],
-    ['OM', 'عمان', 21.0, 57.0, 'بازار هدف'], ['SY', 'سوریه', 35.0, 38.5, 'بازار هدف'], ['PK', 'پاکستان', 30.4, 69.3, 'بازار هدف'], ['KZ', 'قزاقستان', 48.0, 67.0, 'بازار هدف'],
-    ['IR', 'ایران', 32.5, 53.7, 'مبدأ مسیرهای تجاری'], ['EG', 'مصر', 26.8, 30.8, 'بازار هدف'], ['LY', 'لیبی', 27.0, 17.0, 'بازار هدف'],
-    ['GH', 'غنا', 7.9, -1.0, 'بازار هدف'], ['TZ', 'تانزانیا', -6.4, 34.9, 'دریایی + زمینی از ایران'], ['ZA', 'آفریقای جنوبی', -28.5, 25.5, 'دریایی + زمینی از ایران'],
-    ['GB', 'انگلستان', 53.5, -1.8, 'بازار هدف'], ['MY', 'مالزی', 4.2, 102.0, 'بازار هدف'], ['AU', 'استرالیا', -25.3, 134.0, 'بازار هدف'],
-    ['KR', 'کره جنوبی', 36.4, 127.9, 'بازار هدف'], ['ID', 'اندونزی', -2.5, 117.9, 'بازار هدف'], ['SG', 'سنگاپور', 1.35, 103.8, 'بازار هدف'],
-];
-if (!I18n::isSource()) {
-    foreach ($routeCountries as &$rc) {
-        $rc[1] = I18n::countryName($rc[0], $rc[1]);
-        $rc[4] = t($rc[4]);
-    }
-    unset($rc);
-}
-$listed = array_column($globeMarkets, 'code');
-$routeCards = array_values(array_filter($routeCountries, static fn (array $c): bool => !in_array($c[0], $listed, true)));
+// Globe cards: the admin's globe markets plus every country reached by a drawn route (shared with sign-in/sign-up).
+$globeCards = \App\Modules\System\GlobeCards::build($globeMarkets, $marketNote);
 
 // Stats strip: real cached totals when the admin switches them on, otherwise the admin's fixed facts.
 $strip = [];
@@ -225,18 +204,7 @@ $h = $home['hero'];
     <div class="tg-labels" aria-hidden="true"></div>
     <?php if ($show['cards']): ?>
     <div class="tg-cards">
-      <?php foreach ($globeMarkets as $m): ?>
-      <a class="tg-card<?= $m['secondary'] ? ' is-secondary' : '' ?>" href="<?= e($marketHref($m['code'])) ?>" data-lat="<?= e($m['lat']) ?>" data-lon="<?= e($m['lon']) ?>" data-name="<?= e($m['name']) ?>" data-note="<?= e($marketNote($m['code'])) ?>">
-        <?= $flagOf($m['code']) ?>
-        <span class="tg-card-t"><b><?= e($m['name']) ?></b><small><?= e($marketNote($m['code'])) ?></small></span>
-      </a>
-      <?php endforeach; ?>
-      <?php foreach ($routeCards as [$code, $name, $lat, $lon, $note]): ?>
-      <a class="tg-card is-secondary is-route" href="<?= e($marketHref($code)) ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= e($note) ?>">
-        <?= $flagOf($code) ?>
-        <span class="tg-card-t"><b><?= e($name) ?></b><small><?= e($note) ?></small></span>
-      </a>
-      <?php endforeach; ?>
+<?= $this->partial('public/_globe_cards', ['cards' => $globeCards, 'href' => $marketHref]) ?>
     </div>
     <?php endif; ?>
     <div class="tg-tip" role="status" hidden></div>

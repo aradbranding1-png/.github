@@ -531,9 +531,10 @@ function init(root) {
     Q.dpr = 2;
   }
   if (tv) document.documentElement.classList.add('tg-lowfx');
-  const SEA_LIST = lite ? SEA_ROUTES.filter((r) => ['cn-eu', 'cn-me', 'in-me'].includes(r.id)) : [...SEA_ROUTES, ...(weak ? AFRICA_SEA.slice(0, 3) : AFRICA_SEA)];
-  const LAND_LIST = lite ? LAND_ROUTES : [...LAND_ROUTES, ...AFRICA_LAND];
-  const AIR_LIST = lite ? [['tehran', 'dubai'], ['dubai', 'delhi'], ['istanbul', 'frankfurt']] : AIR_ROUTES.slice(0, Q.air);
+  // The sign-in page draws the same routes as the home page (its country cards are the same set); only the traffic is calmer.
+  const SEA_LIST = [...SEA_ROUTES, ...(weak ? AFRICA_SEA.slice(0, 3) : AFRICA_SEA)];
+  const LAND_LIST = [...LAND_ROUTES, ...AFRICA_LAND];
+  const AIR_LIST = AIR_ROUTES.slice(0, Q.air);
 
   let renderer;
   try {
@@ -789,7 +790,8 @@ function init(root) {
     hit.userData = { type: 'country', el };
     world.add(hit);
     hitTargets.push(hit);
-    return { el, local: p, w: 0, h: 0, hover: false, priority: el.dataset.priority !== undefined ? +el.dataset.priority || 0 : el.classList.contains('is-home') ? 0 : el.classList.contains('is-secondary') ? 0.6 : 0.3, on: false, alpha: 0 };
+    const home = el.classList.contains('is-home');
+    return { el, local: p, w: 0, h: 0, hover: false, home, priority: el.dataset.priority !== undefined ? +el.dataset.priority || 0 : home ? 0 : el.classList.contains('is-secondary') ? 0.6 : 0.3, on: false, alpha: 0, since: 0, rest: 0 };
   });
   cards.forEach((c) => {
     c.el.addEventListener('pointerenter', () => { c.hover = true; c.el.classList.add('is-hot'); });
@@ -1094,14 +1096,23 @@ function init(root) {
   let pickedAt = 0;
   const overlaps = (a, b, pad) => a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
 
-  function pickCards() {
+  // Turn-taking: the globe turns slowly, so without a limit one country (and its long caption) could hold its spot for
+  // most of a turn. A card stays at most `dwell` ms, then rests while others get the place. Iran (is-home) never rests:
+  // it comes first and stays for as long as it faces the viewer, from a little earlier on the rim than the others.
+  const dwell = () => (W < 720 ? 4500 : 7000);
+  const restFor = () => (W < 720 ? 6500 : 5000);
+
+  function pickCards(now) {
     // A card that is still fading out keeps its space, so a newcomer never appears on top of it.
     const boxes = obstacles.concat(cards.filter((c) => !c.on && c.alpha > 0.08).map((c) => ({ x: c.px, y: c.py, w: c.w, h: c.h })));
     const anchors = [];
-    const score = (c) => (c.hover ? 10 : 0) + c.f + (c.on ? 0.15 : 0) - c.priority * 0.15;
-    cards.forEach((c) => { c.next = false; });
+    const score = (c) => (c.hover ? 10 : 0) + (c.home ? 0.6 : 0) + c.f + (c.on ? 0.15 : 0) - c.priority * 0.15;
+    cards.forEach((c) => {
+      c.next = false;
+      if (c.on && !c.hover && !c.home && now - c.since > dwell()) { c.rest = now + restFor(); }
+    });
     let n = 0;
-    cards.filter((c) => c.w && (c.f > 0.32 || c.hover)).sort((a, b) => score(b) - score(a)).forEach((c) => {
+    cards.filter((c) => c.w && (c.f > (c.home ? 0.2 : 0.32) || c.hover) && (c.hover || now >= c.rest)).sort((a, b) => score(b) - score(a)).forEach((c) => {
       if (n >= maxCards() && !c.hover) return;
       const box = { x: c.px, y: c.py, w: c.w, h: c.h };
       if (!c.hover && boxes.some((b) => overlaps(box, b, 10))) return;
@@ -1111,7 +1122,10 @@ function init(root) {
       anchors.push({ x: c.sx, y: c.sy });
       n++;
     });
-    cards.forEach((c) => { c.on = c.next; });
+    cards.forEach((c) => {
+      if (c.next && !c.on) c.since = now;
+      c.on = c.next;
+    });
   }
 
   function updateOverlays() {
@@ -1139,7 +1153,7 @@ function init(root) {
     const hovering = cards.some((c) => c.hover && !c.on);
     if (now - pickedAt > 300 || hovering) {
       pickedAt = now;
-      pickCards();
+      pickCards(now);
     }
     // Between choices the globe keeps turning: if two shown cards drift into each other, the weaker one gives way now.
     const kept = [];

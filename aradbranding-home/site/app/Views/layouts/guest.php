@@ -6,13 +6,15 @@
  * @var string $content @var string $title
  */
 $isRegister = str_contains($content, 'action="/register"');
-$cards = [
-    ['IR', 'ایران', 32.5, 53.7], ['AE', 'امارات', 24.0, 54.5], ['IN', 'هند', 22.0, 78.5],
-    ['CN', 'چین', 33.5, 106.0], ['TR', 'ترکیه', 39.0, 35.0],
-    ['IQ', 'عراق', 33.0, 43.5, true], ['AF', 'افغانستان', 34.0, 66.0, true],
-];
+// Same globe cards as the home page: the admin's globe markets plus every country reached by a drawn route.
+$cards = \App\Modules\System\GlobeCards::build(
+    \App\Modules\System\GlobeCards::globeMarkets((new \App\Modules\System\HomeContent(\App\Core\Container::instance()->get(\App\Core\Settings\Settings::class)))->get()),
+    static fn (string $code): string => t('بازار هدف')
+);
 foreach ($cards as &$card) {
-    $card[1] = \App\Core\I18n\I18n::countryName($card[0], $card[1]);
+    if ($card['note'] === t('مسیر زمینی از ایران')) {
+        $card['class'] .= ' is-land';
+    }
 }
 unset($card);
 ?>
@@ -40,12 +42,7 @@ unset($card);
     <svg class="tg-lines"></svg>
     <div class="tg-labels"></div>
     <div class="tg-cards">
-      <?php foreach ($cards as $card): [$code, $name, $lat, $lon] = $card; $secondary = !empty($card[4]); ?>
-      <span class="tg-card<?= $code === 'IR' ? ' is-home' : '' ?><?= $secondary ? ' is-secondary is-land' : '' ?>" data-lat="<?= e($lat) ?>" data-lon="<?= e($lon) ?>" data-name="<?= e($name) ?>" data-note="<?= $secondary ? te('مسیر حمل زمینی از ایران') : te('بازار هدف') ?>">
-        <svg class="th-flag" viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-<?= e($code) ?>"/></svg>
-        <span class="tg-card-t"><b><?= e($name) ?></b></span>
-      </span>
-      <?php endforeach; ?>
+<?= $this->partial('public/_globe_cards', ['cards' => $cards]) ?>
     </div>
     <div class="tg-tip" hidden></div>
   </div>
