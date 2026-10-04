@@ -242,8 +242,9 @@ function quote_doc_render(array $inv, array $quote, array $items, array $o = [])
     <div class="financial-wrap">
       <table class="financial-table">
         <tr><td>مجموع خدمات</td><td><?= format_toman((int) $quote['subtotal']) ?></td></tr>
-        <tr><td>مبلغ تخفیف (<?= to_persian_digits((string) (float) $quote['discount_percent']) ?>٪)</td><td>- <?= format_toman((int) $quote['discount_amount']) ?></td></tr>
-        <tr><td>مبلغ خدماتِ رایگان</td><td>- <?= format_toman((int) $quote['free_amount']) ?></td></tr>
+        <?php // تخفیف و خدماتِ رایگان فقط وقتی ثبت شده باشند نمایش داده می‌شوند ?>
+        <?php if ((int) $quote['discount_amount'] > 0): ?><tr><td>مبلغ تخفیف (<?= to_persian_digits((string) (float) $quote['discount_percent']) ?>٪)</td><td>- <?= format_toman((int) $quote['discount_amount']) ?></td></tr><?php endif; ?>
+        <?php if ((int) $quote['free_amount'] > 0): ?><tr><td>مبلغ خدماتِ رایگان</td><td>- <?= format_toman((int) $quote['free_amount']) ?></td></tr><?php endif; ?>
         <tr><td>مبلغ قبل از مالیات</td><td><?= format_toman((int) $quote['taxable_amount']) ?></td></tr>
         <tr><td>مبلغ مالیات (<?= to_persian_digits((string) (float) $quote['tax_percent']) ?> درصد)</td><td>+ <?= format_toman((int) $quote['tax_amount']) ?></td></tr>
         <tr class="total"><td>مبلغ نهایی</td><td><?= format_toman((int) $quote['total_amount']) ?></td></tr>
