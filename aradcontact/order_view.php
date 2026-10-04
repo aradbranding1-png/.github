@@ -982,10 +982,19 @@ require_once __DIR__ . '/includes/layout_top.php';
         <?php endif; ?>
       </div>
 
+      <?php if ((string) ($order['import_ref'] ?? '') !== ''): ?>
+      <!-- واریزیِ قبل از سامانه (ورود از اکسل): تیکت و استارز ندارد -->
+      <div class="card p-3 mb-3" style="border-color:#e7e2d3;background:#fafaf9">
+        <div class="fw-bold mb-1"><i class="fa-solid fa-file-import"></i> واریزیِ قبل از سامانه (ورود از اکسل)</div>
+        <div class="small text-muted">شماره کار <bdi dir="ltr"><?= e(to_persian_digits((string) $order['import_ref'])) ?></bdi> —
+          برای این سفارش <b>تیکتِ آراد برندینگ و شارژِ استارز ارسال نمی‌شود</b>. سهم عملکرد:
+          <?= (int) ($order['import_perf'] ?? 0) === 1 ? '<span class="text-success">طبقِ قانونِ فعلی محاسبه می‌شود</span>' : '<span class="text-secondary">محاسبه نمی‌شود</span>' ?>.</div>
+      </div>
+      <?php endif; ?>
       <!-- سامانه توسعه تجارت: شارژِ استارز -->
       <?php require_once __DIR__ . '/includes/trade_stars.php';
         $tsS = ts_settings($pdo);
-        $tsTargets = ts_ready($pdo) ? ts_order_targets($pdo, $tsS, $order) : [];
+        $tsTargets = ts_ready($pdo) && (string) ($order['import_ref'] ?? '') === '' ? ts_order_targets($pdo, $tsS, $order) : [];
         $tsRows = $tsTargets ? ts_credits_for_order($pdo, $orderId) : [];
         if ($tsTargets): ?>
       <div class="card p-3 mb-3" id="ts" style="border-color:#fde68a">
@@ -1020,7 +1029,7 @@ require_once __DIR__ . '/includes/layout_top.php';
       <?php endif; ?>
 
       <!-- تیکت‌های آراد برندینگ (یکی برای هر خدمت) -->
-      <?php if ($abtOk && ($abtCan || $abtTickets)):
+      <?php if ($abtOk && ($abtCan || $abtTickets) && !abt_order_blocked($order)):
         $abtUnsent = array_values(array_filter($abtTickets, static fn($t) => !in_array($t['status'], ['sent', 'manual', 'bundled', 'deleted'], true))); ?>
       <div class="card p-3 mb-3" id="abt" style="border-color:#bfdbfe">
         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">

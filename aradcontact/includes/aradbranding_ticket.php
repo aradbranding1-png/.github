@@ -551,9 +551,15 @@ function abt_order_items(PDO $pdo, int $orderId): array
  * (اگر خدمت تنظیمِ اختصاصی نداشت، متنِ عمومی). تیکتِ ارسال‌شده دست نمی‌خورد.
  * $force = true → متن از قالب دوباره ساخته می‌شود (فقط برای $onlyTicketId اگر داده شود).
  */
+/** سفارشِ واردشده از اکسلِ واریزی‌های قبل از سامانه (admin_sales_import.php) ← تیکت ندارد */
+function abt_order_blocked(array $order): bool
+{
+    return (string) ($order['import_ref'] ?? '') !== '';
+}
+
 function abt_prepare_items(PDO $pdo, array $order, int $userId, bool $force = false, ?int $onlyTicketId = null): array
 {
-    if (!abt_ready($pdo)) return [];
+    if (!abt_ready($pdo) || abt_order_blocked($order)) return [];
     $s = abt_settings($pdo);
     $existing = [];
     foreach (abt_tickets_for_order($pdo, (int) $order['id']) as $t) {
@@ -870,6 +876,9 @@ function abt_send(PDO $pdo, array $order, array $ticket, int $userId): array
 
 function abt_send_unlocked(PDO $pdo, array $order, array $ticket, int $userId): array
 {
+    if (abt_order_blocked($order)) {
+        return ['ok' => false, 'message' => 'این سفارش از اکسلِ واریزی‌های قبل از سامانه وارد شده و برایش تیکت ارسال نمی‌شود.'];
+    }
     if (in_array($ticket['status'], ['sent', 'manual', 'bundled'], true)) {
         return ['ok' => true, 'message' => 'تیکتِ این سفارش قبلاً ارسال شده است.'];
     }
@@ -1420,7 +1429,7 @@ function abt_on_order_approved(PDO $pdo, int $orderId, int $userId): array
         return ['ok' => null, 'message' => ''];
     }
     $order = orders_get($pdo, $orderId);
-    if (!$order || $order['status'] !== 'approved') {
+    if (!$order || $order['status'] !== 'approved' || abt_order_blocked($order)) {
         return ['ok' => null, 'message' => ''];
     }
     $tickets = abt_prepare_items($pdo, $order, $userId, false);

@@ -323,7 +323,7 @@ function ts_sync_order(PDO $pdo, int $orderId, int $userId = 0): array
     try { $locked = (int) $pdo->query('SELECT GET_LOCK(' . $pdo->quote($lock) . ', 30)')->fetchColumn() === 1; } catch (Throwable $e) {}
     try {
         $order = orders_get($pdo, $orderId);
-        if (!$order || $order['status'] !== 'approved') return ['ok' => null, 'message' => ''];
+        if (!$order || $order['status'] !== 'approved' || (string) ($order['import_ref'] ?? '') !== '') return ['ok' => null, 'message' => ''];
         $msgs = [];
         $okAll = true;
         $any = false;

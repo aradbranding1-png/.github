@@ -883,6 +883,14 @@ function ps_sync_order(PDO $pdo, int $orderId, int $byUser = 0): void
         $o = $pdo->prepare('SELECT status FROM sales_orders WHERE id = ?');
         $o->execute([$orderId]);
         $ostatus = (string) $o->fetchColumn();
+        // واریزیِ قبل از سامانه که هنگامِ ورود «سهم عملکرد: خیر» خورده ← هیچ‌وقت محاسبه نمی‌شود
+        // (sales_orders.import_ref / import_perf — includes/sales_import.php)
+        try {
+            $ip = $pdo->prepare('SELECT import_ref, import_perf FROM sales_orders WHERE id = ?');
+            $ip->execute([$orderId]);
+            $ip = $ip->fetch(PDO::FETCH_ASSOC);
+            if ($ip && (string) $ip['import_ref'] !== '' && (int) $ip['import_perf'] !== 1) $ostatus = 'imported_no_perf';
+        } catch (Throwable $e) {} // ستون هنوز ساخته نشده
         $pays = $pdo->prepare("SELECT p.*, COALESCE(p.paid_at, DATE(p.decided_at)) AS pay_date FROM sales_order_payments p WHERE p.order_id = ? AND p.kind NOT IN ('credit','transfer')");
         $pays->execute([$orderId]);
         $valid = [];

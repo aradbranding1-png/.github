@@ -47,6 +47,8 @@ try { $pdo->query('SELECT is_legacy FROM sales_orders LIMIT 0'); $hasLegacy = tr
 $where = ["o.status = 'approved'"];
 $params = [];
 if ($hasLegacy) $where[] = 'COALESCE(o.is_legacy, 0) = 0';
+// واریزی‌های قبل از سامانه (ورود از اکسل) قرارداد/تیکت ندارند
+try { $pdo->query('SELECT import_ref FROM sales_orders LIMIT 0'); $where[] = 'o.import_ref IS NULL'; } catch (Throwable $e) {}
 if ($fromG) { $where[] = 'o.decided_at >= ?'; $params[] = $fromG . ' 00:00:00'; }
 if ($toG) { $where[] = 'o.decided_at <= ?'; $params[] = $toG . ' 23:59:59'; }
 if ($q !== '') {

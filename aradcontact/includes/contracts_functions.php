@@ -1738,6 +1738,9 @@ function ctr_ticket_already_sent(PDO $pdo, array $contract, array $docs, string 
 function ctr_send_ticket_locked(PDO $pdo, array $contract, array $docs, array $links, string $message, string $department, int $userId,
                                 array $orderLike, string $subject, ?string $attachments, string $serviceTitle, string $now): array
 {
+    if ((string) ($orderLike['import_ref'] ?? '') !== '') {
+        return ['ok' => false, 'message' => 'این سفارش از اکسلِ واریزی‌های قبل از سامانه وارد شده و برایش تیکت ارسال نمی‌شود.'];
+    }
     try {
         // تیکتِ ارسال‌نشده‌ی قبلیِ همین قرارداد دوباره استفاده می‌شود (تیکتِ تکراری ساخته نمی‌شود)
         $ex = $pdo->prepare("SELECT id FROM aradbranding_tickets WHERE item_id IS NULL AND order_id = ? AND service_title = ? AND status IN ('queued','failed','skipped') ORDER BY id DESC");

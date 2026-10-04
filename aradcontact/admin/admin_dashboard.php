@@ -58,6 +58,7 @@ $sections = [
             ['perm' => 'finance_orders_view', 'href' => 'admin_orders.php?view=receivables', 'icon' => 'fa-hand-holding-dollar', 'label' => 'مطالبات، بدهکاران و اقساط', 'badge' => (int) $recvSumDash['customers'], 'g' => '#5c1420,#33090f'],
             ['perm' => 'finance_orders_view', 'href' => 'admin_orders.php?view=payments', 'icon' => 'fa-money-bill-transfer', 'label' => 'پرداخت‌های در انتظار تأیید', 'badge' => $pendingPaymentsCnt, 'g' => '#5c4a14,#332a0b'],
             ['perm' => 'finance_orders_view', 'href' => 'admin_orders.php?view=report', 'icon' => 'fa-chart-column', 'label' => 'گزارش فروش', 'g' => '#164a30,#0b2b1c'],
+            ['perm' => 'finance_orders_decide', 'href' => 'admin_sales_import.php', 'icon' => 'fa-file-import', 'label' => 'ورودِ واریزی‌های قبل از سامانه (اکسل)', 'g' => '#2f4a16,#1a2b0b'],
             ['perm' => 'finance_settings', 'href' => 'admin_financial_settings.php', 'icon' => 'fa-percent', 'label' => 'تنظیمات مالی (مالیات)', 'g' => '#5c4a14,#332a0b'],
             ['perm' => 'finance_settings', 'href' => 'admin_invoice_settings.php', 'icon' => 'fa-file-pdf', 'label' => 'تنظیمات فاکتور و PDF', 'g' => '#4a3410,#2b1e09'],
             ['perm' => 'finance_settings', 'href' => 'admin_contract_template.php', 'icon' => 'fa-file-contract', 'label' => 'قالب قرارداد', 'g' => '#3b2a4a,#1f1528'],

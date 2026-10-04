@@ -939,6 +939,7 @@ if (!function_exists('perm_page_map')) {
         $map['admin_contract_template.php'] = ['finance_settings'];
         $map['admin_aradbranding_ticket.php'] = ['finance_settings'];
         $map['admin_aradbranding_send.php'] = ['finance_orders_decide', 'finance_settings'];
+        $map['admin_sales_import.php']      = ['finance_orders_decide'];
         $map['customer_credit.php']       = ['finance_orders_decide'];
         $map['admin_error_log.php']       = ['admin_system_update'];
         return $map;
