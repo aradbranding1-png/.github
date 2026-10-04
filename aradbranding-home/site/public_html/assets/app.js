@@ -515,7 +515,7 @@
       box.setAttribute('role', 'dialog');
       box.setAttribute('aria-label', T('نصب اپلیکیشن سامانه توسعه تجارت'));
       box.innerHTML = '<button class="pwa-x" type="button" aria-label="' + T('بستن') + '">×</button>' +
-        '<div class="pwa-head"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="44" height="44"><div><b>' + T('اپلیکیشن سامانه توسعه تجارت') + '</b><small>' + T('نصب رایگان، بدون نیاز به فروشگاه برنامه') + '</small></div></div>' +
+        '<div class="pwa-head"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="44" height="44"><div><b>' + T('اپلیکیشن سامانه توسعه تجارت') + '</b><small>' + T('نصب رایگان، بدون نیاز به فروشگاه برنامه') + '</small></div></div>' +
         steps +
         '<div class="pwa-actions">' + (deferred ? '<button class="pwa-btn" type="button" data-pwa="install">' + T('نصب اپلیکیشن') + '</button>' : '<button class="pwa-btn" type="button" data-pwa="ok">' + T('متوجه شدم') + '</button>') +
         '<button class="pwa-later" type="button" data-pwa="later">' + T('بعداً') + '</button></div>';

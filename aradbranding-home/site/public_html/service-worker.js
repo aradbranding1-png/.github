@@ -3,7 +3,7 @@
  * - Page navigations: always network; an offline page only when the network is down.
  * - Nothing private is ever cached: no HTML, no API, no POST, no wallet/letters/admin data.
  */
-const VERSION = 'sadt-v5';
+const VERSION = 'sadt-v6';
 const OFFLINE = '/offline.html';
 const PRECACHE = [OFFLINE, '/icons/icon-192.png'];
 

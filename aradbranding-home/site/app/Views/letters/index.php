@@ -54,7 +54,7 @@ $url = static fn (string $folder, string $cat): string => '/letters?folder=' . $
           <?php foreach ($announcements as $a): $new = (int) $a['id'] > $lastSeen; ?>
             <li class="mail-row<?= $new ? ' unread' : '' ?>">
               <a href="/letters/official/<?= e($a['uid']) ?>">
-                <span class="avatar org-avatar has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
+                <span class="avatar org-avatar has-logo"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="48" height="48" decoding="async"></span>
                 <span class="mail-main">
                   <span class="mail-top"><span class="mail-name"><?= e($orgName) ?> <span class="chip chip-gold"><?= te('رسمی') ?></span></span><span class="mail-time"><?= e(fa_date($a['published_at'])) ?></span></span>
                   <span class="mail-subject"><?= e($a['subject']) ?></span>
@@ -81,7 +81,7 @@ $url = static fn (string $folder, string $cat): string => '/letters?folder=' . $
               $av = !$official && $peer ? media($peer['avatar_path']) : null; ?>
             <li class="mail-row<?= $unread ? ' unread' : '' ?>">
               <a href="/letters/<?= e($r['uid']) ?>">
-                <?php if ($official): ?><span class="avatar org-avatar has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
+                <?php if ($official): ?><span class="avatar org-avatar has-logo"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="48" height="48" decoding="async"></span>
                 <?php elseif ($av): ?><img class="avatar" src="<?= e($av) ?>" alt="" loading="lazy">
                 <?php else: ?><span class="avatar"><?= e($peer ? initials($peer['first_name'], $peer['last_name']) : '?') ?></span><?php endif; ?>
                 <span class="mail-main">

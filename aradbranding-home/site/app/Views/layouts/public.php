@@ -40,7 +40,7 @@ $brandLang = isset(\App\Core\I18n\I18n::LOCALES[$page['lang_code']]) ? (string) 
 <?= $this->partial('partials/icons') ?>
 <header class="pub-top">
   <a class="brand" href="/" dir="<?= e(\App\Core\I18n\I18n::LOCALES[$brandLang]['dir']) ?>" lang="<?= e($brandLang) ?>">
-    <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
+    <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="48" height="48" decoding="async"></span>
     <span class="brand-name"><?= e(\App\Core\I18n\I18n::lookup('سامانه توسعه تجارت', $brandLang)) ?></span>
   </a>
   <div class="form-actions">

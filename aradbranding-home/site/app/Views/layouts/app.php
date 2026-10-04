@@ -106,7 +106,7 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
 <div class="app-shell">
   <aside class="sidebar" aria-label="<?= te('منوی اصلی') ?>">
     <a class="brand" href="/dashboard">
-      <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
+      <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="48" height="48" decoding="async"></span>
       <span class="brand-name"><?= te('آراد برندینگ') ?><small><?= te('سامانه توسعه تجارت') ?></small></span>
     </a>
     <div class="side-scroll"><?= $renderNav() ?></div>
@@ -119,7 +119,7 @@ $avatar = static function (string $cls) use ($avatarUrl, $user): string {
         <summary class="icon-btn" aria-label="<?= te('منو') ?>"><svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><?php if ($unreadPrivate > 0): ?><i class="dot-badge" aria-hidden="true"></i><?php endif; ?></summary>
         <div class="drawer-panel">
           <div class="drawer-head">
-            <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
+            <span class="brand-mark has-logo"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="48" height="48" decoding="async"></span>
             <span class="brand-name"><?= te('آراد برندینگ') ?><small><?= e($fullName) ?></small></span>
             <button class="drawer-close" type="button" aria-label="<?= te('بستن منو') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           </div>

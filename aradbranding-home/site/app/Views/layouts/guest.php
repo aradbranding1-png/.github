@@ -43,7 +43,7 @@ $cards = \App\Modules\System\GlobeCards::build(\App\Modules\System\GlobeCards::g
 
 <header class="auth-top">
   <a class="auth-brand" href="/" aria-label="<?= te('سامانه توسعه تجارت · صفحه اصلی') ?>">
-    <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
+    <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="48" height="48" decoding="async"></span>
     <span class="th-brand-name"><?= te('سامانه توسعه تجارت') ?><small><?= te('شبکه بین‌المللی تجار') ?></small></span>
   </a>
   <?= $this->partial('partials/lang_switch', ['variant' => 'auth']) ?>
@@ -53,7 +53,7 @@ $cards = \App\Modules\System\GlobeCards::build(\App\Modules\System\GlobeCards::g
 <main class="auth-main">
   <div class="auth-card" id="auth-card">
     <div class="auth-card-brand">
-      <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=4" alt="" width="48" height="48" decoding="async"></span>
+      <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="48" height="48" decoding="async"></span>
       <span class="th-brand-name"><?= te('سامانه توسعه تجارت') ?><small><?= te('شبکه بین‌المللی تجار') ?></small></span>
     </div>
     <?= $this->partial('partials/flash', ['flashes' => $flashes ?? []]) ?>
