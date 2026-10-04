@@ -69,9 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hideSender = $canHideSender && isset($_POST['show_sender_present'])
             ? empty($_POST['show_sender_name'])
             : automation_unit_hides_sender_by_default($senderPos['unit_title'] ?? null);
-        $letterNumber = trim((string) ($_POST['letter_number'] ?? ''));
+        // شماره‌ی نامه فقط عدد است (بدونِ حروفِ فارسی/انگلیسی)؛ خالی ← شماره‌ی بعدیِ دبیرخانه
+        $letterNumber = preg_replace('/\D+/', '', normalize_digits(trim((string) ($_POST['letter_number'] ?? ''))));
         if ($letterNumber === '') {
-            $letterNumber = 'L-' . date('Ymd') . '-' . str_pad((string) random_int(1, 9999), 4, '0', STR_PAD_LEFT);
+            $letterNumber = (string) ((int) $pdo->query("SELECT COALESCE(MAX(CAST(letter_number AS UNSIGNED)), 0) FROM letters WHERE letter_number REGEXP '^[0-9]+$'")->fetchColumn() + 1);
         }
 
         $payload = json_decode((string) ($_POST['recipients_payload'] ?? '[]'), true);
@@ -322,8 +323,9 @@ require_once __DIR__ . '/includes/layout_top.php';
       </script>
       <?php endif; ?>
       <div class="col-md-4">
-        <label class="form-label">شماره نامه (خالی=خودکار)</label>
-        <input type="text" name="letter_number" class="form-control" dir="ltr" value="<?= e($__v('letter_number')) ?>">
+        <label class="form-label">شماره نامه (فقط عدد — خالی=خودکار)</label>
+        <input type="text" name="letter_number" class="form-control" dir="ltr" inputmode="numeric" placeholder="خودکار" value="<?= e(preg_match('/^\d+$/', $__ln = normalize_digits(trim((string) $__v('letter_number')))) ? $__ln : '') ?>"
+               oninput="this.value = this.value.replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); }).replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }).replace(/\D+/g, '');">
       </div>
       <div class="col-md-4">
         <label class="form-label">نوع نامه</label>
