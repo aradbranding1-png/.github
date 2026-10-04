@@ -1100,3 +1100,37 @@ html:not([lang="fa"]) .image-pick { flex-wrap: wrap; min-width: 0; }
 html:not([lang="fa"]) .image-pick > *, html:not([lang="fa"]) .field, html:not([lang="fa"]) .form .row > * { min-width: 0; }
 html:not([lang="fa"]) input[type=file] { max-width: 100%; min-width: 0; }
 @media (max-width: 480px) { html:not([lang="fa"]) .image-pick > .stack, html:not([lang="fa"]) .image-pick > input[type=file] { flex: 1 1 100%; } }
+
+/* Public business page (/p/…): dark petrol-blue accent in place of champagne gold — buttons, frames, links,
+   section titles and the verified seal. The site logo in the top bar keeps its colours. */
+.pub-teal {
+  --gold: #5AAFC4; --gold-2: #2F8BA3; --rose: #3E97AE; --gold-ink: #FFFFFF; --gold-soft: rgba(90, 175, 196, .12);
+  --foil: linear-gradient(135deg, #2C86A0 0%, #1D6C83 42%, #155A6E 72%, #104958 100%);
+  --edge: linear-gradient(90deg, transparent, rgba(90, 175, 196, .7), rgba(29, 108, 131, .55), transparent);
+  --petrol-glow: rgba(29, 108, 131, .75); --petrol-tint: rgba(29, 108, 131, .14); --seal: #2C86A0;
+}
+:root[data-theme="light"] .pub-teal {
+  --gold: #155A6E; --gold-2: #104958; --rose: #1D6C83; --gold-soft: rgba(21, 90, 110, .08);
+  --foil: linear-gradient(135deg, #1F7088 0%, #175F75 42%, #114D5F 72%, #0C3D4B 100%);
+  --edge: linear-gradient(90deg, transparent, rgba(21, 90, 110, .5), rgba(16, 73, 88, .4), transparent);
+  --petrol-glow: rgba(16, 73, 88, .55); --petrol-tint: rgba(21, 90, 110, .08); --seal: #175F75;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .pub-teal {
+    --gold: #155A6E; --gold-2: #104958; --rose: #1D6C83; --gold-soft: rgba(21, 90, 110, .08);
+    --foil: linear-gradient(135deg, #1F7088 0%, #175F75 42%, #114D5F 72%, #0C3D4B 100%);
+    --edge: linear-gradient(90deg, transparent, rgba(21, 90, 110, .5), rgba(16, 73, 88, .4), transparent);
+    --petrol-glow: rgba(16, 73, 88, .55); --petrol-tint: rgba(21, 90, 110, .08); --seal: #175F75;
+  }
+}
+.pub-teal::before { background: radial-gradient(1200px 600px at 100% -10%, var(--petrol-tint), transparent 60%); }
+.pub-teal ::selection { background: var(--petrol-tint); }
+.pub-teal .btn { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 8px 22px -12px var(--petrol-glow); }
+.pub-teal .btn:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 12px 28px -12px var(--petrol-glow); }
+.pub-teal .btn-ghost { box-shadow: inset 0 1px 0 0 transparent, inset 0 0 0 1px var(--line-strong); }
+.pub-teal .btn-ghost:hover { box-shadow: inset 0 0 0 1px var(--gold); }
+.pub-teal .pub-locked { background: radial-gradient(500px 200px at 50% 0%, var(--petrol-tint), transparent 70%), var(--surface); }
+.verified-seal { display: inline-block; width: .72em; height: .72em; margin-inline-start: .28em; vertical-align: .02em; }
+.verified-seal svg { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 3px 6px var(--petrol-glow, rgba(0, 0, 0, .3))); }
+.verified-seal .vs-bg { fill: var(--seal, var(--gold-2)); }
+.verified-seal .vs-tick { fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }

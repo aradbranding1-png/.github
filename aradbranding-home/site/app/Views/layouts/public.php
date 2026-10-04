@@ -36,7 +36,7 @@ $brandLang = isset(\App\Core\I18n\I18n::LOCALES[$page['lang_code']]) ? (string) 
 <meta name="twitter:card" content="<?= $image ? 'summary_large_image' : 'summary' ?>">
 <script type="application/ld+json"><?= json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
 </head>
-<body>
+<body class="pub-teal">
 <?= $this->partial('partials/icons') ?>
 <header class="pub-top">
   <a class="brand" href="/" dir="<?= e(\App\Core\I18n\I18n::LOCALES[$brandLang]['dir']) ?>" lang="<?= e($brandLang) ?>">

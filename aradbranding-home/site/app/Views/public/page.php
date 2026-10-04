@@ -12,11 +12,10 @@ $countryName = $page['lang_code'] === 'fa' ? $page['country_fa'] : $page['countr
 
   <section class="pub-card">
     <div class="pub-avatar"><?php if ($logo): ?><img src="<?= e($logo) ?>" alt="<?= e($name) ?>" width="112" height="112"><?php else: ?><div aria-hidden="true"><?= e(mb_substr($name, 0, 1)) ?></div><?php endif; ?></div>
-    <h1 class="pub-name"><?= e($name) ?></h1>
+    <h1 class="pub-name"><?= e($name) ?><?php if ($page['verified']): ?><span class="verified-seal" role="img" title="<?= e($labels['verified']) ?>" aria-label="<?= e($labels['verified']) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="vs-bg" d="M12.00 0.80Q14.29 3.47 17.60 2.30Q18.25 5.75 21.70 6.40Q20.53 9.71 23.20 12.00Q20.53 14.29 21.70 17.60Q18.25 18.25 17.60 21.70Q14.29 20.53 12.00 23.20Q9.71 20.53 6.40 21.70Q5.75 18.25 2.30 17.60Q3.47 14.29 0.80 12.00Q3.47 9.71 2.30 6.40Q5.75 5.75 6.40 2.30Q9.71 3.47 12.00 0.80Z"/><path class="vs-tick" d="M7.4 12.3l3.1 3.1 6.1-6.4"/></svg></span><?php endif; ?></h1>
     <?php if ($page['company_name'] && $page['company_name'] !== $page['title']): ?><p class="pub-title"><?= e($page['title']) ?></p><?php endif; ?>
     <div class="pub-meta">
       <span class="chip"><span class="flag" aria-hidden="true"><?= flag($page['country_code']) ?></span><?= e($countryName) ?></span>
-      <?php if ($page['verified']): ?><span class="chip chip-gold"><svg class="icon"><use href="#i-check"/></svg><?= e($labels['verified']) ?></span><?php endif; ?>
       <?php if ($isOwner): ?><a class="chip chip-gold" href="/pages" lang="fa"><?= e($labels['edit']) ?></a><?php endif; ?>
     </div>
     <?php if ($viewer && !$isOwner): ?>
