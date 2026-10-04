@@ -196,7 +196,9 @@ require_once __DIR__ . '/../includes/layout_top.php';
             <td><?= e((string) ($g['name'] ?? '')) ?><div class="text-muted" dir="ltr" style="font-size:11px"><?= e(to_persian_digits((string) ($g['mobile'] ?? ''))) ?></div>
               <?php if (($g['plan'] ?? '') !== ''): ?><div class="text-muted" style="font-size:11px"><?= e($g['plan']) ?><?= ($g['kind'] ?? '') !== '' ? ' — ' . e($g['kind']) : '' ?></div><?php endif; ?></td>
             <td class="text-nowrap fw-bold"><?= $money($g['amount'] ?? 0) ?></td>
-            <td class="agents"><?php foreach ($g['agents'] as $a): ?><span class="<?= $a['user_id'] ? '' : 'text-danger' ?>"><?= e($a['name']) ?> <b><?= to_persian_digits((string) round($a['pct'], 2)) ?>٪</b><?php if (count($g['agents']) > 1 && isset($a['amount'])): ?> <span class="border-0 p-0 text-muted"><?= $money($a['amount']) ?></span><?php endif; ?></span><?php endforeach; ?></td>
+            <td class="agents"><?php foreach ($g['agents'] as $a): $__sh = $a['share'] ?? true; ?><span class="<?= $a['user_id'] ? '' : 'text-danger' ?>" style="<?= $__sh ? '' : 'background:#f5f5f4;color:#78716c' ?>"<?= $__sh ? '' : ' title="در اکسل «بررسی» خورده و جمعِ بقیه ۱۰۰٪ است ← فقط ثبت‌کننده، بدونِ سهم"' ?>><?= e($a['name']) ?>
+              <?php if ($__sh): ?><b><?= to_persian_digits((string) round($a['pct'], 2)) ?>٪</b><?php if (count($g['agents']) > 1 && isset($a['amount'])): ?> <span class="border-0 p-0 text-muted"><?= $money($a['amount']) ?></span><?php endif; ?>
+              <?php else: ?><small>(ثبت‌کننده — بدونِ سهم)</small><?php endif; ?></span><?php endforeach; ?></td>
             <td class="small"><?php if (!empty($g['customer'])): ?><a href="../customer_view.php?id=<?= (int) $g['customer']['id'] ?>" target="_blank">موجود: <?= e((string) $g['customer']['full_name']) ?></a><?php elseif ($g['ref'] !== ''): ?><span class="text-primary">ساخته می‌شود</span><?php endif; ?></td>
             <td class="small">
               <?php if (!empty($g['exists'])): ?><a href="../order_view.php?id=<?= (int) $g['exists'] ?>" target="_blank">ثبت شده (سفارش #<?= to_persian_digits((string) $g['exists']) ?>)</a>

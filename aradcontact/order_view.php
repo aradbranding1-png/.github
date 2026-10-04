@@ -896,9 +896,10 @@ require_once __DIR__ . '/includes/layout_top.php';
     <div class="col-lg-5">
       <?php $kyc = kyc_get($pdo, (int) $order['customer_id']); ?>
       <div class="card p-3 mb-3" style="border-color:<?= $kyc['complete'] ? '#bbf7d0' : '#fde68a' ?>">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="fw-bold mb-0"><i class="fa-solid fa-id-card text-info"></i> مدارکِ مشتری</h6>
-          <?= $kyc['complete'] ? '<span class="badge text-bg-success"><i class="fa-solid fa-check"></i> کامل</span>' : '<span class="badge text-bg-warning">ناقص: ' . e(implode('، ', kyc_missing_labels($kyc))) . '</span>' ?>
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+          <h6 class="fw-bold mb-0 text-nowrap"><i class="fa-solid fa-id-card text-info"></i> مدارکِ مشتری</h6>
+          <?= $kyc['complete'] ? '<span class="badge text-bg-success"><i class="fa-solid fa-check"></i> کامل</span>'
+            : '<span class="badge text-bg-warning text-start" style="white-space:normal;line-height:1.8;max-width:100%;font-weight:600;border-radius:10px">ناقص: ' . e(implode('، ', kyc_missing_labels($kyc))) . '</span>' ?>
         </div>
         <div class="d-flex gap-3 align-items-start">
           <?php if ($kyc['has_card']): ?>

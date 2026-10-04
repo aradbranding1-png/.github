@@ -96,6 +96,27 @@ function simp_date(string $raw): ?string
 }
 
 /**
+ * کدام ردیف‌ها سهم دارند؟ در الگوی اکسل، اگر جمعِ درصدها ۱۰۰ نباشد، ردیفی که پورسانتش «بررسی» است
+ * فقط ثبت‌کننده‌ی واریزی است (مثلاً ردیفِ اول با ۱۰۰٪ و بعد سهم‌گیرندگانِ واقعی با جمعِ ۱۰۰٪) و سهمی نمی‌برد.
+ * @param array<int,array{pct:float,commission:string}> $agents
+ * @return array<int,bool>
+ */
+function simp_share_flags(array $agents): array
+{
+    $all = array_fill_keys(array_keys($agents), true);
+    $sum = array_sum(array_column($agents, 'pct'));
+    if (abs($sum - 100) <= 0.01 || count($agents) < 2) return $all;
+    $isCheck = static fn($c) => trim(str_replace(['ي', 'ك'], ['ی', 'ک'], (string) $c)) === 'بررسی';
+    $flags = [];
+    $rest = 0.0;
+    foreach ($agents as $k => $a) {
+        $flags[$k] = !$isCheck($a['commission'] ?? '');
+        if ($flags[$k]) $rest += (float) $a['pct'];
+    }
+    return in_array(true, $flags, true) && abs($rest - 100) <= 0.01 ? $flags : $all;
+}
+
+/**
  * خواندن و گروه‌بندیِ اکسل + بررسی (بدونِ نوشتن در پایگاه‌داده).
  * @return array{ok:bool, message:string, groups:array}
  */
@@ -177,16 +198,21 @@ function simp_parse(PDO $pdo, array $rows): array
         if (!preg_match('/^09\d{9}$/', $g['mobile'])) $g['errors'][] = 'شماره همراهِ تاجر نامعتبر است: «' . $g['mobile'] . '».';
         $ids = array_column($g['agents'], 'user_id');
         if (count(array_filter($ids)) !== count(array_unique(array_filter($ids)))) $g['errors'][] = 'یک کارشناس دوبار در همین واریزی آمده است.';
-        $sum = array_sum(array_column($g['agents'], 'pct'));
+        // سهم‌گیرندگانِ واقعی (ردیفِ «بررسی» وقتی جمع ۱۰۰ نیست = فقط ثبت‌کننده، بدونِ سهم)
+        $share = simp_share_flags($g['agents']);
+        $sum = 0.0;
+        foreach ($g['agents'] as $k => $a) if ($share[$k]) $sum += $a['pct'];
         $g['pct_sum'] = $sum;
         if ($sum > 0 && abs($sum - 100) > 0.01) {
             $g['warnings'][] = 'جمعِ درصدها ' . to_persian_digits((string) round($sum, 2)) . ' است (نه ۱۰۰)؛ مبلغ به همان نسبت بینِ سهم‌گیرندگان تقسیم می‌شود.';
         }
         // تقسیمِ مبلغ بینِ سهم‌گیرندگان (جمع = مبلغِ واریزی)
         $left = $g['amount'];
-        $n = count($g['agents']);
+        $last = max(array_keys(array_filter($share)) ?: [0]);
         foreach ($g['agents'] as $k => &$a) {
-            $a['amount'] = $k === $n - 1 ? $left : (int) round($g['amount'] * $a['pct'] / max(0.0001, $sum));
+            $a['share'] = $share[$k];
+            if (!$share[$k]) { $a['amount'] = 0; continue; }
+            $a['amount'] = $k === $last ? $left : (int) round($g['amount'] * $a['pct'] / max(0.0001, $sum));
             $left -= $a['amount'];
         }
         unset($a);
@@ -253,17 +279,18 @@ function simp_import_group(PDO $pdo, array $g, bool $perf, int $userId): array
             VALUES (?,?,'initial',?,?,'bank_deposit',?,?,'confirmed',?,?,?,?)")
             ->execute([$oid, $cid, $amount, $g['date'], $g['payref'] !== '' ? mb_substr($g['payref'], 0, 100) : null, 'ورود از اکسل', $userId, $userId, $at, $at]);
         // سهم‌گیرندگان ← فروشِ مشترک (فقط اگر بیش از یک نفر یا کسی غیر از ثبت‌کننده)
-        if (count($g['agents']) > 1) {
+        $sharers = array_values(array_filter($g['agents'], static fn($a) => ($a['share'] ?? true) && $a['amount'] > 0));
+        if (count($sharers) > 1 || ($sharers && (int) $sharers[0]['user_id'] !== $seller)) {
             $ins = scr_has_payment_col($pdo)
                 ? $pdo->prepare('INSERT INTO sales_order_credit_splits (order_id, payment_id, user_id, amount, created_by, created_at) VALUES (?,NULL,?,?,?,?)')
                 : $pdo->prepare('INSERT INTO sales_order_credit_splits (order_id, user_id, amount, created_by, created_at) VALUES (?,?,?,?,?)');
-            foreach ($g['agents'] as $a) {
-                if ($a['amount'] <= 0) continue;
+            foreach ($sharers as $a) {
                 if (scr_has_payment_col($pdo)) $ins->execute([$oid, $a['user_id'], $a['amount'], $userId, $now]);
                 else $ins->execute([$oid, $a['user_id'], $a['amount'], $userId, $now]);
             }
         }
-        $shares = implode(' | ', array_map(static fn($a) => $a['name'] . ' ' . round($a['pct'], 2) . '٪' . ($a['commission'] !== '' ? ' (پورسانتِ اکسل: ' . $a['commission'] . ')' : ''), $g['agents']));
+        $shares = implode(' | ', array_map(static fn($a) => $a['name'] . ' ' . round($a['pct'], 2) . '٪' . ($a['commission'] !== '' ? ' (پورسانتِ اکسل: ' . $a['commission'] . ')' : '')
+            . (($a['share'] ?? true) ? '' : ' [فقط ثبت‌کننده، بدونِ سهم]'), $g['agents']));
         orders_add_history($pdo, $oid, $userId, 'note', null, null, $note . ' — سهم‌ها: ' . $shares
             . ' — سهم عملکرد: ' . ($perf ? 'طبقِ قانونِ فعلی محاسبه شد' : 'محاسبه نمی‌شود') . ' — تیکت/استارز: ندارد.');
         $pdo->commit();
@@ -281,4 +308,86 @@ function simp_import_group(PDO $pdo, array $g, bool $perf, int $userId): array
         }
     }
     return ['ok' => true, 'message' => 'ثبت شد.', 'order_id' => $oid];
+}
+
+/**
+ * یک‌بار: اصلاحِ «فروشِ مشترک»ِ واریزی‌هایی که قبل از قاعده‌ی «ردیفِ بررسی = فقط ثبت‌کننده» وارد شده بودند.
+ * سهم‌ها از یادداشتِ ثبتِ همان سفارش (فهرستِ ردیف‌های اکسل با درصد و پورسانت) دوباره خوانده می‌شوند؛
+ * فقط سفارش‌هایی تغییر می‌کنند که در آن‌ها کسی به‌اشتباه سهم گرفته بود. سهم عملکرد دست نمی‌خورد.
+ * @return int تعدادِ سفارش‌های اصلاح‌شده
+ */
+function simp_fix_shares_v1(PDO $pdo): int
+{
+    $flag = __DIR__ . '/../storage/.sales_import_shares_v1';
+    if (is_file($flag) || !simp_ready($pdo) || !scr_ready($pdo)) return 0;
+    $fixed = 0;
+    try {
+        $orders = $pdo->query('SELECT id, seller_user_id, total_amount, import_ref FROM sales_orders WHERE import_ref IS NOT NULL')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $note = $pdo->prepare("SELECT note FROM sales_order_history WHERE order_id = ? AND note LIKE '%سهم‌ها: %' ORDER BY id LIMIT 1");
+        $cur = $pdo->prepare('SELECT user_id, amount FROM sales_order_credit_splits WHERE order_id = ?');
+        $byName = $pdo->prepare('SELECT id FROM users WHERE full_name = ?');
+        $hasPay = scr_has_payment_col($pdo);
+        foreach ($orders as $o) {
+            $oid = (int) $o['id'];
+            $note->execute([$oid]);
+            $txt = (string) $note->fetchColumn();
+            if (!preg_match('/سهم‌ها: (.+?)(?: — سهم عملکرد:|$)/u', $txt, $m)) continue;
+            $agents = [];
+            foreach (explode(' | ', $m[1]) as $part) {
+                if (!preg_match('/^(.+?) ([\d.]+)٪(?: \(پورسانتِ اکسل: (.*?)\))?(?: \[.*\])?$/u', trim($part), $p)) { $agents = []; break; }
+                $agents[] = ['name' => $p[1], 'pct' => (float) $p[2], 'commission' => (string) ($p[3] ?? '')];
+            }
+            if (count($agents) < 2) continue;
+            $flags = simp_share_flags($agents);
+            if (!in_array(false, $flags, true)) continue; // همه سهم داشتند ← قبلاً درست ثبت شده
+            // نام ← کاربر (اول از میانِ سهم‌گیرندگانِ فعلیِ همین سفارش و فروشنده)
+            $cur->execute([$oid]);
+            $known = array_map('intval', array_column($cur->fetchAll(PDO::FETCH_ASSOC) ?: [], 'user_id'));
+            $known[] = (int) $o['seller_user_id'];
+            $ok = true;
+            foreach ($agents as &$a) {
+                $byName->execute([$a['name']]);
+                $ids = array_map('intval', $byName->fetchAll(PDO::FETCH_COLUMN) ?: []);
+                $pick = array_values(array_intersect($ids, $known));
+                $a['user_id'] = $pick[0] ?? (count($ids) === 1 ? $ids[0] : 0);
+                if (!$a['user_id']) $ok = false;
+            }
+            unset($a);
+            if (!$ok) { error_log('simp_fix_shares_v1: order ' . $oid . ' — agent not resolved'); continue; }
+            $total = (int) $o['total_amount'];
+            $sum = 0.0;
+            foreach ($agents as $k => $a) if ($flags[$k]) $sum += $a['pct'];
+            $sharers = [];
+            $left = $total;
+            $keys = array_keys(array_filter($flags));
+            foreach ($keys as $i => $k) {
+                $amt = $i === count($keys) - 1 ? $left : (int) round($total * $agents[$k]['pct'] / max(0.0001, $sum));
+                $left -= $amt;
+                if ($amt > 0) $sharers[] = ['user_id' => $agents[$k]['user_id'], 'amount' => $amt, 'name' => $agents[$k]['name']];
+            }
+            $pdo->beginTransaction();
+            try {
+                $pdo->prepare('DELETE FROM sales_order_credit_splits WHERE order_id = ?' . ($hasPay ? ' AND payment_id IS NULL' : ''))->execute([$oid]);
+                if (count($sharers) > 1 || ($sharers && $sharers[0]['user_id'] !== (int) $o['seller_user_id'])) {
+                    $ins = $hasPay
+                        ? $pdo->prepare('INSERT INTO sales_order_credit_splits (order_id, payment_id, user_id, amount, created_by, created_at) VALUES (?,NULL,?,?,NULL,NOW())')
+                        : $pdo->prepare('INSERT INTO sales_order_credit_splits (order_id, user_id, amount, created_by, created_at) VALUES (?,?,?,NULL,NOW())');
+                    foreach ($sharers as $s) $ins->execute([$oid, $s['user_id'], $s['amount']]);
+                }
+                $out = array_values(array_map(static fn($a) => $a['name'], array_filter($agents, static fn($a, $k) => !$flags[$k], ARRAY_FILTER_USE_BOTH)));
+                orders_add_history($pdo, $oid, null, 'note', null, null, 'اصلاحِ سهمِ فروش (ورود از اکسل): ' . implode('، ', $out)
+                    . ' فقط ثبت‌کننده بود (پورسانت «بررسی») و سهم از او برداشته شد. سهم‌گیرندگان: '
+                    . implode('، ', array_map(static fn($s) => $s['name'] . ' ' . number_format($s['amount']), $sharers)) . '.');
+                $pdo->commit();
+                $fixed++;
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                error_log('simp_fix_shares_v1 ' . $oid . ': ' . $e->getMessage());
+            }
+        }
+        @file_put_contents($flag, date('c') . ' fixed=' . $fixed);
+    } catch (Throwable $e) {
+        error_log('simp_fix_shares_v1: ' . $e->getMessage());
+    }
+    return $fixed;
 }

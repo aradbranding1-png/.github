@@ -144,6 +144,14 @@ function sales_has_legacy_col(PDO $pdo): bool
  */
 function sales_user_events_sql(PDO $pdo, string $orderWhere = '1=1'): string
 {
+    // یک‌بار: اصلاحِ سهم‌های واریزی‌های واردشده از اکسل (ردیفِ «بررسی» = فقط ثبت‌کننده) — includes/sales_import.php
+    static $simpFix = false;
+    if (!$simpFix) {
+        $simpFix = true;
+        if (!is_file(__DIR__ . '/../storage/.sales_import_shares_v1') && is_file(__DIR__ . '/sales_import.php')) {
+            try { require_once __DIR__ . '/sales_import.php'; simp_fix_shares_v1($pdo); } catch (Throwable $e) { error_log('simp_fix: ' . $e->getMessage()); }
+        }
+    }
     // تاریخِ فروش = تاریخِ واریز (طبقِ فیش)، نه تاریخِ تأییدِ مالی؛ اگر تاریخِ واریز ثبت نشده، تاریخِ تأیید
     $orderAt = sales_payments_ready($pdo)
         ? "COALESCE(CAST((SELECT MAX(pi.paid_at) FROM sales_order_payments pi WHERE pi.order_id = o.id AND pi.kind = 'initial') AS DATETIME), CAST(o.payment_date AS DATETIME), o.decided_at)"
