@@ -20,6 +20,7 @@ $autoCan = static function (string $code) use ($pdo, $user, $automationOk): bool
 // شمارنده‌ها (بج روی کارت‌ها)
 $pendingOrders = 0;
 $pendingPaymentsCnt = 0;
+$pendingConsentsCnt = 0;
 $recvSumDash = ['customers' => 0, 'overdue' => 0, 'unscheduled' => 0];
 if (user_can('finance_orders_view', $user) && is_file(__DIR__ . '/../includes/orders_functions.php')) {
     require_once __DIR__ . '/../includes/orders_functions.php';
@@ -27,6 +28,8 @@ if (user_can('finance_orders_view', $user) && is_file(__DIR__ . '/../includes/or
         $pendingOrders = orders_count_by_status($pdo, 'pending');
         $pendingPaymentsCnt = count(fin_pending_payments($pdo, 500));
         $recvSumDash = fin_receivables_summary(fin_receivables($pdo));
+        require_once __DIR__ . '/../includes/consent_functions.php';
+        $pendingConsentsCnt = consent_pending_count($pdo);
     }
 }
 $abtPendingCnt = 0; // تیکت‌های آراد برندینگِ ارسال‌نشده (در صف/ناموفق) — همان فهرستِ صفحه‌ی «ارسال تیکت‌ها» (فقط سفارش‌های تأییدشده)
@@ -57,6 +60,7 @@ $sections = [
             ['perm' => 'finance_orders_view', 'href' => 'admin_orders.php', 'icon' => 'fa-file-invoice-dollar', 'label' => 'سفارشات و بررسی مالی', 'badge' => $pendingOrders, 'g' => '#0f4a2c,#07291a'],
             ['perm' => 'finance_orders_view', 'href' => 'admin_orders.php?view=receivables', 'icon' => 'fa-hand-holding-dollar', 'label' => 'مطالبات، بدهکاران و اقساط', 'badge' => (int) $recvSumDash['customers'], 'g' => '#5c1420,#33090f'],
             ['perm' => 'finance_orders_view', 'href' => 'admin_orders.php?view=payments', 'icon' => 'fa-money-bill-transfer', 'label' => 'پرداخت‌های در انتظار تأیید', 'badge' => $pendingPaymentsCnt, 'g' => '#5c4a14,#332a0b'],
+            ['perm' => 'finance_orders_view', 'href' => 'admin_orders.php?view=consents', 'icon' => 'fa-file-signature', 'label' => 'پیام‌های رضایتِ در انتظارِ بررسی', 'badge' => $pendingConsentsCnt, 'g' => '#4a1e5f,#280f33'],
             ['perm' => 'finance_orders_view', 'href' => 'admin_orders.php?view=report', 'icon' => 'fa-chart-column', 'label' => 'گزارش فروش', 'g' => '#164a30,#0b2b1c'],
             ['perm' => 'finance_orders_decide', 'href' => 'admin_sales_import.php', 'icon' => 'fa-file-import', 'label' => 'ورودِ واریزی‌های قبل از سامانه (اکسل)', 'g' => '#2f4a16,#1a2b0b'],
             ['perm' => 'finance_settings', 'href' => 'admin_financial_settings.php', 'icon' => 'fa-percent', 'label' => 'تنظیمات مالی (مالیات)', 'g' => '#5c4a14,#332a0b'],

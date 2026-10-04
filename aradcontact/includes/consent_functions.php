@@ -135,6 +135,55 @@ if (!function_exists('consent_decide')) {
     }
 }
 
+if (!function_exists('consent_pending_list')) {
+    /** اسکرین‌شات‌های «در انتظارِ بررسیِ مالی» (قدیمی‌ترها اول) — صفِ admin_orders.php?view=consents */
+    function consent_pending_list(PDO $pdo, int $limit = 500): array
+    {
+        if (!consent_ready($pdo)) return [];
+        try {
+            $st = $pdo->prepare("SELECT c.order_id, c.uploaded_at, c.mime, c.original_name, u.full_name AS uploader_name,
+                    o.order_number, o.status AS order_status, o.paid_amount, o.total_amount, o.customer_id, cu.full_name AS customer_name, cu.mobile AS customer_mobile,
+                    s.full_name AS seller_name
+                FROM sales_order_consents c JOIN sales_orders o ON o.id = c.order_id
+                LEFT JOIN users u ON u.id = c.uploaded_by LEFT JOIN customers cu ON cu.id = o.customer_id LEFT JOIN users s ON s.id = o.seller_user_id
+                WHERE c.status = 'pending' AND c.file_path IS NOT NULL AND o.status <> 'cancelled'
+                ORDER BY c.uploaded_at ASC LIMIT " . max(1, $limit));
+            $st->execute();
+            return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $e) {
+            error_log('consent_pending_list: ' . $e->getMessage());
+            return [];
+        }
+    }
+}
+
+if (!function_exists('consent_pending_count')) {
+    function consent_pending_count(PDO $pdo): int
+    {
+        if (!consent_ready($pdo)) return 0;
+        try {
+            return (int) $pdo->query("SELECT COUNT(*) FROM sales_order_consents c JOIN sales_orders o ON o.id = c.order_id
+                WHERE c.status = 'pending' AND c.file_path IS NOT NULL AND o.status <> 'cancelled'")->fetchColumn();
+        } catch (Throwable $e) {
+            return 0;
+        }
+    }
+}
+
+if (!function_exists('consent_statuses_for')) {
+    /** order_id => status برای فهرستِ سفارش‌ها */
+    function consent_statuses_for(PDO $pdo, array $orderIds): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $orderIds)));
+        if (!$ids || !consent_ready($pdo)) return [];
+        try {
+            return $pdo->query('SELECT order_id, status FROM sales_order_consents WHERE file_path IS NOT NULL AND order_id IN (' . implode(',', $ids) . ')')->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+}
+
 if (!function_exists('consent_customer_identity')) {
     /** نام و کد ملیِ مشتری برای متن (از مدارکِ هویتی) */
     function consent_customer_identity(PDO $pdo, int $customerId, string $fallbackName = ''): array

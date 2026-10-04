@@ -10,11 +10,12 @@ require_once __DIR__ . '/../includes/orders_functions.php';
 require_once __DIR__ . '/../includes/payment_duplicates.php';
 require_once __DIR__ . '/../includes/team_sales.php';
 require_once __DIR__ . '/../includes/xlsx_writer.php';
+require_once __DIR__ . '/../includes/consent_functions.php';
 
 $ready = services_module_ready($pdo) && orders_ready($pdo);
 $statuses = orders_statuses();
 $methods = orders_payment_methods();
-$view = in_array($_GET['view'] ?? '', ['report', 'receivables', 'payments'], true) ? $_GET['view'] : 'list';
+$view = in_array($_GET['view'] ?? '', ['report', 'receivables', 'payments', 'consents'], true) ? $_GET['view'] : 'list';
 $status = (string) ($_GET['status'] ?? ($view === 'list' ? 'pending' : ''));
 if ($status !== 'all' && !isset($statuses[$status])) {
     $status = $view === 'list' ? 'pending' : 'all';
@@ -298,10 +299,12 @@ $sellerPicker = static function (array $sellers, int $sellerId, string $uid): st
 $recv = [];
 $recvSum = ['balance' => 0, 'overdue' => 0, 'due_week' => 0, 'unscheduled' => 0, 'orders' => 0, 'customers' => 0];
 $pendingPayments = [];
+$pendingConsents = [];
 if ($ready) {
     $recv = fin_receivables($pdo, $sellerId > 0 ? ['only_seller_ids' => [$sellerId]] : []);
     $recvSum = fin_receivables_summary($recv);
     $pendingPayments = fin_pending_payments($pdo);
+    $pendingConsents = consent_pending_list($pdo);
     if ($view === 'receivables' && isset($_GET['export_debtors'])) {
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename="debtors_' . date('Ymd_His') . '.csv"');
@@ -356,6 +359,8 @@ require_once __DIR__ . '/../includes/layout_top.php';
       <?php if ($recvSum['overdue'] + $recvSum['unscheduled'] > 0): ?><span class="badge text-bg-danger ms-1"><?= format_toman($recvSum['overdue'] + $recvSum['unscheduled']) ?> معوق</span><?php endif; ?></a></li>
     <li class="nav-item"><a class="nav-link <?= $view === 'payments' ? 'active' : '' ?>" href="admin_orders.php?view=payments"><i class="fa-solid fa-money-bill-transfer"></i> پرداخت‌های در انتظارِ تأیید
       <?php if ($pendingPayments): ?><span class="badge text-bg-warning ms-1"><?= to_persian_digits((string) count($pendingPayments)) ?></span><?php endif; ?></a></li>
+    <li class="nav-item"><a class="nav-link <?= $view === 'consents' ? 'active' : '' ?>" href="admin_orders.php?view=consents"><i class="fa-solid fa-file-signature"></i> پیام‌های رضایتِ در انتظارِ بررسی
+      <?php if ($pendingConsents): ?><span class="badge text-bg-danger ms-1"><?= to_persian_digits((string) count($pendingConsents)) ?></span><?php endif; ?></a></li>
     <li class="nav-item"><a class="nav-link <?= $view === 'report' ? 'active' : '' ?>" href="admin_orders.php?view=report"><i class="fa-solid fa-chart-column"></i> گزارش فروش</a></li>
   </ul>
 
@@ -369,6 +374,37 @@ require_once __DIR__ . '/../includes/layout_top.php';
       </form>
     </div>
     <?php $recvBase = '../'; $recvShowSeller = true; require __DIR__ . '/../includes/receivables_view.php'; ?>
+  <?php elseif ($view === 'consents'): ?>
+    <div class="small text-muted mb-2">اسکرین‌شاتِ پیامِ رضایتِ مشتری که کارشناس (هم‌زمان با فیش یا بعد از آن) بارگذاری کرده و هنوز تأیید یا رد نشده — قدیمی‌ترها اول. با کلیک روی تصویر، اندازه‌ی کامل باز می‌شود.</div>
+    <div class="card p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light"><tr><th>بارگذاری</th><th>مشتری</th><th>فاکتور</th><th>مبلغِ پرداختی</th><th>کارشناس</th><th>اسکرین‌شات</th><th>تصمیم</th></tr></thead>
+          <tbody>
+          <?php if (!$pendingConsents): ?><tr><td colspan="7" class="text-center text-muted py-4">پیامِ رضایتی در انتظارِ بررسی نیست 🎉</td></tr><?php endif; ?>
+          <?php foreach ($pendingConsents as $c): $__img = strpos((string) $c['mime'], 'image/') === 0; $__u = '../order_consent.php?order_id=' . (int) $c['order_id']; ?>
+            <tr>
+              <td class="small text-nowrap"><?= to_jalali(substr((string) $c['uploaded_at'], 0, 10)) ?><div class="text-muted"><?= e(to_persian_digits(substr((string) $c['uploaded_at'], 11, 5))) ?></div></td>
+              <td class="fw-semibold"><?= e((string) $c['customer_name']) ?><div class="small text-muted" dir="ltr"><?= e((string) $c['customer_mobile']) ?></div></td>
+              <td class="text-nowrap"><a href="../order_view.php?id=<?= (int) $c['order_id'] ?>#order-consent"><?= e(to_persian_digits((string) $c['order_number'])) ?></a>
+                <div><?= orders_status_badge((string) $c['order_status']) ?></div></td>
+              <td class="text-nowrap fw-bold"><?= format_toman((int) $c['paid_amount']) ?></td>
+              <td class="small"><?= e((string) ($c['seller_name'] ?? '—')) ?><?php if (($c['uploader_name'] ?? '') !== '' && $c['uploader_name'] !== $c['seller_name']): ?><div class="text-muted">بارگذاری: <?= e((string) $c['uploader_name']) ?></div><?php endif; ?></td>
+              <td><a href="<?= e($__u) ?>" target="_blank" class="border rounded-3 overflow-hidden d-inline-block bg-light text-center" style="width:72px;height:72px">
+                <?php if ($__img): ?><img src="<?= e($__u) ?>" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover"><?php else: ?><i class="fa-solid fa-file-pdf fs-3 text-danger mt-3"></i><?php endif; ?></a></td>
+              <td class="text-nowrap">
+                <form method="post" action="../order_consent.php" class="d-inline"><?= csrf_field() ?><input type="hidden" name="order_id" value="<?= (int) $c['order_id'] ?>"><input type="hidden" name="action" value="approve"><input type="hidden" name="back" value="consents">
+                  <button class="btn btn-sm btn-success"><i class="fa-solid fa-check"></i> تأیید</button></form>
+                <form method="post" action="../order_consent.php" class="d-inline" onsubmit="var r=prompt('دلیلِ رد:'); if(!r) return false; this.note.value=r; return true;"><?= csrf_field() ?>
+                  <input type="hidden" name="order_id" value="<?= (int) $c['order_id'] ?>"><input type="hidden" name="action" value="reject"><input type="hidden" name="note"><input type="hidden" name="back" value="consents">
+                  <button class="btn btn-sm btn-outline-danger">رد</button></form>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
   <?php elseif ($view === 'payments'): ?>
     <div class="card p-0">
       <div class="table-responsive">
@@ -452,6 +488,7 @@ require_once __DIR__ . '/../includes/layout_top.php';
   </div>
 
   <?php if ($view === 'list'): ?>
+    <?php $__consents = consent_statuses_for($pdo, array_column($rows, 'id')); ?>
     <div class="d-flex gap-2 mb-2 small">
       <a class="chip <?= $status === 'all' ? 'active' : '' ?>" href="?<?= e(http_build_query(array_merge($qs, ['status' => 'all']))) ?>">همه‌ی وضعیت‌ها</a>
     </div>
@@ -473,6 +510,9 @@ require_once __DIR__ . '/../includes/layout_top.php';
               <td class="small"><?= e($methods[$r['payment_method']] ?? (string) $r['payment_method']) ?><?php if ($r['payment_ref']): ?><div class="text-muted" dir="ltr"><?= e($r['payment_ref']) ?></div><?php endif; ?></td>
               <td><span class="badge <?= (int) $r['files_cnt'] > 0 ? 'text-bg-success' : 'text-bg-danger' ?>"><i class="fa-solid fa-receipt"></i> <?= to_persian_digits((string) $r['files_cnt']) ?></span></td>
               <td><?= !empty($r['is_legacy']) && $r['status'] === 'approved' ? '<span class="badge text-bg-info"><i class="fa-solid fa-hand-holding-dollar"></i> اقساطِ قبلی</span>' : orders_status_badge((string) $r['status']) ?>
+                <?php $__cs = $__consents[(int) $r['id']] ?? '';
+                  if ($__cs === 'pending'): ?><div><a href="../order_view.php?id=<?= (int) $r['id'] ?>#order-consent" class="badge text-bg-danger text-decoration-none"><i class="fa-solid fa-file-signature"></i> پیامِ رضایت: در انتظارِ بررسی</a></div>
+                <?php elseif ($__cs === 'approved'): ?><div><span class="badge text-bg-success"><i class="fa-solid fa-file-signature"></i> رضایت تأیید شد</span></div><?php endif; ?>
                 <?php
                   // هشدارِ واریزیِ تکراری (فقط برای سفارش‌های در انتظار — همان‌هایی که مالی باید تصمیم بگیرد)
                   $__dups = ($r['status'] === 'pending' && pdup_ready($pdo)) ? pdup_candidates($pdo, $r) : [];
