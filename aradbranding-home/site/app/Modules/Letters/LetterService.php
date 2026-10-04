@@ -28,6 +28,9 @@ final class LetterService
     /** Category tabs of the mailbox (horizontal). */
     public const CATEGORIES = ['all' => null, 'private' => self::T_PRIVATE, 'public' => self::T_PUBLIC, 'proposal' => self::T_PROPOSAL, 'official' => self::T_OFFICIAL];
 
+    /** Preview stored for a message hidden by moderation (TrustAdminController); translated when listed. */
+    public const HIDDEN_PREVIEW = 'این پیام توسط تیم بررسی پنهان شد.';
+
     public function __construct(
         private Connection $db,
         private WalletService $wallet,

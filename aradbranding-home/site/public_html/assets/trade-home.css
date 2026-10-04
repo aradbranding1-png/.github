@@ -683,3 +683,4 @@ html:not([lang="fa"]) .th-discover > *, html:not([lang="fa"]) .th-field select {
 html:not([lang="fa"]) .th-opps-h { flex-wrap: wrap; row-gap: 6px; }
 html:not([lang="fa"]) .th-opps-h h2, html:not([lang="fa"]) .th-opps li a, html:not([lang="fa"]) .th-opp-t { min-width: 0; }
 html:not([lang="fa"]) .th-opp-t b, html:not([lang="fa"]) .th-opp-t small { overflow-wrap: anywhere; }
+html:not([lang="fa"]) .th-steps li::before { content: counter(s); }

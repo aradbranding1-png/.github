@@ -30,6 +30,15 @@ final class NotificationService
         'trust_restored' => 'محدودیت حساب شما برداشته شد. خوش برگشتید!',
     ];
 
+    /**
+     * Fixed system phrases that the staff tools store as a notification's :subject. They are translated when shown;
+     * any other subject (a name, a title, a note someone typed) is shown exactly as stored.
+     */
+    public const SYSTEM_SUBJECTS = [
+        'تخلفی دیده نشد. از همراهی شما سپاسگزاریم.',
+        'اقدام لازم انجام شد. از همراهی شما سپاسگزاریم.',
+    ];
+
     public function __construct(private Connection $db)
     {
     }
@@ -82,9 +91,15 @@ final class NotificationService
         }
         foreach ($rows as &$r) {
             $d = json_decode((string) ($r['data'] ?? '{}'), true) ?: [];
+            $subject = (string) ($d['subject'] ?? '');
+            if (in_array($subject, self::SYSTEM_SUBJECTS, true)) {
+                $subject = t($subject);
+            } elseif (str_starts_with($subject, 'توضیح: ')) {
+                $subject = t('توضیح: :note', ['note' => mb_substr($subject, 7)]); // staff wallet note
+            }
             $r['text'] = t(self::TEXT[$r['type']] ?? '', [
                 'name' => (string) ($d['name'] ?? ''),
-                'subject' => (string) ($d['subject'] ?? ''),
+                'subject' => $subject,
                 'n' => fa_int((int) ($d['n'] ?? 0)),
             ]);
         }
