@@ -64,11 +64,12 @@ final class HomeContent
     }
 
     /**
-     * Rows of the old globe rail: they counted the lines drawn on the globe, not world trade. A saved copy of one is
-     * replaced, row by row, with the fact in the same place of the new default rail.
+     * Rows of the old globe rail (they counted the lines drawn on the globe, not world trade) and facts since updated by
+     * a newer report. A saved copy of one is replaced, row by row, with the fact in the same place of the default rail.
      */
     private const RETIRED_RAIL = [
         'پوشش جهانی|۲۴۳ کشور' => 0, 'مسیرهای دریایی|{sea} مسیر' => 1, 'مسیرهای هوایی باری|{air} مسیر' => 2, 'بنادر و هاب‌ها|{nodes} گره' => 3,
+        'تجارت کالای جهان در ۲۰۲۴|۲۴٫۴ تریلیون دلار' => 1,
     ];
 
     /** Old default texts that are no longer true; a saved copy of one is shown with its current wording. */
@@ -131,9 +132,9 @@ final class HomeContent
                 'hint' => 'بکشید تا بچرخد · دوبار کلیک برای بزرگنمایی · نمایش تصویری مسیرهای تجارت جهانی',
             ],
             'rail' => [
-                // Fixed facts about world trade (WTO, UNCTAD Review of Maritime Transport 2025); editable at /admin/home.
+                // Fixed facts about world trade (WTO Global Trade Outlook March 2026, UNCTAD Review of Maritime Transport 2025); editable at /admin/home.
                 ['icon' => 'm-globe', 'label' => 'اعضای سازمان تجارت جهانی', 'value' => '۱۶۶ کشور'],
-                ['icon' => 'm-chart', 'label' => 'تجارت کالای جهان در ۲۰۲۴', 'value' => '۲۴٫۴ تریلیون دلار'],
+                ['icon' => 'm-chart', 'label' => 'تجارت کالای جهان در ۲۰۲۵', 'value' => '۲۶٫۳ تریلیون دلار'],
                 ['icon' => 'm-ship', 'label' => 'سهم دریا از حجم تجارت جهان', 'value' => 'بیش از ۸۰٪'],
                 ['icon' => 'm-anchor', 'label' => 'بار دریایی جهان در ۲۰۲۴', 'value' => '۱۲٫۷ میلیارد تن'],
             ],

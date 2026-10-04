@@ -389,7 +389,7 @@ return array (
   'تجار پیشنهادی برای شما' => 'Sizin için önerilen tüccarlar',
   'تجارت جهانی' => 'Küresel ticaret',
   'تجارت جهانی،' => 'Küresel ticaret,',
-  'تجارت کالای جهان در ۲۰۲۴' => '2024 dünya mal ticareti',
+  'تجارت کالای جهان در ۲۰۲۵' => '2025 dünya mal ticareti',
   'تحلیلگر' => 'Analist',
   'تخلفی دیده نشد. از همراهی شما سپاسگزاریم.' => 'Herhangi bir ihlal bulunmadı. Desteğiniz için teşekkür ederiz.',
   'تراکنش‌های قدیمی‌تر' => 'Daha eski işlemler',
@@ -1368,6 +1368,6 @@ return array (
   'یکی از پیشنهادهای منتشرشده خود را برای همه گیرندگان بفرستید. کسانی که قبلاً این پیشنهاد را دریافت کرده‌اند حساب نمی‌شوند.' => 'Yayınlanmış tekliflerinizden birini tüm alıcılara gönderin. Bu teklifi daha önce almış olanlar sayılmaz.',
   '۱۲٫۷ میلیارد تن' => '12,7 milyar ton',
   '۱۶۶ کشور' => '166 ülke',
-  '۲۴٫۴ تریلیون دلار' => '24,4 trilyon $',
   '۲۴۳ کشور' => '243 ülke',
+  '۲۶٫۳ تریلیون دلار' => '26,3 trilyon $',
 );
