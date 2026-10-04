@@ -27,7 +27,7 @@ final class Validator
             $label = t($labels[$field] ?? $field);
             $value = $input[$field] ?? null;
             if (is_string($value)) {
-                $value = trim($value);
+                $value = in_array('email', $fieldRules, true) ? Str::cleanEmail($value) : trim($value);
             }
             $isEmpty = $value === null || $value === '' || $value === [];
 

@@ -91,7 +91,7 @@ final class AuthService
      */
     public function attempt(string $email, string $password, string $ip): array
     {
-        $email = mb_strtolower(trim($email));
+        $email = mb_strtolower(Str::cleanEmail($email));
         $cols = 'id, password_hash, status, suspended_until, suspended_until <= NOW(3) AS suspension_over, status_reason, locked_until, locked_until > NOW(3) AS is_locked';
         if (str_contains($email, '@')) {
             $row = $this->db->first("SELECT {$cols} FROM users WHERE email = ? AND deleted_at IS NULL", [$email]);

@@ -198,7 +198,7 @@ final class ApiController extends Controller
             return [null, false, null, ['mobile' => 'No account with this mobile number and create_account is false.']];
         }
         $db = $this->c->get(Connection::class);
-        $email = mb_strtolower(trim((string) $request->input('email', '')));
+        $email = mb_strtolower(Str::cleanEmail((string) $request->input('email', '')));
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $db->scalar('SELECT 1 FROM users WHERE email = ?', [$email]) !== null) {
             $host = parse_url((string) Env::get('APP_URL', 'https://aradbranding.app'), PHP_URL_HOST) ?: 'aradbranding.app';
             $email = 'm' . $cc . $national . '@customers.' . $host;

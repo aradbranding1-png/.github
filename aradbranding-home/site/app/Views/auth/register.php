@@ -51,7 +51,7 @@ $languages = localized_rows($languages);
     <?php if (isset($errors['phone'])): ?><div class="error"><?= e($errors['phone']) ?></div><?php endif; ?>
   </div>
 
-  <?= $this->partial('partials/field', ['name' => 'email', 'label' => t('ایمیل'), 'type' => 'email', 'old' => $old, 'errors' => $errors, 'attrs' => ['autocomplete' => 'email', 'required' => true, 'dir' => 'ltr']]) ?>
+  <?= $this->partial('partials/field', ['name' => 'email', 'label' => t('ایمیل'), 'type' => 'email', 'old' => $old, 'errors' => $errors, 'attrs' => ['autocomplete' => 'email', 'required' => true, 'dir' => 'ltr', 'autocapitalize' => 'off', 'spellcheck' => 'false']]) ?>
   <div class="row row-2">
     <?= $this->partial('partials/field', ['name' => 'password', 'label' => t('رمز عبور'), 'type' => 'password', 'old' => [], 'errors' => $errors, 'hint' => t('حداقل :n نویسه', ['n' => fa_num(8)]), 'attrs' => ['autocomplete' => 'new-password', 'required' => true, 'minlength' => 8, 'dir' => 'ltr']]) ?>
     <?= $this->partial('partials/field', ['name' => 'password_confirmation', 'label' => t('تکرار رمز عبور'), 'type' => 'password', 'old' => [], 'errors' => $errors, 'attrs' => ['autocomplete' => 'new-password', 'required' => true, 'dir' => 'ltr']]) ?>
