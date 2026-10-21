@@ -1163,3 +1163,7 @@ html:not([lang="fa"]) input[type=file] { max-width: 100%; min-width: 0; }
 .su-note { margin: 0; font-size: 12.5px; line-height: 1.8; }
 .su-export-text { display: grid; gap: 2px; font-size: 14px; }
 .su-export-text .muted { font-size: 12.5px; }
+/* Reports: per-day (week, month, year) figures under the bar chart, newest first. */
+.chart-table { margin-top: 16px; max-height: 440px; overflow: auto; }
+.chart-table td:last-child, .chart-table th:last-child { text-align: end; }
+.chart-table tr.muted td { color: var(--muted); }

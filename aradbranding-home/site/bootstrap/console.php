@@ -238,8 +238,18 @@ $console->register('cron', 'اجرای کارهای زمان‌بندی‌شده
     });
     $s->every(3600, 'metrics', static function () use ($c) {
         $m = $c->get(\App\Modules\Admin\MetricsService::class);
-        $m->computeDay(gmdate('Y-m-d', strtotime('-1 day')));
-        $m->computeDay(gmdate('Y-m-d'));
+        // Days are Tehran calendar days (1.19.17). Once, recompute the history that was counted in UTC days.
+        $settings = $c->get(\App\Core\Settings\Settings::class);
+        $tz = $m::timezone()->getName();
+        if ($settings->get($m::TZ_SETTING) !== $tz) {
+            $c->get(\App\Core\Db\Connection::class)->allowLongRunning();
+            for ($i = 400; $i >= 2; $i--) {
+                $m->computeDay($m::today(-$i));
+            }
+            $settings->set($m::TZ_SETTING, $tz, null);
+        }
+        $m->computeDay($m::today(-1));
+        $m->computeDay($m::today());
         return 'today + yesterday';
     });
     $s->every(900, 'exports-cleanup', static function () {
@@ -334,7 +344,7 @@ $console->register('metrics:backfill', 'محاسبه آمار روزهای گذ�
     $days = max(1, min(3650, (int) ($a[0] ?? 90)));
     $m = $c->get(\App\Modules\Admin\MetricsService::class);
     for ($i = $days; $i >= 0; $i--) {
-        $m->computeDay(gmdate('Y-m-d', strtotime("-{$i} day")));
+        $m->computeDay($m::today(-$i));
     }
     Console::line("{$days} روز محاسبه شد.");
     return 0;

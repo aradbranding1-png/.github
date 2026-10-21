@@ -1,5 +1,15 @@
 <?php
-/** Simple server-rendered bar chart (inline SVG, no JS, CSP-safe). @var list<array{label: string, value: int}> $series @var string $title @var bool|null $money */
+/**
+ * Simple server-rendered bar chart (inline SVG, no JS, CSP-safe). A 'Y-m-d' label is shown as a Persian date.
+ * @var list<array{label: string, full?: string, value: int}> $series @var string $title @var bool|null $money
+ */
+$series = array_map(static function (array $p): array {
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $p['label'])) {
+        $p['full'] ??= \App\Core\Support\Jalali::full((string) $p['label']);
+        $p['label'] = \App\Core\Support\Jalali::dayMonth((string) $p['label']);
+    }
+    return $p;
+}, $series);
 $max = max(1, ...array_map(static fn ($p) => (int) $p['value'], $series ?: [['value' => 1]]));
 $n = max(1, count($series));
 $w = 600; $h = 160; $gap = 4; $bw = max(2, ($w - $gap * ($n - 1)) / $n);
@@ -13,9 +23,17 @@ $fmt = static fn (int $v): string => !empty($money) ? toman($v) : fa_int($v);
   <?php else: ?>
     <svg viewBox="0 0 <?= $w ?> <?= $h ?>" role="img" aria-label="<?= e($title) ?>" preserveAspectRatio="none" dir="ltr">
       <?php foreach ($series as $i => $p): $bh = (int) round(((int) $p['value'] / $max) * ($h - 6)); ?>
-        <rect x="<?= round($i * ($bw + $gap), 2) ?>" y="<?= $h - $bh ?>" width="<?= round($bw, 2) ?>" height="<?= max(1, $bh) ?>" rx="2"><title><?= e($p['label'] . ': ' . $fmt((int) $p['value'])) ?></title></rect>
+        <rect x="<?= round($i * ($bw + $gap), 2) ?>" y="<?= $h - $bh ?>" width="<?= round($bw, 2) ?>" height="<?= max(1, $bh) ?>" rx="2"><title><?= e(($p['full'] ?? $p['label']) . ': ' . $fmt((int) $p['value'])) ?></title></rect>
       <?php endforeach; ?>
     </svg>
     <div class="chart-axis" dir="ltr"><span><?= e($series[0]['label']) ?></span><span><?= e($series[$n - 1]['label']) ?></span></div>
+    <?php if (!empty($table)): ?>
+      <div class="table-wrap chart-table"><table class="table">
+        <thead><tr><th><?= e($table) ?></th><th><?= e($valueLabel ?? $title) ?></th></tr></thead>
+        <tbody><?php foreach (array_reverse($series) as $p): ?>
+          <tr<?= (int) $p['value'] === 0 ? ' class="muted"' : '' ?>><td><?= e($p['full'] ?? $p['label']) ?></td><td><b><?= e($fmt((int) $p['value'])) ?></b></td></tr>
+        <?php endforeach; ?></tbody>
+      </table></div>
+    <?php endif; ?>
   <?php endif; ?>
 </figure>

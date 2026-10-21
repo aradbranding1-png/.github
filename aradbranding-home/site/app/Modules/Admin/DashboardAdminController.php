@@ -30,20 +30,20 @@ final class DashboardAdminController extends AdminController
         $window = $metrics->window(61);
         $days = [];
         for ($i = 60; $i >= 0; $i--) {
-            $days[] = gmdate('Y-m-d', strtotime("-{$i} day"));
+            $days[] = MetricsService::today(-$i);
         }
         $val = static fn (string $day, string $metric): int => (int) ($window[$day][$metric] ?? 0);
         $series = static function (string ...$metricList) use ($days, $val): array {
             return array_map(static fn (string $d): int => array_sum(array_map(static fn (string $m): int => $val($d, $m), $metricList)), $days);
         };
-        $today = $window[gmdate('Y-m-d')] ?? [];
-        $yesterday = $window[gmdate('Y-m-d', strtotime('-1 day'))] ?? [];
+        $today = $window[MetricsService::today()] ?? [];
+        $yesterday = $window[MetricsService::today(-1)] ?? [];
 
         $countries = [];
         foreach ($this->c->get(ReferenceData::class)->countries() as $country) {
             $countries[(string) $country['code']] = (string) $country['name_fa'];
         }
-        $todayStart = gmdate('Y-m-d') . ' 00:00:00';
+        $todayStart = (new \DateTimeImmutable(MetricsService::today() . ' 00:00:00', MetricsService::timezone()))->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 
         // Latest real platform events: new members, pages, proposals and admin actions.
         $activity = $db->select(

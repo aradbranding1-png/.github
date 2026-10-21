@@ -106,7 +106,7 @@ final class OpsController extends Controller
         $days = max(1, min(730, (int) $request->input('days', 90)));
         $m = $this->c->get(\App\Modules\Admin\MetricsService::class);
         for ($i = $days; $i >= 0; $i--) {
-            $m->computeDay(gmdate('Y-m-d', strtotime("-{$i} day")));
+            $m->computeDay($m::today(-$i));
         }
         return Response::json(['days' => $days], 'Metrics computed');
     }

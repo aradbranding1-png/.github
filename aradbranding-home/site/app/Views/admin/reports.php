@@ -8,7 +8,9 @@ $periods = ['daily' => 'روزانه', 'weekly' => 'هفتگی', 'monthly' => '�
   <select class="select" name="period" aria-label="دوره"><?php foreach ($periods as $k => $l): ?><option value="<?= e($k) ?>"<?= $period === $k ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select>
   <button class="btn btn-sm" type="submit">نمایش</button>
 </form>
-<section class="panel"><?= $this->partial('admin/_chart', ['series' => $series, 'title' => MetricsService::LABELS[$metric] . ' · ' . $periods[$period], 'money' => $metric === 'revenue_rial']) ?></section>
+<section class="panel"><?= $this->partial('admin/_chart', ['series' => $series, 'title' => MetricsService::LABELS[$metric] . ' · ' . $periods[$period], 'money' => $metric === 'revenue_rial',
+  'table' => ['daily' => 'روز', 'weekly' => 'هفته', 'monthly' => 'ماه', 'yearly' => 'سال'][$period], 'valueLabel' => MetricsService::LABELS[$metric]]) ?>
+  <p class="hint">روزها به وقت تهران شمرده می‌شوند (از ۰۰:۰۰ تا ۲۴:۰۰) و هفته‌ها از شنبه تا جمعه. آمار هر ساعت به‌روز می‌شود.</p></section>
 
 <section class="panel">
   <h2>بر اساس کشور</h2>

@@ -6,11 +6,14 @@ namespace App\Modules\Admin;
 
 use App\Core\Cache\Cache;
 use App\Core\Db\Connection;
+use App\Core\Env;
+use App\Core\Support\Jalali;
 
 /**
  * Aggregated metrics for dashboards and reports (architecture doc §86).
  * The cron fills `daily_metrics` hourly for today and yesterday using day-range index scans;
- * dashboards never COUNT millions of rows on request.
+ * dashboards never COUNT millions of rows on request. A "day" is a calendar day in DISPLAY_TIMEZONE (Tehran),
+ * so the Persian dates on the reports are exact.
  */
 final class MetricsService
 {
@@ -26,11 +29,32 @@ final class MetricsService
     {
     }
 
-    /** Recompute one UTC day. Safe to repeat (upserts). */
+    /** Days are counted in this time zone; timestamps in the database are UTC. */
+    public const TZ_SETTING = 'metrics.day_timezone';
+
+    public static function timezone(): \DateTimeZone
+    {
+        try {
+            return new \DateTimeZone((string) Env::get('DISPLAY_TIMEZONE', 'Asia/Tehran'));
+        } catch (\Throwable) {
+            return new \DateTimeZone('Asia/Tehran');
+        }
+    }
+
+    /** Local calendar date ('Y-m-d') $offset days from today. */
+    public static function today(int $offset = 0): string
+    {
+        $d = new \DateTimeImmutable('now', self::timezone());
+        return ($offset === 0 ? $d : $d->modify(sprintf('%+d day', $offset)))->format('Y-m-d');
+    }
+
+    /** Recompute one local calendar day ('Y-m-d'). Safe to repeat (upserts). */
     public function computeDay(string $day): void
     {
-        $from = $day . ' 00:00:00';
-        $to = date('Y-m-d', strtotime($day . ' +1 day')) . ' 00:00:00';
+        $utc = new \DateTimeZone('UTC');
+        $start = new \DateTimeImmutable($day . ' 00:00:00', self::timezone());
+        $from = $start->setTimezone($utc)->format('Y-m-d H:i:s');
+        $to = $start->modify('+1 day')->setTimezone($utc)->format('Y-m-d H:i:s');
         $r = [$from, $to];
         $m = [];
 
@@ -66,7 +90,7 @@ final class MetricsService
         $m['stars_used'] = -($sumType(2) + $sumType(3)) - $sumType(4);
         $m['page_views'] = (int) ($sums[2]['page_view']['n'] ?? 0);
 
-        if ($day === gmdate('Y-m-d')) {
+        if ($day === self::today()) {
             $m['dau'] = (int) $this->db->scalar('SELECT COUNT(*) FROM users WHERE last_active_at >= ?', [$from]);
             $m['wau'] = (int) $this->db->scalar('SELECT COUNT(*) FROM users WHERE last_active_at >= NOW(3) - INTERVAL 7 DAY');
             $m['mau'] = (int) $this->db->scalar('SELECT COUNT(*) FROM users WHERE last_active_at >= NOW(3) - INTERVAL 30 DAY');
@@ -107,8 +131,8 @@ final class MetricsService
     {
         $out = [];
         foreach ($this->db->select(
-            'SELECT day, metric, value FROM daily_metrics WHERE country_id = 0 AND day >= CURRENT_DATE - INTERVAL ? DAY ORDER BY day',
-            [$days]
+            'SELECT day, metric, value FROM daily_metrics WHERE country_id = 0 AND day >= ? ORDER BY day',
+            [self::today(-$days)]
         ) as $r) {
             $out[(string) $r['day']][(string) $r['metric']] = (int) $r['value'];
         }
@@ -116,30 +140,54 @@ final class MetricsService
     }
 
     /**
-     * Series for charts: grouped by day / week / month / year.
-     * @return list<array{label: string, value: int}>
+     * Series for charts in the Persian calendar: Tehran days, Saturday-to-Friday weeks, Persian months and years.
+     * Every period is listed, with 0 where nothing happened, so the bars line up with the dates.
+     * @return list<array{label: string, full: string, value: int}> oldest first
      */
     public function series(string $metric, string $period, int $points): array
     {
-        $days = ['daily' => $points, 'weekly' => $points * 7, 'monthly' => $points * 31, 'yearly' => $points * 366][$period] ?? $points;
-        $rows = $this->db->select(
-            'SELECT day, value FROM daily_metrics WHERE metric = ? AND country_id = 0 AND day >= CURRENT_DATE - INTERVAL ? DAY ORDER BY day',
-            [$metric, $days]
-        );
+        $span = ['daily' => $points, 'weekly' => 7 * ($points + 1), 'monthly' => 31 * ($points + 1), 'yearly' => 366 * ($points + 1)][$period] ?? $points;
+        $first = self::today(-($span - 1));
+        $values = [];
+        foreach ($this->db->select(
+            'SELECT day, value FROM daily_metrics WHERE metric = ? AND country_id = 0 AND day >= ? ORDER BY day',
+            [$metric, $first]
+        ) as $r) {
+            $values[(string) $r['day']] = (int) $r['value'];
+        }
         $buckets = [];
-        foreach ($rows as $r) {
-            $ts = strtotime((string) $r['day']);
+        $day = new \DateTimeImmutable($first . ' 12:00:00', new \DateTimeZone('UTC'));
+        $last = self::today();
+        for ($ymd = $day->format('Y-m-d'); $ymd <= $last; $day = $day->modify('+1 day'), $ymd = $day->format('Y-m-d')) {
+            [$jy, $jm] = Jalali::ofDate($ymd);
             $key = match ($period) {
-                'weekly' => date('o-\WW', $ts),
-                'monthly' => date('Y-m', $ts),
-                'yearly' => date('Y', $ts),
-                default => (string) $r['day'],
+                // Persian weeks run Saturday to Friday: the bucket is named after its Saturday.
+                'weekly' => $day->modify('-' . (((int) $day->format('w') + 1) % 7) . ' day')->format('Y-m-d'),
+                'monthly' => sprintf('%04d-%02d', $jy, $jm),
+                'yearly' => (string) $jy,
+                default => $ymd,
             };
-            $buckets[$key] = ($buckets[$key] ?? 0) + (int) $r['value'];
+            $buckets[$key] ??= ['from' => $ymd, 'to' => $ymd, 'value' => 0];
+            $buckets[$key]['to'] = $ymd;
+            $buckets[$key]['value'] += $values[$ymd] ?? 0;
+        }
+        $buckets = array_slice($buckets, -$points, null, true);
+        if ($period === 'yearly') {
+            // No empty years before the first one with data.
+            while (count($buckets) > 1 && reset($buckets)['value'] === 0) {
+                array_shift($buckets);
+            }
         }
         $out = [];
-        foreach (array_slice($buckets, -$points, null, true) as $label => $value) {
-            $out[] = ['label' => (string) $label, 'value' => $value];
+        foreach ($buckets as $key => $b) {
+            [$jy, $jm] = Jalali::ofDate($b['from']);
+            [$label, $full] = match ($period) {
+                'weekly' => ['هفته ' . Jalali::dayMonth($key), Jalali::dayMonth($key) . ' تا ' . Jalali::dayMonth(date('Y-m-d', strtotime($key . ' +6 day'))) . ' ' . fa_num((string) Jalali::ofDate($key)[0])],
+                'monthly' => [Jalali::MONTHS[$jm] . ' ' . fa_num((string) $jy), Jalali::MONTHS[$jm] . ' ' . fa_num((string) $jy)],
+                'yearly' => [fa_num((string) $jy), 'سال ' . fa_num((string) $jy)],
+                default => [Jalali::dayMonth($key), Jalali::full($key)],
+            };
+            $out[] = ['label' => $label, 'full' => $full, 'value' => $b['value']];
         }
         return $out;
     }
