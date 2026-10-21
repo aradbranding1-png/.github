@@ -1,7 +1,7 @@
 <?php $tone = ['ok' => 'success', 'warning' => 'warning', 'error' => 'danger']; $ic = ['ok' => 'circle-check', 'warning' => 'triangle-alert', 'error' => 'circle-x'];
 $cnt = array_count_values(array_column($checks, 'status')); ?>
 <div class="page-head"><div><h1>سلامت سامانه</h1><div class="sub">وضعیت Database، Storage، PHP، Extensions، Permission، Cron، Migration، Disk Space و ...</div></div>
-<div class="btn-group"><a class="btn btn-outline" href="<?= url('/admin/system/health') ?>"><?= icon('refresh-cw') ?> بررسی مجدد</a><a class="btn btn-outline" href="<?= url('/admin/system/health', ['deep' => 1]) ?>"><?= icon('activity') ?> بررسی عمیق (شامل تست SSO)</a></div></div>
+<div class="btn-group"><a class="btn btn-outline" href="<?= url('/admin/system/health') ?>"><?= icon('refresh-cw') ?> بررسی مجدد</a></div></div>
 <div class="grid g-4 mb-3">
     <div class="card stat tone-<?= $tone[$summary] ?>"><div class="bubble"><?= icon('heart-pulse') ?></div><div><div class="v"><?= e(strtoupper($summary)) ?></div><div class="l">وضعیت کلی</div></div></div>
     <div class="card stat tone-success"><div class="bubble"><?= icon('circle-check') ?></div><div><div class="v"><?= fa($cnt['ok'] ?? 0) ?></div><div class="l">OK</div></div></div>

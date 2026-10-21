@@ -12,7 +12,7 @@ final class UserService
     public static function create(array $d, array $roleIds = []): int
     {
         $seg = in_array($d['segment'] ?? '', ['merchant', 'employee', 'agent'], true) ? $d['segment'] : 'merchant';
-        // every new account (self sign-up, SSO, API, import, staff) waits for approval,
+        // every new account (self sign-up, API, import, staff) waits for approval,
         // unless it is created by someone who is allowed to approve accounts
         $status = in_array($d['status'] ?? 'active', ['active', 'inactive', 'pending'], true) ? ($d['status'] ?? 'active') : 'active';
         // skip_approval: trusted server-to-server creation (e.g. a paid order from Arad Contact with auto-activation on)

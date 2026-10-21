@@ -13,7 +13,7 @@ app/
   Core/                Kernel, Router, Request, DB(PDO), Auth, Gate(RBAC), Csrf, Session, Validator,
                        Upload, Audit, Activity, Notify, Settings, Jalali, Xlsx, Migrator, Logger, ErrorHandler, HtmlSanitizer, RateLimiter
   Services/            Enrollment, PathService, Growth, Targeting(تخصیص + Rule Engine), Scope(محدوده داده),
-                       Recommend, ExamService, UserService(ادغام حساب)، UserReport, SsoClient, Backup, Updater, Health, Cron
+                       Recommend, ExamService, UserService(ادغام حساب)، UserReport, Backup, Updater, Health, Cron
   Controllers/         Auth, Install, Dashboard, Learn, Exam, Profile, File, Notification
   Controllers/Admin/   Dashboard, User, Role, Structure, Course, Library, Path, Exam, Question, Review, Assignment, Report, System, Maintenance
   Controllers/Api/     V1Controller

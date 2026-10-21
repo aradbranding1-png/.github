@@ -29,16 +29,13 @@ return function (Router $r): void {
     $r->post('/logout', [AuthController::class, 'logout']);
     $r->get('/password/change', [AuthController::class, 'passwordChangeForm']);
     $r->post('/password/change', [AuthController::class, 'passwordChange']);
-    $r->get('/sso/redirect', [AuthController::class, 'ssoRedirect'], ['auth' => false]);
-    $r->get('/sso/callback', [AuthController::class, 'ssoCallback'], ['auth' => false]);
-    $r->get('/sso/link', [AuthController::class, 'ssoLinkForm'], ['auth' => false]);
-    $r->post('/sso/link', [AuthController::class, 'ssoLink'], ['auth' => false]);
     $r->get('/verify/{code}', [LearnController::class, 'verifyCertificate'], ['auth' => false]);
     $r->post('/impersonate/stop', [AuthController::class, 'stopImpersonation']);
 
     // ------------------------------------------------------------ files
     $r->get('/avatar/{id}', [FileController::class, 'avatar']);
     $r->get('/file/{uuid}', [FileController::class, 'serve']);
+    $r->get('/file/{uuid}/play', [FileController::class, 'play']);
 
     // ------------------------------------------------------------ learner panel
     $r->get('/', [DashboardController::class, 'home']);
@@ -87,7 +84,6 @@ return function (Router $r): void {
     $r->post('/profile/password', [ProfileController::class, 'password']);
     $r->post('/profile/avatar', [ProfileController::class, 'avatar']);
     $r->post('/profile/avatar/source', [ProfileController::class, 'avatarSource']);
-    $r->get('/profile/link-my', [ProfileController::class, 'linkMy']);
 
     $r->get('/notifications', [NotificationController::class, 'index']);
     $r->post('/notifications/read-all', [NotificationController::class, 'readAll']);
@@ -113,7 +109,6 @@ return function (Router $r): void {
     $r->post('/admin/users/{id}/delete', [Admin\UserController::class, 'destroy'], ['perm' => 'users.delete']);
     $r->post('/admin/users/{id}/login-check', [Admin\UserController::class, 'loginCheck'], ['perm' => 'users.edit']);
     $r->post('/admin/users/{id}/unlock', [Admin\UserController::class, 'unlock'], ['perm' => 'users.edit']);
-    $r->post('/admin/users/{id}/unlink-my', [Admin\UserController::class, 'unlinkMy'], ['perm' => 'users.edit']);
     $r->get('/admin/users/{id}/access', [Admin\RoleController::class, 'userAccess'], ['perm' => 'roles.view']);
     $r->post('/admin/users/{id}/access', [Admin\RoleController::class, 'saveUserAccess'], ['perm' => 'roles.assign']);
     $r->post('/admin/users/{id}/impersonate', [Admin\UserController::class, 'impersonate'], ['root' => true]);
@@ -173,7 +168,7 @@ return function (Router $r): void {
     $r->get('/admin/courses', [Admin\CourseController::class, 'index'], ['perm' => ['courses.view', 'lessons.view']]);
     $r->get('/admin/courses/create', [Admin\CourseController::class, 'create'], ['perm' => 'courses.create']);
     $r->post('/admin/courses', [Admin\CourseController::class, 'store'], ['perm' => 'courses.create']);
-    $r->get('/admin/courses/{id}', [Admin\CourseController::class, 'show'], ['perm' => ['courses.view', 'lessons.view']]);
+    $r->get('/admin/courses/{id}', [Admin\CourseController::class, 'show'], ['perm' => ['courses.view', 'lessons.view', 'lessons.create']]);
     $r->get('/admin/courses/{id}/edit', [Admin\CourseController::class, 'edit'], ['perm' => 'courses.edit']);
     $r->post('/admin/courses/{id}', [Admin\CourseController::class, 'update'], ['perm' => 'courses.edit']);
     $r->post('/admin/courses/{id}/publish', [Admin\CourseController::class, 'publish'], ['perm' => 'courses.publish']);
@@ -188,7 +183,8 @@ return function (Router $r): void {
     $r->post('/admin/lessons/{id}/transfer', [Admin\CourseController::class, 'lessonTransfer'], ['perm' => 'lessons.edit']);
     $r->post('/admin/lessons/{id}/delete', [Admin\CourseController::class, 'lessonDelete'], ['perm' => 'lessons.delete']);
     $r->post('/admin/courses/{id}/exercises', [Admin\CourseController::class, 'exerciseSave'], ['perm' => 'lessons.create']);
-    $r->post('/admin/exercises/{id}', [Admin\CourseController::class, 'exerciseUpdate'], ['perm' => 'lessons.edit']);
+    $r->get('/admin/exercises/{id}/edit', [Admin\CourseController::class, 'exerciseEdit'], ['perm' => ['lessons.edit', 'lessons.create']]);
+    $r->post('/admin/exercises/{id}', [Admin\CourseController::class, 'exerciseUpdate'], ['perm' => ['lessons.edit', 'lessons.create']]);
     $r->post('/admin/exercises/{id}/delete', [Admin\CourseController::class, 'exerciseDelete'], ['perm' => 'lessons.delete']);
 
     $r->get('/admin/library', [Admin\LibraryController::class, 'index'], ['perm' => 'library.view']);
@@ -202,6 +198,7 @@ return function (Router $r): void {
     $r->post('/admin/paths/{id}/steps/order', [Admin\PathController::class, 'stepOrder'], ['perm' => 'paths.edit']);
     $r->get('/admin/paths/{id}', [Admin\PathController::class, 'show'], ['perm' => 'paths.view']);
     $r->post('/admin/paths/{id}', [Admin\PathController::class, 'save'], ['perm' => 'paths.edit']);
+    $r->post('/admin/paths/{id}/copy', [Admin\PathController::class, 'copy'], ['perm' => 'paths.create']);
     $r->post('/admin/paths/{id}/delete', [Admin\PathController::class, 'destroy'], ['perm' => 'paths.delete']);
     $r->post('/admin/paths/{id}/steps', [Admin\PathController::class, 'addStep'], ['perm' => 'paths.edit']);
     $r->post('/admin/path-steps/{id}', [Admin\PathController::class, 'updateStep'], ['perm' => 'paths.edit']);
@@ -222,17 +219,18 @@ return function (Router $r): void {
     $r->get('/admin/exams/create', [Admin\ExamController::class, 'create'], ['perm' => 'exams.create']);
     $r->get('/admin/exams/lessons', [Admin\ExamController::class, 'lessons'], ['perm' => ['exams.create', 'exams.edit']]);
     $r->post('/admin/exams', [Admin\ExamController::class, 'store'], ['perm' => 'exams.create']);
-    $r->get('/admin/exams/{id}', [Admin\ExamController::class, 'edit'], ['perm' => 'exams.view']);
-    $r->post('/admin/exams/{id}', [Admin\ExamController::class, 'update'], ['perm' => 'exams.edit']);
+    $r->get('/admin/exams/{id}', [Admin\ExamController::class, 'edit'], ['perm' => ['exams.view', 'exams.edit', 'exams.create']]);
+    $r->post('/admin/exams/{id}', [Admin\ExamController::class, 'update'], ['perm' => ['exams.edit', 'exams.create']]);
     $r->post('/admin/exams/{id}/delete', [Admin\ExamController::class, 'destroy'], ['perm' => 'exams.delete']);
-    $r->post('/admin/exams/{id}/questions', [Admin\ExamController::class, 'questions'], ['perm' => 'exams.edit']);
+    $r->post('/admin/exams/{id}/questions', [Admin\ExamController::class, 'questions'], ['perm' => ['exams.edit', 'exams.create']]);
+    $r->post('/admin/exams/{id}/questions/bulk', [Admin\ExamController::class, 'bulkQuestions'], ['perm' => ['questions.edit', 'exams.edit', 'exams.create']]);
     $r->get('/admin/exams/{id}/report', [Admin\ExamController::class, 'report'], ['perm' => 'exams.report']);
 
     $r->get('/admin/questions', [Admin\QuestionController::class, 'index'], ['perm' => 'questions.view']);
     $r->get('/admin/questions/create', [Admin\QuestionController::class, 'create'], ['perm' => 'questions.create']);
     $r->post('/admin/questions', [Admin\QuestionController::class, 'store'], ['perm' => 'questions.create']);
-    $r->get('/admin/questions/{id}/edit', [Admin\QuestionController::class, 'edit'], ['perm' => 'questions.edit']);
-    $r->post('/admin/questions/{id}', [Admin\QuestionController::class, 'update'], ['perm' => 'questions.edit']);
+    $r->get('/admin/questions/{id}/edit', [Admin\QuestionController::class, 'edit'], ['perm' => ['questions.edit', 'exams.edit', 'exams.create']]);
+    $r->post('/admin/questions/{id}', [Admin\QuestionController::class, 'update'], ['perm' => ['questions.edit', 'exams.edit', 'exams.create']]);
     $r->post('/admin/questions/{id}/delete', [Admin\QuestionController::class, 'destroy'], ['perm' => 'questions.delete']);
     $r->post('/admin/question-categories', [Admin\QuestionController::class, 'saveCategory'], ['perm' => 'questions.create']);
     $r->post('/admin/question-categories/{id}/delete', [Admin\QuestionController::class, 'deleteCategory'], ['perm' => 'questions.delete']);
@@ -325,6 +323,11 @@ return function (Router $r): void {
     $r->get('/admin/reports/user/{id}', [Admin\ReportController::class, 'user'], ['perm' => ['reports.report', 'users.report', 'team.report']]);
     $r->get('/admin/reports/groups', [Admin\ReportController::class, 'groups'], ['perm' => 'reports.report']);
     $r->get('/admin/reports/courses', [Admin\ReportController::class, 'courses'], ['perm' => ['reports.report', 'courses.report']]);
+    $r->get('/admin/reports/suspicious', [Admin\ReportController::class, 'suspicious'], ['perm' => ['reports.report', 'courses.report']]);
+    $r->post('/admin/reports/suspicious', [Admin\ReportController::class, 'suspiciousAction'], ['perm' => ['reports.report', 'courses.report']]);
+    $r->post('/admin/reports/suspicious/scan', [Admin\ReportController::class, 'suspiciousScan'], ['perm' => ['reports.report', 'courses.report']]);
+    $r->get('/admin/reports/course/{id}', [Admin\ReportController::class, 'courseParticipation'], ['perm' => ['reports.report', 'courses.report']]);
+    $r->get('/admin/reports/lesson/{id}', [Admin\ReportController::class, 'lessonParticipation'], ['perm' => ['reports.report', 'courses.report']]);
     $r->get('/admin/reports/exams', [Admin\ReportController::class, 'exams'], ['perm' => ['reports.report', 'exams.report']]);
     $r->get('/admin/reports/progress', [Admin\ReportController::class, 'progress'], ['perm' => 'reports.report']);
     $r->get('/admin/reports/inactive', [Admin\ReportController::class, 'inactive'], ['perm' => 'reports.report']);
@@ -336,14 +339,16 @@ return function (Router $r): void {
     $r->get('/admin/audit', [Admin\SystemController::class, 'audit'], ['perm' => 'audit.view']);
 
     // ------------------------------------------------------------ admin: system
-    $r->get('/admin/settings', [Admin\SystemController::class, 'settings'], ['perm' => 'settings.view']);
+    $r->get('/admin/settings', [Admin\SystemController::class, 'settings'], ['perm' => ['settings.view', 'health.view', 'backups.view', 'migrations.view', 'errors.view']]);
     $r->post('/admin/settings', [Admin\SystemController::class, 'saveSettings'], ['perm' => 'settings.edit']);
+    $r->get('/admin/integrations/bale', [Admin\IntegrationController::class, 'bale'], ['perm' => 'settings.view']);
+    $r->post('/admin/integrations/bale', [Admin\IntegrationController::class, 'saveBale'], ['perm' => 'settings.edit']);
+    $r->post('/admin/integrations/bale/test', [Admin\IntegrationController::class, 'baleTest'], ['perm' => 'settings.edit']);
+    $r->post('/admin/integrations/bale/action', [Admin\IntegrationController::class, 'baleAction'], ['perm' => 'settings.edit']);
     $r->get('/admin/integrations/arad-contact', [Admin\IntegrationController::class, 'aradContact'], ['perm' => 'settings.view']);
     $r->post('/admin/integrations/arad-contact', [Admin\IntegrationController::class, 'saveAradContact'], ['perm' => 'settings.edit']);
     $r->post('/admin/integrations/arad-contact/token', [Admin\IntegrationController::class, 'aradContactToken'], ['root' => true]);
     $r->get('/admin/integrations/arad-contact/logs/{id}', [Admin\IntegrationController::class, 'aradContactLog'], ['perm' => 'settings.view']);
-    $r->get('/admin/sso', [Admin\SystemController::class, 'sso'], ['perm' => 'sso.view']);
-    $r->post('/admin/sso', [Admin\SystemController::class, 'saveSso'], ['perm' => 'sso.edit']);
     $r->get('/admin/system/health', [Admin\SystemController::class, 'health'], ['perm' => 'health.view']);
     $r->get('/admin/system/errors', [Admin\SystemController::class, 'errors'], ['perm' => 'errors.view']);
     $r->get('/admin/system/backups', [Admin\MaintenanceController::class, 'backups'], ['perm' => 'backups.view']);
@@ -355,6 +360,7 @@ return function (Router $r): void {
     $r->post('/admin/system/migrations/run', [Admin\MaintenanceController::class, 'runMigrations'], ['root' => true]);
     $r->get('/admin/system/updates', [Admin\MaintenanceController::class, 'updates'], ['root' => true]);
     $r->post('/admin/system/updates', [Admin\MaintenanceController::class, 'uploadUpdate'], ['root' => true]);
+    $r->post('/admin/system/updates/export', [Admin\MaintenanceController::class, 'exportCurrent'], ['root' => true]);
     $r->get('/admin/system/updates/{id}', [Admin\MaintenanceController::class, 'updatePlan'], ['root' => true]);
     $r->post('/admin/system/updates/{id}/apply', [Admin\MaintenanceController::class, 'applyUpdate'], ['root' => true]);
     $r->post('/admin/system/updates/{id}/rollback', [Admin\MaintenanceController::class, 'rollbackUpdate'], ['root' => true]);

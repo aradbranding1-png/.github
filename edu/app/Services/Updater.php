@@ -351,4 +351,40 @@ final class Updater
             }
         }
     }
+
+    // ------------------------------------------------------------------ export of the installed version
+
+    /**
+     * ZIP of the version currently installed on the server (application code, public_html, docs, root files).
+     * The storage folder (uploads, backups, sessions, logs…) and .env (passwords / keys) are never included.
+     * Written to storage/tmp; the caller deletes it right after the download.
+     */
+    public static function exportCurrent(): string
+    {
+        if (!class_exists(\ZipArchive::class)) throw new \RuntimeException('افزونه zip روی سرور فعال نیست.');
+        @set_time_limit(0);
+        $dir = STORAGE_PATH . '/tmp';
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        $path = $dir . '/export-' . app_version() . '-' . bin2hex(random_bytes(6)) . '.zip';
+        $zip = new \ZipArchive();
+        if ($zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) throw new \RuntimeException('ساخت فایل ZIP ممکن نشد.');
+        $skip = '~(^|/)\.(git|DS_Store)(/|$)|__MACOSX|(^|/)\.env$|\.(swp|tmp)$~i';
+        $n = 0;
+        foreach (['app', 'database', 'public_html', 'docs'] as $d) {
+            if (!is_dir(BASE_PATH . '/' . $d)) continue;
+            $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(BASE_PATH . '/' . $d, \FilesystemIterator::SKIP_DOTS));
+            foreach ($it as $f) {
+                if (!$f->isFile() || !$f->isReadable()) continue;
+                $rel = str_replace('\\', '/', substr($f->getPathname(), strlen(BASE_PATH) + 1));
+                if (preg_match($skip, $rel)) continue;
+                $zip->addFile($f->getPathname(), $rel);
+                $n++;
+            }
+        }
+        foreach (['VERSION', 'manifest.json', 'cli.php', 'cron.php', '.htaccess', 'README.md', '.env.example'] as $f) {
+            if (is_file(BASE_PATH . '/' . $f)) { $zip->addFile(BASE_PATH . '/' . $f, $f); $n++; }
+        }
+        if (!$zip->close() || $n === 0) { @unlink($path); throw new \RuntimeException('ساخت فایل ZIP ناموفق بود.'); }
+        return $path;
+    }
 }

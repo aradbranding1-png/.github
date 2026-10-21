@@ -2,9 +2,8 @@
     <?php include __DIR__ . '/_side.php'; ?>
     <main class="auth-main">
         <div class="auth-card" style="max-width:520px">
-            <div class="brand"><div class="sb-logo"><?= icon('user-plus') ?></div><div><h2 class="mb-0">ثبت‌نام در سامانه آموزش</h2><div class="muted small">اگر در my.aradbranding.me حساب دارید، نیازی به ثبت‌نام نیست</div></div></div>
+            <div class="brand"><div class="sb-logo"><?= icon('user-plus') ?></div><div><h2 class="mb-0">ثبت‌نام در سامانه آموزش</h2><div class="muted small">حساب کاربری خود را بسازید</div></div></div>
             <?php foreach (flashes() as $f): ?><div class="alert alert-<?= e($f['type']) ?>"><?= $f['msg'] ?></div><?php endforeach; ?>
-            <?php if ($sso): ?><a class="btn btn-sso btn-lg mb-2" href="<?= url('/sso/redirect') ?>"><?= icon('fingerprint') ?> <?= e(setting('sso_button_label')) ?></a><?php endif; ?>
             <form method="post" action="<?= url('/register') ?>" class="card">
                 <?= csrf_field() ?>
                 <div class="field"><label>نوع کاربری</label>

@@ -2,14 +2,15 @@
 <div class="grid g-main">
     <div class="stack">
         <div class="card"><h3><?= icon('info') ?> صورت تمرین</h3><div class="prose small"><?= clean_html($s['instructions']) ?: '—' ?></div></div>
-        <div class="card"><h3><?= icon('send') ?> پاسخ فراگیر</h3>
+        <div class="card"><h3><?= icon('send') ?> پاسخ فراگیر<?php if ($s['text_answer']): ?> <?= wc_badge($s['text_answer']) ?><?php endif; ?></h3>
             <?php if ($s['text_answer']): ?><div class="prose"><?= nl2br(e($s['text_answer'])) ?></div><?php endif; ?>
             <?php if ($s['file_uuid']): ?>
-                <?php if ($s['file_kind'] === 'image'): ?><img src="<?= url('/file/' . $s['file_uuid']) ?>" alt="" style="border-radius:12px;max-height:480px"><?php elseif ($s['file_kind'] === 'video'): ?><div class="media-box"><video controls src="<?= url('/file/' . $s['file_uuid']) ?>"></video></div><?php endif; ?>
-                <div class="file-tile mt-1"><span class="fi"><?= icon('file') ?></span><div class="grow"><?= e($s['original_name']) ?></div><a class="btn btn-sm btn-outline" href="<?= url('/file/' . $s['file_uuid'], ['dl' => 1]) ?>"><?= icon('download') ?></a><a class="btn btn-sm btn-ghost" target="_blank" href="<?= url('/file/' . $s['file_uuid']) ?>"><?= icon('eye') ?></a></div>
+                <?php if ($s['file_kind'] === 'image'): ?><img src="<?= url('/file/' . $s['file_uuid']) ?>" alt="" style="border-radius:12px;max-height:480px"><?php elseif ($s['file_kind'] === 'video'): ?><div class="media-box"><video controls preload="metadata" src="<?= url('/file/' . $s['file_uuid']) ?>"></video></div>
+                <?php elseif ($s['file_kind'] === 'audio' || preg_match('/\.(m4a|mp3|wav|ogg|aac|oga|opus|weba|amr)$/i', (string)$s['original_name'])): ?><div class="review-audio"><audio data-player data-inline preload="metadata" data-speeds="1,1.5,2,2.5,3" data-speed-key="ap-speed-review" data-title="<?= e($s['original_name']) ?>" src="<?= url('/file/' . $s['file_uuid']) ?>"></audio></div><?php endif; ?>
+                <div class="file-tile mt-1"><span class="fi"><?= icon('file') ?></span><div class="grow"><?= e($s['original_name']) ?></div><a class="btn btn-sm btn-outline" href="<?= url('/file/' . $s['file_uuid'], ['dl' => 1]) ?>"><?= icon('download') ?></a><a class="btn btn-sm btn-ghost" target="_blank" href="<?= file_view_url(['uuid' => $s['file_uuid'], 'kind' => $s['file_kind'], 'original_name' => $s['original_name']]) ?>"><?= icon('eye') ?></a></div>
             <?php endif; ?>
         </div>
-        <?php if ($history): ?><div class="card"><h3><?= icon('history') ?> ارسال‌های قبلی</h3><?php foreach ($history as $h): ?><div class="list-item small"><?= status_badge($h['status']) ?><div class="grow"><?= e(str_limit($h['text_answer'], 120)) ?></div><span class="faint"><?= jdate($h['created_at']) ?></span></div><?php endforeach; ?></div><?php endif; ?>
+        <?php if ($history): ?><div class="card"><h3><?= icon('history') ?> ارسال‌های قبلی</h3><?php foreach ($history as $h): ?><div class="list-item small"><?= status_badge($h['status']) ?><div class="grow"><?= e(str_limit($h['text_answer'], 120)) ?></div><?php if ($h['text_answer']): ?><?= wc_badge($h['text_answer']) ?><?php endif; ?><span class="faint"><?= jdate($h['created_at']) ?></span></div><?php endforeach; ?></div><?php endif; ?>
     </div>
     <?php if (can('reviews.approve')): ?>
     <form class="card" method="post" action="<?= url('/admin/reviews/submission/' . $s['id']) ?>"><?= csrf_field() ?>

@@ -6,7 +6,7 @@
  */
 'use strict';
 
-var VERSION = 'aradedu-v1.0.2';
+var VERSION = 'aradedu-v1.0.3';
 var STATIC = VERSION + '-static';
 var OFFLINE_URL = 'offline.html';
 var PRECACHE = [

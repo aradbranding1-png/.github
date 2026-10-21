@@ -99,6 +99,25 @@ final class MaintenanceController
     }
 
     // ------------------------------------------------------------------ updates
+
+    /** Download the installed version as ZIP (without storage/ and .env). The file is deleted from the host right after. */
+    public function exportCurrent(): void
+    {
+        $this->confirmPassword();
+        try {
+            $path = Updater::exportCurrent();
+        } catch (\Throwable $e) {
+            flash('danger', 'خروجی گرفتن ناموفق بود: ' . $e->getMessage());
+            redirect('/admin/system/updates');
+        }
+        // delete from the host whatever happens (finished, cancelled, connection lost)
+        ignore_user_abort(true);
+        register_shutdown_function(static function () use ($path): void { if (is_file($path)) @unlink($path); });
+        Audit::log('updates.export', 'system', null, 'success', ['version' => app_version(), 'size' => (int)filesize($path)]);
+        unset($_SERVER['HTTP_RANGE']);
+        FileController::stream($path, 'application/zip', 'aradedu-' . app_version() . '.zip', true);
+        @unlink($path);
+    }
     public function updates(): string
     {
         $rows = DB::all('SELECT s.*, u.first_name, u.last_name, b.filename AS backup_file FROM system_updates s LEFT JOIN users u ON u.id = s.started_by LEFT JOIN backups b ON b.id = s.backup_id ORDER BY s.id DESC');

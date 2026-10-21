@@ -13,18 +13,40 @@ final class Auth
         if (self::$loaded) return self::$user;
         self::$loaded = true;
         $id = (int)($_SESSION['uid'] ?? 0);
-        if ($id <= 0) return null;
+        if ($id <= 0) return self::fromRememberCookie();
         $u = DB::one('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [$id]);
         if (!$u || $u['status'] !== 'active') {
             if (!empty($_SESSION['imp_root'])) { self::stopImpersonation(); return self::user(); }
             unset($_SESSION['uid']);
+            RememberMe::forgetCurrent();
             return null;
         }
         // Bind session to user agent fingerprint to limit session hijacking
         if (($_SESSION['_ua'] ?? '') !== hash('sha256', Request::userAgent())) {
             Session::destroy();
-            return null;
+            session_start();
+            // a browser update changes the user agent — a valid «remember me» cookie signs the user back in
+            return self::fromRememberCookie();
         }
+        if (empty($_SESSION['imp_root'])) RememberMe::touch();
+        self::$user = $u;
+        return $u;
+    }
+
+    /** Session expired / browser reopened → sign in again from the «remember me» cookie (valid 30 days after the last visit) */
+    private static function fromRememberCookie(): ?array
+    {
+        $u = RememberMe::consume();
+        if (!$u) return null;
+        $sel = $_SESSION['_rm'] ?? null;
+        Session::regenerate();
+        $_SESSION['uid'] = (int)$u['id'];
+        $_SESSION['_ua'] = hash('sha256', Request::userAgent());
+        $_SESSION['login_at'] = time();
+        $_SESSION['_rm'] = $sel;
+        $_SESSION['_rm_touch'] = time();
+        DB::run('UPDATE users SET last_login_at = NOW() WHERE id = ?', [(int)$u['id']]);
+        try { DB::insert('login_history', ['user_id' => (int)$u['id'], 'method' => 'remember', 'ip' => Request::ip(), 'user_agent' => mb_substr(Request::userAgent(), 0, 255), 'success' => 1, 'created_at' => now()]); } catch (\Throwable) {}
         self::$user = $u;
         return $u;
     }
@@ -149,13 +171,15 @@ final class Auth
         return strtr($p, $map);
     }
 
-    public static function login(array $user, string $method = 'password'): void
+    public static function login(array $user, string $method = 'password', bool $remember = true): void
     {
+        RememberMe::forgetCurrent();
         Session::regenerate();
         $_SESSION['uid'] = (int)$user['id'];
         $_SESSION['_ua'] = hash('sha256', Request::userAgent());
         $_SESSION['login_at'] = time();
         self::refresh();
+        if ($remember) RememberMe::issue((int)$user['id']);
         DB::run('UPDATE users SET last_login_at = NOW(), first_login_at = COALESCE(first_login_at, NOW()), login_count = login_count + 1 WHERE id = ?', [(int)$user['id']]);
         DB::insert('login_history', ['user_id' => (int)$user['id'], 'method' => $method, 'ip' => Request::ip(), 'user_agent' => Request::userAgent(), 'success' => 1, 'created_at' => now()]);
         Activity::track((int)$user['id'], 'login', null, null, ['method' => $method]);
@@ -168,6 +192,7 @@ final class Auth
         if (!empty($_SESSION['imp_log'])) {
             DB::run('UPDATE impersonation_logs SET ended_at = NOW() WHERE id = ? AND ended_at IS NULL', [(int)$_SESSION['imp_log']]);
         }
+        RememberMe::forgetCurrent();
         Session::destroy();
         self::refresh();
     }

@@ -13,7 +13,7 @@ use App\Services\Targeting;
 use App\Services\UserService;
 
 /**
- * REST API v1 for integrations (my.aradbranding.me, CRM, HR, mobile app).
+ * REST API v1 for integrations (CRM, HR, mobile app).
  * Auth: "Authorization: Bearer <token>" — tokens are created in the admin panel, stored hashed, scoped by abilities.
  */
 final class V1Controller
@@ -93,7 +93,7 @@ final class V1Controller
         $seg = in_array($b['segment'] ?? '', ['merchant', 'employee', 'agent'], true) ? $b['segment'] : null;
         if ($u) {
             if ((int)$u['is_root'] === 1) throw new HttpException(403);
-            if ($u['my_user_id'] && $myId !== '' && $u['my_user_id'] !== $myId) throw new HttpException(409, 'این موبایل به حساب my دیگری متصل است.');
+            if ($u['my_user_id'] && $myId !== '' && $u['my_user_id'] !== $myId) throw new HttpException(409, 'این موبایل به شناسهٔ خارجی دیگری متصل است.');
             $upd = array_filter(['first_name' => $b['first_name'] ?? null, 'last_name' => $b['last_name'] ?? null, 'segment' => $seg, 'job_title' => $b['job_title'] ?? null], fn($v) => $v !== null && $v !== '');
             if ($myId !== '' && !$u['my_user_id']) { $upd['my_user_id'] = $myId; $upd['my_linked_at'] = now(); }
             if ($upd) DB::update('users', $upd + ['updated_at' => now()], 'id = ?', [(int)$u['id']]);
@@ -137,6 +137,7 @@ final class V1Controller
         if (!DB::value('SELECT 1 FROM users WHERE id = ? AND deleted_at IS NULL', [$uid]) || !DB::value('SELECT 1 FROM courses WHERE id = ? AND deleted_at IS NULL', [$cid])) throw new HttpException(422, 'user_id یا course_id نامعتبر است.');
         $type = in_array($b['training_type'] ?? '', array_keys(\App\Core\Labels::TRAINING_TYPE), true) ? $b['training_type'] : 'mandatory';
         $due = !empty($b['due_at']) && strtotime((string)$b['due_at']) ? date('Y-m-d H:i:s', strtotime((string)$b['due_at'])) : null;
+        if (!\App\Services\CourseAudience::filterUsers($cid, [$uid])) throw new HttpException(422, 'این دوره برای گروه یا سطح این کاربر تعریف نشده است.');
         $eid = Enrollment::enroll($uid, $cid, ['source' => 'api', 'training_type' => $type, 'due_at' => $due]);
         Audit::log('api.enroll', 'enrollment', $eid, 'success', ['token' => (int)$t['id'], 'user' => $uid, 'course' => $cid]);
         json_out(['ok' => true, 'enrollment_id' => $eid], 201);

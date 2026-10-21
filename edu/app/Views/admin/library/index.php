@@ -29,11 +29,11 @@
                             <input type="hidden" name="title" value="<?= e($f['title']) ?>"><input type="hidden" name="folder" value="<?= e($f['folder']) ?>">
                             <label class="switch"><input type="checkbox" name="viewable" value="1"<?= checked($f['viewable']) ?> data-autosubmit></label>
                             <label class="switch" style="margin-right:2.2rem"><input type="checkbox" name="downloadable" value="1"<?= checked($f['downloadable']) ?> data-autosubmit></label>
-                            <a class="btn btn-xs btn-ghost" href="<?= url('/file/' . $f['uuid']) ?>" target="_blank"><?= icon('eye') ?></a>
+                            <a class="btn btn-xs btn-ghost" href="<?= file_view_url($f) ?>" target="_blank"><?= icon('eye') ?></a>
                         </form>
                     </td>
                 <?php else: ?>
-                    <td><?= $f['viewable'] ? '✓' : '—' ?></td><td><?= $f['downloadable'] ? '✓' : '—' ?></td><td><a class="btn btn-xs btn-ghost" href="<?= url('/file/' . $f['uuid']) ?>" target="_blank"><?= icon('eye') ?></a></td>
+                    <td><?= $f['viewable'] ? '✓' : '—' ?></td><td><?= $f['downloadable'] ? '✓' : '—' ?></td><td><a class="btn btn-xs btn-ghost" href="<?= file_view_url($f) ?>" target="_blank"><?= icon('eye') ?></a></td>
                 <?php endif; ?>
                 <td class="actions"><?php if (can('library.delete')): ?><form class="inline" method="post" action="<?= url('/admin/library/' . $f['id'] . '/delete') ?>" data-confirm="<?= $f['used'] ? 'این فایل در ' . fa($f['used']) . ' درس استفاده شده است. ' : '' ?>حذف شود؟"><?= csrf_field() ?><button class="btn btn-xs btn-ghost" style="color:var(--danger)"><?= icon('trash-2') ?></button></form><?php endif; ?></td>
             </tr>

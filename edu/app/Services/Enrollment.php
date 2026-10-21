@@ -111,7 +111,7 @@ final class Enrollment
         if (!$course) return $en;
         $it = self::items($courseId);
         $lessonIds = array_map(fn($l) => (int)$l['id'], $it['lessons']);
-        $doneLessons = $lessonIds ? (int)DB::value("SELECT COUNT(*) FROM lesson_progress WHERE user_id = ? AND status = 'completed' AND lesson_id IN (" . DB::in($lessonIds) . ')', array_merge([$userId], $lessonIds)) : 0;
+        $doneLessons = $lessonIds ? count(array_intersect(self::completedLessonIds($userId, $courseId), $lessonIds)) : 0;
         $reqExams = array_values(array_filter($it['exams'], fn($e) => (int)$e['is_required'] === 1));
         $best = self::bestAttempts($userId, array_map(fn($e) => (int)$e['id'], $it['exams']));
         $examsPassed = 0; $failedFinal = false; $retake = false;
@@ -256,12 +256,157 @@ final class Enrollment
                 if (!in_array((int)$l['id'], $completedIds, true)) { $block = $l; break; }
             }
         }
+        if ($block && !empty($enrollment['user_id'])) {
+            $t = self::lessonTasks((int)$enrollment['user_id'], (int)$block['course_id'])[(int)$block['id']]['blocking'] ?? [];
+            if ($t && in_array((int)$block['id'], self::contentDoneLessonIds((int)$enrollment['user_id'], (int)$block['course_id']), true)) {
+                return 'برای رفتن به این درس، ابتدا ' . self::tasksText($t) . ' درس «' . $block['title'] . '» را انجام دهید.';
+            }
+        }
         return $block ? 'برای ورود به این درس ابتدا باید درس‌های قبلی را تکمیل کنید. درس بعدی شما: «' . $block['title'] . '»' : 'برای ورود به این درس ابتدا باید درس‌های قبلی را تکمیل کنید.';
     }
 
+    /** «قبولی در آزمون «X» و ارسال دوباره تمرین «Y»» */
+    public static function tasksText(array $blocking): string
+    {
+        $parts = [];
+        foreach ($blocking as $b) {
+            $parts[] = match (true) {
+                $b['type'] === 'exam' && $b['state'] === 'failed' => 'قبولی در آزمون «' . $b['title'] . '»',
+                $b['type'] === 'exam' => 'شرکت و قبولی در آزمون «' . $b['title'] . '»',
+                $b['state'] === 'rejected' => 'اصلاح و ارسال دوباره تمرین «' . $b['title'] . '»',
+                default => 'ارسال تمرین «' . $b['title'] . '»',
+            };
+        }
+        return implode(' و ', $parts);
+    }
+
+    /**
+     * Lessons that count as finished: content completed AND the lesson's own required exams / exercises done.
+     * A lesson whose exam or exercise was added later, failed or rejected drops out of this list again, so the
+     * next lessons lock until it is done (computed live, nothing is overwritten).
+     */
     public static function completedLessonIds(int $userId, int $courseId): array
     {
+        $content = self::contentDoneLessonIds($userId, $courseId);
+        if (!$content) return [];
+        $tasks = self::lessonTasks($userId, $courseId);
+        return array_values(array_filter($content, fn($id) => empty($tasks[$id]['blocking'])));
+    }
+
+    /** Lessons whose video / audio / text was completed (without looking at their exams / exercises) */
+    public static function contentDoneLessonIds(int $userId, int $courseId): array
+    {
         return array_map('intval', DB::column("SELECT lesson_id FROM lesson_progress WHERE user_id = ? AND course_id = ? AND status = 'completed'", [$userId, $courseId]));
+    }
+
+    /**
+     * Required exams / exercises attached to each lesson and where the learner stands.
+     * Rules: an exam must be passed (an attempt waiting for marking does not block);
+     * an exercise must be sent — waiting for review or accepted lets the learner go on,
+     * «rejected» / «needs revision» blocks until a new answer is sent.
+     * @return array<int, array{items: array, blocking: array}>  keyed by lesson id
+     */
+    public static function lessonTasks(int $userId, int $courseId): array
+    {
+        $out = [];
+        $exams = DB::all("SELECT id, lesson_id, title FROM exams WHERE course_id = ? AND lesson_id IS NOT NULL AND is_required = 1 AND status = 'published' AND deleted_at IS NULL ORDER BY id", [$courseId]);
+        $exercises = DB::all("SELECT id, lesson_id, title FROM exercises WHERE course_id = ? AND lesson_id IS NOT NULL AND is_required = 1 AND status = 'published' AND deleted_at IS NULL ORDER BY id", [$courseId]);
+        if (!$exams && !$exercises) return [];
+        $best = self::bestAttempts($userId, array_map(fn($e) => (int)$e['id'], $exams));
+        foreach ($exams as $e) {
+            $b = $best[(int)$e['id']] ?? null;
+            $state = !$b ? 'todo' : ((int)$b['passed'] === 1 ? 'done' : ((int)$b['pending'] > 0 ? 'pending' : 'failed'));
+            $item = ['type' => 'exam', 'id' => (int)$e['id'], 'title' => $e['title'], 'state' => $state];
+            $out[(int)$e['lesson_id']]['items'][] = $item;
+            if (in_array($state, ['todo', 'failed'], true)) $out[(int)$e['lesson_id']]['blocking'][] = $item;
+        }
+        $st = self::exerciseStatus($userId, array_map(fn($e) => (int)$e['id'], $exercises));
+        foreach ($exercises as $x) {
+            $s = $st[(int)$x['id']]['status'] ?? null;
+            $state = $s === null ? 'todo' : ($s === 'accepted' ? 'done' : (in_array($s, ['needs_revision', 'rejected'], true) ? 'rejected' : 'pending'));
+            $item = ['type' => 'exercise', 'id' => (int)$x['id'], 'title' => $x['title'], 'state' => $state];
+            $out[(int)$x['lesson_id']]['items'][] = $item;
+            if (in_array($state, ['todo', 'rejected'], true)) $out[(int)$x['lesson_id']]['blocking'][] = $item;
+        }
+        foreach ($out as &$o) { $o += ['items' => [], 'blocking' => []]; }
+        unset($o);
+        return $out;
+    }
+
+    // ------------------------------------------------------------------ "really seen" gate for exams / exercises
+
+    /** Video / audio whose real playback the player measures (uploaded file or direct media link — not Aparat/YouTube embeds) */
+    public static function trackable(array $lesson): bool
+    {
+        if (!in_array($lesson['content_type'] ?? '', ['video', 'audio'], true)) return false;
+        if (!empty($lesson['media_file_id'])) return true;
+        $r = MediaLink::resolve($lesson);
+        return $r !== null && in_array($r['mode'], ['video', 'audio'], true);
+    }
+
+    /**
+     * Has the learner really gone through this lesson? Exams and exercises of a lesson open only after that.
+     * @return array{ok: bool, msg: string, watched: int, need: int}
+     */
+    public static function seenState(array $lesson, ?array $lp, ?array $flag): array
+    {
+        $t = '«' . $lesson['title'] . '»';
+        $res = fn(bool $ok, string $msg = '', int $w = 0, int $n = 0) => ['ok' => $ok, 'msg' => $msg, 'watched' => $w, 'need' => $n];
+        if (!$lp || ($lp['status'] ?? '') !== 'completed') return $res(false, 'ابتدا درس ' . $t . ' را کامل ببینید. آزمون و تمرین این درس بعد از دیدن کامل درس فعال می‌شود.');
+        $fs = (string)($flag['status'] ?? '');
+        if ($fs === 'dismissed') return $res(true); // a manager accepted this completion
+        if (in_array($fs, ['open', 'reset'], true)) return $res(false, 'تکمیل درس ' . $t . ' بدون دیدن واقعی ثبت شده است. درس را دوباره کامل ببینید تا آزمون و تمرین آن فعال شود.');
+        $watched = (int)($lp['watched_sec'] ?? 0);
+        if (self::trackable($lesson)) {
+            $expected = CompletionAudit::expectedSeconds($lesson);
+            $need = $expected > 0 ? (int)ceil($expected * CompletionAudit::minWatchedPct() / 100) : 1;
+            if ($watched < $need) {
+                $msg = 'درس ' . $t . ' هنوز واقعاً دیده نشده است';
+                if ($expected > 0) $msg .= ' (دیده‌شده: ' . CompletionAudit::minutes($watched) . ' از ' . CompletionAudit::minutes($expected) . '؛ حداقل ' . fa(CompletionAudit::minWatchedPct()) . '٪ لازم است)';
+                return $res(false, $msg . '. ویدیو/صوت درس را بدون جلو زدن ببینید تا آزمون و تمرین آن فعال شود.', $watched, $need);
+            }
+            return $res(true, '', $watched, $need);
+        }
+        if ($fs !== 'rewatched' && CompletionAudit::evaluate($lesson, $lp)) return $res(false, 'زمانی که برای درس ' . $t . ' گذاشته‌اید برای دیدن/مطالعهٔ آن کافی نبوده است. درس را دوباره کامل مطالعه کنید تا آزمون و تمرین آن فعال شود.');
+        return $res(true, '', $watched);
+    }
+
+    /** Lessons of a course (or one lesson) that are not really seen yet: lesson id → seenState */
+    public static function unseenLessons(int $userId, int $courseId, ?int $lessonId = null): array
+    {
+        $lessons = $lessonId
+            ? DB::all('SELECT * FROM lessons WHERE id = ? AND deleted_at IS NULL', [$lessonId])
+            : DB::all("SELECT * FROM lessons WHERE course_id = ? AND status = 'published' AND deleted_at IS NULL ORDER BY sort, id", [$courseId]);
+        if (!$lessons) return [];
+        $ids = array_map(fn($l) => (int)$l['id'], $lessons);
+        $lps = [];
+        foreach (DB::all('SELECT * FROM lesson_progress WHERE user_id = ? AND lesson_id IN (' . DB::in($ids) . ')', array_merge([$userId], $ids)) as $r) $lps[(int)$r['lesson_id']] = $r;
+        $flags = [];
+        try { foreach (DB::all('SELECT * FROM lesson_completion_flags WHERE user_id = ? AND lesson_id IN (' . DB::in($ids) . ')', array_merge([$userId], $ids)) as $r) $flags[(int)$r['lesson_id']] = $r; } catch (\Throwable) {}
+        $out = [];
+        foreach ($lessons as $l) {
+            $st = self::seenState($l, $lps[(int)$l['id']] ?? null, $flags[(int)$l['id']] ?? null);
+            if (!$st['ok']) $out[(int)$l['id']] = $st + ['lesson' => $l];
+        }
+        return $out;
+    }
+
+    /**
+     * Is this exam / exercise open for the learner? A lesson's exam/exercise needs that lesson really seen;
+     * a course-wide one needs every lesson of the course really seen.
+     * @return array|null  null = open; otherwise ['msg' => …, 'lesson' => lesson row to go to]
+     */
+    public static function taskGate(int $userId, array $task): ?array
+    {
+        $cid = (int)($task['course_id'] ?? 0);
+        if (!$cid) return null;
+        $lid = (int)($task['lesson_id'] ?? 0);
+        $un = self::unseenLessons($userId, $cid, $lid ?: null);
+        if (!$un) return null;
+        $first = reset($un);
+        if ($lid) return ['msg' => $first['msg'], 'lesson' => $first['lesson'], 'count' => 1];
+        $n = count($un);
+        return ['msg' => 'این آزمون/تمرین مربوط به کل دوره است و بعد از دیدن کامل همهٔ درس‌ها فعال می‌شود. ' . fa($n) . ' درس هنوز کامل دیده نشده؛ اولین آن: درس «' . $first['lesson']['title'] . '».', 'lesson' => $first['lesson'], 'count' => $n];
     }
 
     /** Daily maintenance: expire overdue enrollments and courses. */

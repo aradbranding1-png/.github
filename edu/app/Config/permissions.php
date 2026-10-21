@@ -9,6 +9,7 @@
 return [
     'actions' => [
         'view' => 'مشاهده',
+        'viewall' => 'مشاهده همه',
         'create' => 'ایجاد',
         'edit' => 'ویرایش',
         'delete' => 'حذف',
@@ -51,7 +52,7 @@ return [
         'levels'        => ['label' => 'سطح‌بندی و طبقه‌بندی‌ها', 'section' => 'structure', 'actions' => ['view', 'create', 'edit', 'delete']],
 
         'categories'    => ['label' => 'موضوعات آموزشی', 'section' => 'content', 'actions' => ['view', 'create', 'edit', 'delete']],
-        'courses'       => ['label' => 'دوره‌ها', 'section' => 'content', 'actions' => ['view', 'create', 'edit', 'delete', 'publish', 'report', 'export']],
+        'courses'       => ['label' => 'دوره‌ها', 'section' => 'content', 'actions' => ['view', 'viewall', 'create', 'edit', 'delete', 'publish', 'report', 'export']],
         'lessons'       => ['label' => 'درس‌ها', 'section' => 'content', 'actions' => ['view', 'create', 'edit', 'delete', 'publish']],
         'library'       => ['label' => 'کتابخانه محتوا و فایل‌ها', 'section' => 'content', 'actions' => ['view', 'create', 'edit', 'delete', 'download']],
         'paths'         => ['label' => 'مسیرهای آموزشی', 'section' => 'content', 'actions' => ['view', 'create', 'edit', 'delete', 'publish', 'assign']],
@@ -74,7 +75,6 @@ return [
         'audit'         => ['label' => 'Audit Log (رویدادنگاری)', 'section' => 'reports', 'actions' => ['view', 'export']],
 
         'settings'      => ['label' => 'تنظیمات سامانه', 'section' => 'system', 'actions' => ['view', 'edit']],
-        'sso'           => ['label' => 'اتصال SSO به my.aradbranding.me', 'section' => 'system', 'actions' => ['view', 'edit']],
         'health'        => ['label' => 'سلامت سامانه', 'section' => 'system', 'actions' => ['view']],
         'backups'       => ['label' => 'پشتیبان‌گیری', 'section' => 'system', 'actions' => ['view', 'create', 'delete', 'download', 'restore']],
         'errors'        => ['label' => 'خطاهای سامانه', 'section' => 'system', 'actions' => ['view']],

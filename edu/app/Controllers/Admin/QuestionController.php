@@ -33,7 +33,25 @@ final class QuestionController
     {
         return ['q' => $q, 'options' => $q ? DB::all('SELECT * FROM question_options WHERE question_id = ? ORDER BY sort, id', [(int)$q['id']]) : [],
             'cats' => DB::pairs('SELECT id, name FROM question_categories ORDER BY name'),
-            'levels' => DB::pairs("SELECT l.id, CONCAT(g.name, ' — ', l.name) FROM levels l JOIN `groups` g ON g.id = l.group_id ORDER BY g.sort, l.rank_no")];
+            'levelGroups' => self::levelGroups()];
+    }
+
+    /** Groups with their levels, for the «سطح» select (a whole group or one level) */
+    public static function levelGroups(): array
+    {
+        $out = [];
+        foreach (DB::pairs('SELECT id, name FROM `groups` ORDER BY sort, name') as $gid => $name) $out[(int)$gid] = ['name' => $name, 'levels' => []];
+        foreach (DB::all('SELECT id, group_id, name FROM levels ORDER BY rank_no, id') as $l) if (isset($out[(int)$l['group_id']])) $out[(int)$l['group_id']]['levels'][(int)$l['id']] = $l['name'];
+        return array_filter($out, fn($g) => $g['levels']);
+    }
+
+    /** «سطح» value: "g<groupId>" = every level of that group, or a level id */
+    public static function levelTarget(?string $v = null): array
+    {
+        $v ??= Request::str('level_id');
+        if (preg_match('/^g(\d+)$/', $v, $m) && DB::value('SELECT 1 FROM `groups` WHERE id = ?', [(int)$m[1]])) return [null, (int)$m[1]];
+        if (ctype_digit($v) && (int)$v > 0 && ($gid = DB::value('SELECT group_id FROM levels WHERE id = ?', [(int)$v]))) return [(int)$v, (int)$gid];
+        return [null, null];
     }
 
     /** Exam the new question should be attached to (when opened from an exam page), or null */
@@ -75,9 +93,10 @@ final class QuestionController
         }
         if ($type === 'short' && !$opts) $err = 'حداقل یک پاسخ قابل قبول وارد کنید.';
         if ($err) { keep_old($_POST); flash('danger', $err); back(); }
+        [$levelId, $groupId] = self::levelTarget();
         $row = [
             'type' => $type, 'text' => trim((string)$d['text']), 'explanation' => Request::str('explanation') ?: null, 'score' => max(0, (float)($d['score'] ?? 1)),
-            'difficulty' => (int)($d['difficulty'] ?? 1), 'category_id' => Request::intOrNull('category_id'), 'level_id' => Request::intOrNull('level_id'),
+            'difficulty' => (int)($d['difficulty'] ?? 1), 'category_id' => Request::intOrNull('category_id'), 'level_id' => $levelId, 'group_id' => $groupId,
             'tags' => ($d['tags'] ?? '') !== '' ? $d['tags'] : null, 'is_active' => Request::bool('is_active') ? 1 : 0,
         ];
         DB::transaction(function () use (&$id, $row, $opts, $type) {
@@ -111,19 +130,38 @@ final class QuestionController
         redirect(Request::bool('add_another') ? '/admin/questions/create' : '/admin/questions');
     }
 
+    /**
+     * Exam a question is being edited from (?exam= / exam_id): only when the question belongs to that exam.
+     * People without «questions.edit» may edit a question only through an exam they are allowed to edit.
+     */
+    private function editContext(int $questionId): ?array
+    {
+        $eid = Request::int('exam') ?: Request::int('exam_id');
+        $exam = null;
+        if ($eid && DB::value('SELECT 1 FROM exam_questions WHERE exam_id = ? AND question_id = ?', [$eid, $questionId])) {
+            $exam = DB::one('SELECT * FROM exams WHERE id = ? AND deleted_at IS NULL', [$eid]);
+            if ($exam && $exam['course_id']) \App\Services\Scope::authorizeCourse(['id' => $exam['course_id']]);
+        }
+        if (!can('questions.edit') && !can_edit_exam($exam)) throw new HttpException(403);
+        return $exam;
+    }
+
     public function edit(int $id): string
     {
         $q = DB::one('SELECT * FROM questions WHERE id = ? AND deleted_at IS NULL', [$id]) ?? throw new HttpException(404);
-        return view('admin/questions/form', ['title' => 'ویرایش سؤال'] + $this->formData($q));
+        $exam = $this->editContext($id);
+        $used = (int)DB::value('SELECT COUNT(DISTINCT exam_id) FROM exam_questions WHERE question_id = ?', [$id]);
+        return view('admin/questions/form', ['title' => 'ویرایش سؤال', 'forExam' => $exam, 'usedIn' => $used] + $this->formData($q));
     }
 
     public function update(int $id): never
     {
         DB::one('SELECT id FROM questions WHERE id = ? AND deleted_at IS NULL', [$id]) ?? throw new HttpException(404);
+        $exam = $this->editContext($id);
         $this->save($id);
-        Audit::log('questions.update', 'question', $id);
+        Audit::log('questions.update', 'question', $id, 'success', $exam ? ['exam' => (int)$exam['id']] : []);
         flash('success', 'سؤال ذخیره شد. (نتایج آزمون‌های قبلی تغییر نمی‌کند)');
-        redirect('/admin/questions');
+        redirect($exam ? '/admin/exams/' . $exam['id'] . '#questions' : '/admin/questions');
     }
 
     public function destroy(int $id): never

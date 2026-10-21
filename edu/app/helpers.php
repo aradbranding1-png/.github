@@ -368,6 +368,22 @@ function file_url(mixed $fileId, bool $download = false): string
     return url('/file/' . $cache[$fileId], $download ? ['dl' => 1] : []);
 }
 
+/** Number of words in a text (Persian/English; ZWNJ joins parts of one word) */
+function word_count(?string $s): int
+{
+    $s = trim(strip_tags((string)$s));
+    if ($s === '') return 0;
+    $parts = preg_split('/[\s\x{00A0}\x{200B}\x{2000}-\x{200A}\x{3000}]+/u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $n = 0;
+    foreach ($parts as $p) if (preg_match('/[\p{L}\p{N}]/u', $p)) $n++;
+    return $n;
+}
+
+function wc_badge(?string $s): string
+{
+    return '<span class="wc-badge">' . icon('file-text') . ' ' . fa(word_count($s)) . ' کلمه</span>';
+}
+
 function str_limit(?string $s, int $len = 80): string
 {
     $s = trim(strip_tags((string)$s));
@@ -396,7 +412,13 @@ function client_ip(): string
 function clean_html(?string $html): string
 {
     // Markdown from AI tools (**bold**, ## headings, * bullets) becomes real formatting
-    return App\Core\HtmlSanitizer::clean(App\Core\Markdown::render((string)$html));
+    $html = App\Core\Markdown::render((string)$html);
+    // plain text (no HTML structure): blank lines become paragraphs, single line breaks are kept
+    if (!preg_match('~<(p|br|div|ul|ol|li|h[1-6]|table|blockquote|pre)\b~i', $html)) {
+        $paras = preg_split("/(?:\r?\n[ \t]*){2,}/", trim(str_replace("\r\n", "\n", $html))) ?: [];
+        $html = implode('', array_map(fn($p) => '<p>' . nl2br(trim($p), false) . '</p>', array_filter($paras, fn($p) => trim($p) !== '')));
+    }
+    return App\Core\HtmlSanitizer::clean($html);
 }
 
 function status_badge(string $status): string
@@ -473,3 +495,58 @@ function confirm_password_field(string $label = 'رمز عبور مدیر کل')
         . '<input class="ltr" id="' . $id . '" type="password" name="confirm_password" autocomplete="current-password" required>'
         . '<div class="hint">روی گوشی، رمز را یک بار ذخیره کنید تا دفعه بعد با Face ID یا اثر انگشت پر شود.</div></div>';
 }
+
+/** Report audience filter (segment / group) as query params, to keep it on links and Excel export */
+function aud_q(): array
+{
+    $a = \App\Services\Scope::audience();
+    return array_filter(['aseg' => $a['seg'], 'agrp' => $a['group'] ?: ''], fn($v) => $v !== '');
+}
+
+function aud_hidden(): string
+{
+    $h = '';
+    foreach (aud_q() as $k => $v) $h .= '<input type="hidden" name="' . $k . '" value="' . e((string)$v) . '">';
+    return $h;
+}
+
+/** Compact root-password input for one-line action bars (placeholder instead of label) */
+function confirm_password_inline(string $placeholder = 'رمز عبور مدیر کل'): string
+{
+    $u = \App\Core\Auth::user() ?? [];
+    $login = (string)(($u['username'] ?? '') ?: ($u['mobile'] ?? '') ?: ($u['email'] ?? ''));
+    return '<input class="sr-user" type="text" name="cp_user" value="' . e($login) . '" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>'
+        . '<input class="ltr act-pass" type="password" name="confirm_password" autocomplete="current-password" placeholder="' . e($placeholder) . '" aria-label="' . e($placeholder) . '" required>';
+}
+
+/**
+ * Exam editing: «exams.edit», or the person who created the exam and may create exams («exams.create»).
+ */
+function can_edit_exam(?array $x): bool
+{
+    if (!$x) return false;
+    if (can('exams.edit')) return true;
+    return can('exams.create') && (int)($x['created_by'] ?? 0) > 0 && (int)$x['created_by'] === (int)\App\Core\Auth::id();
+}
+
+/** Exercise editing: «lessons.edit», or its creator with «lessons.create» */
+function can_edit_exercise(?array $x): bool
+{
+    if (!$x) return false;
+    if (can('lessons.edit')) return true;
+    return can('lessons.create') && (int)($x['created_by'] ?? 0) > 0 && (int)$x['created_by'] === (int)\App\Core\Auth::id();
+}
+
+/** Where to edit an exercise: its lesson page (exercise box opened) or the course «exercises» tab */
+function exercise_edit_url(array $x): string
+{
+    return url('/admin/exercises/' . (int)$x['id'] . '/edit');
+}
+
+/** «View» link of a stored file: audio / video open in the site's player page */
+function file_view_url(array $f): string
+{
+    $uuid = (string)($f['uuid'] ?? $f['file_uuid'] ?? '');
+    return \App\Controllers\FileController::isPlayable($f) ? url('/file/' . $uuid . '/play') : url('/file/' . $uuid);
+}
+

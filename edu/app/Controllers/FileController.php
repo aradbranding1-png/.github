@@ -15,6 +15,30 @@ use App\Core\Upload;
  */
 final class FileController
 {
+    /** Is this audio / video (by kind, mime or file name)? */
+    public static function isPlayable(array $f): bool
+    {
+        if (in_array($f['kind'] ?? '', ['audio', 'video'], true)) return true;
+        return (bool)preg_match('/\.(m4a|mp3|wav|ogg|oga|aac|opus|weba|mp4|m4v|webm|mov)$/i', (string)($f['original_name'] ?? ''));
+    }
+
+    /**
+     * «View» page for audio / video: the site's own player around the file, instead of the browser's bare
+     * media page (which some browsers fail to play, e.g. a cached response or .m4a opened directly).
+     */
+    public function play(string $uuid): string
+    {
+        if (!preg_match('/^[0-9a-f\-]{36}$/', $uuid)) throw new HttpException(404);
+        $f = DB::one('SELECT * FROM files WHERE uuid = ? AND deleted_at IS NULL', [$uuid]) ?? throw new HttpException(404);
+        $staff = can('library.view') || can('courses.view') || can('lessons.view') || can('reviews.view') || (($f['folder'] ?? '') === 'growth' && (can('growth.view') || can('growth.approve')));
+        if (!$staff && !$this->learnerMayAccess($f, (int)Auth::id())) throw new HttpException(403);
+        if (!(int)$f['viewable'] && !$staff) throw new HttpException(403, 'مشاهده آنلاین این فایل مجاز نیست.');
+        if (!self::isPlayable($f)) redirect('/file/' . $uuid);
+        $isVideo = $f['kind'] === 'video' || preg_match('/\.(mp4|m4v|webm|mov)$/i', (string)$f['original_name']);
+        return view('files/play', ['title' => (string)$f['original_name'], 'f' => $f, 'isVideo' => (bool)$isVideo, 'staff' => $staff,
+            'canDownload' => (int)$f['downloadable'] === 1 || can('library.download') || $staff], 'layouts/bare');
+    }
+
     public function serve(string $uuid): void
     {
         if (!preg_match('/^[0-9a-f\-]{36}$/', $uuid)) throw new HttpException(404);
@@ -32,6 +56,8 @@ final class FileController
 
         $path = Upload::path($f);
         if (!is_file($path)) throw new HttpException(404);
+        // opened as a page (eye button, new tab) rather than by a player → show the site's player page
+        if (!$download && ($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'document' && self::isPlayable($f)) redirect('/file/' . $uuid . '/play');
         // resized copy for cards/lists (?w=320|640|960) — much lighter than the original upload
         $w = (int)($_GET['w'] ?? 0);
         if ($w && !$download && $f['kind'] === 'image' && in_array($w, [320, 640, 960], true)) {
@@ -141,11 +167,18 @@ final class FileController
         while (ob_get_level() > 0) ob_end_clean();
         $size = (int)filesize($path);
         $start = 0; $end = $size - 1;
+        // browsers play .m4a / .aac reliably only with the standard audio types
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        $audioTypes = ['m4a' => 'audio/mp4', 'aac' => 'audio/aac', 'mp3' => 'audio/mpeg', 'wav' => 'audio/wav', 'ogg' => 'audio/ogg', 'oga' => 'audio/ogg', 'opus' => 'audio/ogg', 'weba' => 'audio/webm'];
+        if (isset($audioTypes[$ext]) && !str_starts_with((string)$mime, 'video/webm')) $mime = $audioTypes[$ext];
         header('X-Content-Type-Options: nosniff');
         header('Content-Type: ' . ($mime ?: 'application/octet-stream'));
         header('Accept-Ranges: bytes');
-        // Sandbox everything except PDFs (browsers refuse to run the PDF viewer in a sandboxed document)
-        if ($mime !== 'application/pdf') header("Content-Security-Policy: default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
+        // Sandbox everything except PDFs (the PDF viewer refuses to run sandboxed) and audio/video: opened in their
+        // own tab, a sandboxed (origin-less) media page is not allowed to load the file it shows. Media cannot run code.
+        $isMedia = str_starts_with((string)$mime, 'audio/') || str_starts_with((string)$mime, 'video/');
+        if ($isMedia) header("Content-Security-Policy: default-src 'none'; media-src 'self'; img-src 'self'; style-src 'unsafe-inline'");
+        elseif ($mime !== 'application/pdf') header("Content-Security-Policy: default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
         $disp = $download ? 'attachment' : 'inline';
         header("Content-Disposition: $disp; filename=\"" . preg_replace('/[^A-Za-z0-9._-]/', '_', $name) . "\"; filename*=UTF-8''" . rawurlencode($name));
         if (!empty($_SERVER['HTTP_RANGE']) && preg_match('/bytes=(\d*)-(\d*)/', (string)$_SERVER['HTTP_RANGE'], $m)) {

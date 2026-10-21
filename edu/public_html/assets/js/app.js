@@ -270,7 +270,7 @@
   function ctypeUI(v) {
     $$('[data-ctype-box]').forEach(function (b) { var list = b.getAttribute('data-ctype-box').split(','); b.classList.toggle('hide', list.indexOf(v) === -1); });
   }
-  var ct = $('[data-content-type]'); if (ct) ctypeUI(ct.value);
+  var ct = $('input[data-content-type]:checked') || $('select[data-content-type]'); if (ct) ctypeUI(ct.value);
 
   // ---------------------------------------------------------------- lesson player: progress, resume, heartbeat
   var player = $('[data-lesson]');
@@ -278,29 +278,67 @@
     var progressUrl = player.getAttribute('data-progress-url');
     var need = parseInt(player.getAttribute('data-need') || '90', 10);
     var btn = $('[data-complete-btn]');
+    // text lessons: the lock lifts by itself after the minimum reading time, no page refresh needed
+    var waitSec = btn ? parseInt(btn.getAttribute('data-audit-wait') || '0', 10) : 0;
+    if (waitSec > 0) {
+      setTimeout(function () {
+        btn.removeAttribute('data-audit-block'); btn.removeAttribute('data-audit-wait'); btn.removeAttribute('title');
+        btn.disabled = false; btn.classList.remove('disabled');
+        var note = $('[data-audit-note]'); if (note) note.classList.add('hide');
+      }, waitSec * 1000);
+    }
     var media = $('video[data-track], audio[data-track]');
     var lastSent = 0, maxPct = parseInt(player.getAttribute('data-pct') || '0', 10);
     if (media) {
       var resume = parseInt(media.getAttribute('data-resume') || '0', 10);
-      media.addEventListener('loadedmetadata', function () { if (resume > 5 && resume < media.duration - 5) media.currentTime = resume; });
+      // real listening / watching: every second of the file that is actually played counts once per visit;
+      // dragging the play-head forward counts nothing. The server adds up these seconds (watched_sec).
+      var watchedBase = parseInt(player.getAttribute('data-watched') || '0', 10);
+      var seen = {}, sessionSec = 0, pending = 0, lastT = null;
+      var watchedPct = function () {
+        var d = media.duration;
+        if (!d || !isFinite(d)) return maxPct;
+        return Math.min(100, Math.floor((watchedBase + sessionSec) * 100 / d));
+      };
+      var flush = function (force) {
+        if (!progressUrl || !media.duration || !isFinite(media.duration)) return;
+        if (!force && pending <= 0) return;
+        var w = pending; pending = 0; lastSent = Date.now();
+        post(progressUrl, { position: Math.floor(media.currentTime), percent: watchedPct(), watched: w, duration: Math.round(media.duration) })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { if (d && d.completed && window.appToast) window.appToast('درس تکمیل شد'); })
+          .catch(function () { pending += w; });
+      };
+      var enableIfDone = function () { var p = watchedPct(); if (p > maxPct) maxPct = p; if (maxPct >= need && btn && !btn.hasAttribute('data-audit-block')) { btn.disabled = false; btn.classList.remove('disabled'); } };
+      media.addEventListener('loadedmetadata', function () { if (resume > 5 && resume < media.duration - 5) media.currentTime = resume; lastT = null; enableIfDone(); });
+      media.addEventListener('seeking', function () { lastT = null; });
+      media.addEventListener('seeked', function () { lastT = media.currentTime; });
       media.addEventListener('timeupdate', function () {
         if (!media.duration) return;
-        var pct = Math.floor(media.currentTime * 100 / media.duration);
-        if (pct > maxPct) maxPct = pct;
-        if (maxPct >= need && btn) btn.disabled = false, btn.classList.remove('disabled');
-        var now = Date.now();
-        if (now - lastSent > 15000) { lastSent = now; post(progressUrl, { position: Math.floor(media.currentTime), percent: maxPct }); }
+        var t = media.currentTime;
+        if (lastT !== null && !media.seeking) {
+          var d = t - lastT;
+          // normal playback moves a fraction of a second per event (a few seconds at 2× or in a background tab)
+          if (d > 0 && d <= 6 * Math.max(1, media.playbackRate || 1)) {
+            for (var sec = Math.floor(lastT); sec < Math.floor(t); sec++) if (!seen[sec]) { seen[sec] = 1; sessionSec++; pending++; }
+          }
+        }
+        lastT = t;
+        enableIfDone();
+        if (Date.now() - lastSent > 15000) flush(true);
       });
-      media.addEventListener('pause', function () { post(progressUrl, { position: Math.floor(media.currentTime), percent: maxPct }); });
+      media.addEventListener('pause', function () { flush(true); });
+      media.addEventListener('ended', function () { flush(true); enableIfDone(); });
+      window.addEventListener('pagehide', function () { flush(false); });
+      document.addEventListener('visibilitychange', function () { if (document.hidden) flush(false); });
       if (media.hasAttribute('data-remote')) {
         // external file could not be played (blocked by host, deleted, unsupported codec):
         // show a direct link and don't keep the learner stuck behind the watch requirement
         media.addEventListener('error', function () {
           var box = $('[data-remote-err]'); if (box) box.classList.remove('hide');
-          if (btn) { btn.disabled = false; btn.classList.remove('disabled'); }
+          if (btn && !btn.hasAttribute('data-audit-block')) { btn.disabled = false; btn.classList.remove('disabled'); }
         });
       }
-      media.addEventListener('ended', function () { maxPct = 100; post(progressUrl, { position: 0, percent: 100 }); if (btn) { btn.disabled = false; btn.classList.remove('disabled'); } });
     }
     // time-on-page heartbeat (only while tab is visible)
     var hb = player.getAttribute('data-heartbeat-url');
@@ -601,7 +639,10 @@
     if (a.dataset.playerReady) return;
     a.dataset.playerReady = '1';
     var title = a.getAttribute('data-title') || document.title.split('|')[0].trim();
-    var host = a.closest('.card') || a.parentNode;
+    // data-speeds="1,1.5,2" overrides the speed list (reviewers listen up to 3×); data-inline keeps the surrounding card
+    var speeds = a.getAttribute('data-speeds') ? a.getAttribute('data-speeds').split(',').map(parseFloat).filter(function (x) { return x > 0; }) : SPEEDS;
+    var speedKey = a.getAttribute('data-speed-key') || 'ap-speed';
+    var host = a.hasAttribute('data-inline') ? a.parentNode : (a.closest('.card') || a.parentNode);
     var p = document.createElement('div');
     p.className = 'ap';
     p.innerHTML =
@@ -612,11 +653,11 @@
         '<div class="ap-main" dir="ltr"><button type="button" class="ap-b ap-back" title="۱۵ ثانیه عقب">' + I.back + '</button><button type="button" class="ap-play" title="پخش">' + I.play + '</button><button type="button" class="ap-b ap-fwd" title="۱۵ ثانیه جلو">' + I.fwd + '</button></div>' +
         '<div class="ap-vol" dir="ltr"><button type="button" class="ap-b ap-mute" title="قطع/وصل صدا">' + I.vol + '</button><input type="range" class="ap-vrange" min="0" max="100" value="100" aria-label="بلندی صدا"></div>' +
       '</div>' +
-      '<div class="ap-speeds" hidden>' + SPEEDS.map(function (s) { return '<button type="button" data-s="' + s + '">' + fa(s) + '×</button>'; }).join('') + '</div>';
+      '<div class="ap-speeds" hidden>' + speeds.map(function (s) { return '<button type="button" data-s="' + s + '">' + fa(s) + '×</button>'; }).join('') + '</div>';
     p.querySelector('.ap-meta b').textContent = title;
     a.controls = false; a.removeAttribute('controls'); a.style.display = 'none';
     // take over the card (icon + native player) with the new player
-    if (host.classList && host.classList.contains('card')) { host.innerHTML = ''; host.appendChild(a); host.appendChild(p); host.classList.add('ap-card'); }
+    if (!a.hasAttribute('data-inline') && host.classList && host.classList.contains('card')) { host.innerHTML = ''; host.appendChild(a); host.appendChild(p); host.classList.add('ap-card'); }
     else a.parentNode.insertBefore(p, a.nextSibling);
 
     var $ = function (s) { return p.querySelector(s); };
@@ -624,8 +665,8 @@
     var speedBtn = $('.ap-speed'), menu = $('.ap-speeds'), mute = $('.ap-mute'), vr = $('.ap-vrange'), status = $('.ap-status');
     var seeking = false;
 
-    function setSpeed(s) { a.playbackRate = s; speedBtn.textContent = fa(s) + '×'; store.set('ap-speed', String(s)); Array.prototype.forEach.call(menu.children, function (b) { b.classList.toggle('on', parseFloat(b.dataset.s) === s); }); }
-    var saved = parseFloat(store.get('ap-speed') || '1'); setSpeed(SPEEDS.indexOf(saved) !== -1 ? saved : 1);
+    function setSpeed(s) { a.playbackRate = s; speedBtn.textContent = fa(s) + '×'; store.set(speedKey, String(s)); Array.prototype.forEach.call(menu.children, function (b) { b.classList.toggle('on', parseFloat(b.dataset.s) === s); }); }
+    var saved = parseFloat(store.get(speedKey) || '1'); setSpeed(speeds.indexOf(saved) !== -1 ? saved : 1);
     var vSaved = parseFloat(store.get('ap-vol') || '1'); a.volume = isFinite(vSaved) ? Math.min(1, Math.max(0, vSaved)) : 1; vr.value = Math.round(a.volume * 100);
 
     function paintVol() { var v = a.muted ? 0 : a.volume; vr.style.setProperty('--v', (v * 100) + '%'); mute.innerHTML = v === 0 ? I.mute : I.vol; }
@@ -724,6 +765,22 @@
   if (box.getAttribute('data-autostart') === '1') go();
 })();
 
+/* ---------------------------------------------------------------- long lesson text: show the start, expand on demand */
+(function () {
+  document.querySelectorAll('[data-readmore]').forEach(function (box) {
+    var inner = box.querySelector('.lbody-in'), btn = box.querySelector('[data-readmore-btn]');
+    if (!inner || !btn) return;
+    var LIMIT = 360;
+    if (inner.scrollHeight <= LIMIT + 120) return; // short enough: show everything
+    box.classList.add('is-clamped'); btn.hidden = false;
+    btn.addEventListener('click', function () {
+      var open = box.classList.toggle('is-open');
+      inner.style.maxHeight = open ? inner.scrollHeight + 'px' : '';
+      if (!open) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+})();
+
 /* ---------------------------------------------------------------- locked lessons: explain instead of doing nothing */
 (function () {
   var box = null, timer = null;
@@ -748,21 +805,66 @@
 })();
 
 /* ---------------------------------------------------------------- drag & drop ordering: [data-sortable] with rows [data-id] and a .drag-h handle */
+// The grabbed row follows the pointer 1:1 (lifted, with a shadow); the other rows glide out of its way
+// (FLIP animation) and on release the row settles into its slot. Uses the CSS `translate` property so
+// it works on table rows too.
 (function () {
   var csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var EASE = 'cubic-bezier(.2,.8,.2,1)', DUR = reduce ? 0 : 220;
   document.querySelectorAll('[data-sortable]').forEach(function (list) {
-    var drag = null, ph = null, startOrder = '';
+    var drag = null, startOrder = '', pending = null;
+    var startY = 0, startTop = 0, startScroll = 0, lastY = 0, raf = 0, scrollV = 0;
     function rows() { return Array.prototype.filter.call(list.children, function (r) { return r.hasAttribute('data-id'); }); }
     function order() { return rows().map(function (r) { return r.getAttribute('data-id'); }).join(','); }
-    var pending = null;
-    function begin(row, e, el) {
+    // layout position (offsetTop ignores the translate animations, so it never jitters; every row is
+    // position:relative in CSS so they all share the same offsetParent)
+    function top(r) { return r.offsetTop; }
+
+    // move `drag` before `ref` (or to the end) and let the other rows glide to their new places
+    function moveTo(ref) {
+      var others = rows().filter(function (r) { return r !== drag; });
+      var before = others.map(function (r) { return r.getBoundingClientRect().top; });
+      if (ref) list.insertBefore(drag, ref); else list.appendChild(drag);
+      others.forEach(function (r) { r.style.transition = 'none'; r.style.translate = ''; });
+      var after = others.map(function (r) { return r.getBoundingClientRect().top; });
+      others.forEach(function (r, i) { var d = before[i] - after[i]; if (d) r.style.translate = '0 ' + d + 'px'; });
+      void list.offsetHeight;
+      others.forEach(function (r) { r.style.transition = 'translate ' + DUR + 'ms ' + EASE; r.style.translate = ''; });
+    }
+
+    function follow() {
+      raf = 0;
+      if (!drag) return;
+      if (scrollV) { window.scrollBy(0, scrollV); raf = requestAnimationFrame(follow); }
+      // where the row should be drawn (layout-independent of where it currently sits in the DOM)
+      var want = startTop + (lastY - startY) + (window.scrollY - startScroll);
+      var h = drag.offsetHeight, mid = want + h / 2;
+      // swap with neighbours once the row's centre passes theirs
+      for (var guard = 0; guard < 50; guard++) {
+        var prev = drag.previousElementSibling, next = drag.nextElementSibling;
+        while (prev && !prev.hasAttribute('data-id')) prev = prev.previousElementSibling;
+        while (next && !next.hasAttribute('data-id')) next = next.nextElementSibling;
+        if (prev && mid < top(prev) + prev.offsetHeight / 2) moveTo(prev);
+        else if (next && mid > top(next) + next.offsetHeight / 2) moveTo(next.nextElementSibling);
+        else break;
+      }
+      drag.style.translate = '0 ' + (want - top(drag)) + 'px';
+    }
+    function schedule() { if (!raf) raf = requestAnimationFrame(follow); }
+
+    function begin(row, e, el, y0) {
       drag = row; startOrder = order();
-      drag.classList.add('dragging'); document.body.classList.add('is-sorting');
+      startY = lastY = y0; startScroll = window.scrollY; startTop = top(row);
+      drag.style.transition = 'scale 180ms ' + EASE + ', box-shadow 180ms ' + EASE;
+      drag.classList.add('dragging'); list.classList.add('is-dragging'); document.body.classList.add('is-sorting');
       el && el.setPointerCapture && el.setPointerCapture(e.pointerId);
+      schedule();
     }
     list.addEventListener('pointerdown', function (e) {
+      if (drag) return;
       var h = e.target.closest('.drag-h');
-      if (h && list.contains(h)) { e.preventDefault(); begin(h.closest('[data-id]'), e, h); return; }
+      if (h && list.contains(h)) { e.preventDefault(); begin(h.closest('[data-id]'), e, h, e.clientY); return; }
       // with a mouse the whole row can be dragged (not from buttons, links or fields)
       if (e.pointerType === 'mouse' && e.button === 0 && list.hasAttribute('data-row-drag') && !e.target.closest('a,button,input,select,textarea,label,form')) {
         var row = e.target.closest('[data-id]');
@@ -771,31 +873,40 @@
     });
     list.addEventListener('pointermove', function (e) {
       if (!drag && pending) {
-        if (Math.abs(e.clientY - pending.y) < 6) return;
-        begin(pending.row, e, list); pending = null;
+        if (Math.abs(e.clientY - pending.y) < 5) return;
+        begin(pending.row, e, list, pending.y); pending = null;
         var sel = window.getSelection && window.getSelection(); if (sel) sel.removeAllRanges();
       }
       if (!drag) return;
       e.preventDefault();
-      var y = e.clientY;
-      var over = rows().filter(function (r) { return r !== drag; }).find(function (r) { var b = r.getBoundingClientRect(); return y < b.top + b.height / 2; });
-      if (over) { if (drag.nextElementSibling !== over) list.insertBefore(drag, over); }
-      else if (list.lastElementChild !== drag) list.appendChild(drag);
-      // keep the row visible when dragging near the screen edges
-      if (y < 80) window.scrollBy(0, -12); else if (y > window.innerHeight - 60) window.scrollBy(0, 12);
+      lastY = e.clientY;
+      // auto-scroll near the screen edges, faster the closer to the edge
+      var y = e.clientY, H = window.innerHeight;
+      scrollV = y < 90 ? -Math.ceil((90 - y) / 6) : y > H - 70 ? Math.ceil((y - (H - 70)) / 5) : 0;
+      schedule();
     });
+    window.addEventListener('scroll', function () { if (drag) schedule(); }, { passive: true });
+
     function end() {
       pending = null;
       if (!drag) return;
-      drag.classList.remove('dragging'); document.body.classList.remove('is-sorting');
+      if (raf) cancelAnimationFrame(raf); raf = 0; scrollV = 0;
       var moved = drag; drag = null;
+      document.body.classList.remove('is-sorting');
+      // settle into the slot
+      moved.style.transition = 'translate ' + DUR + 'ms ' + EASE + ', scale ' + DUR + 'ms ' + EASE + ', box-shadow ' + DUR + 'ms ' + EASE;
+      moved.style.translate = '';
+      moved.classList.remove('dragging');
+      setTimeout(function () { moved.style.transition = ''; list.classList.remove('is-dragging'); rows().forEach(function (r) { r.style.transition = ''; }); }, DUR + 30);
       if (order() === startOrder) return;
       var fd = new FormData(); fd.append('_token', csrf);
       rows().forEach(function (r) { fd.append('ids[]', r.getAttribute('data-id')); });
+      // renumber right away so the change feels instant
+      rows().forEach(function (r, i) { var n = r.querySelector('[data-row-no]'); if (n) n.textContent = String(i + 1).replace(/\d/g, function (x) { return '۰۱۲۳۴۵۶۷۸۹'[x]; }); });
       moved.classList.add('saving');
       fetch(list.getAttribute('data-sortable'), { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
         .then(function (r) { return r.json(); })
-        .then(function (d) { rows().forEach(function (r, i) { var n = r.querySelector('[data-row-no]'); if (n) n.textContent = String(i + 1).replace(/\d/g, function (x) { return '۰۱۲۳۴۵۶۷۸۹'[x]; }); }); moved.classList.remove('saving'); moved.classList.add('saved'); setTimeout(function () { moved.classList.remove('saved'); }, 900); if (window.appToast) window.appToast('ترتیب ذخیره شد'); })
+        .then(function (d) { moved.classList.remove('saving'); moved.classList.add('saved'); setTimeout(function () { moved.classList.remove('saved'); }, 900); if (window.appToast) window.appToast('ترتیب ذخیره شد'); })
         .catch(function () { moved.classList.remove('saving'); alert('ذخیره ترتیب انجام نشد؛ صفحه را دوباره باز کنید.'); });
     }
     list.addEventListener('pointerup', end);
@@ -917,5 +1028,180 @@
         .catch(function () {})
         .then(function () { target.disabled = false; });
     });
+  });
+})();
+
+/* ---------------------------------------------------------------- rich text editor for textarea[data-rich]
+ * Bold / italic / underline, colour, highlight, headings, lists, alignment, link. Pasting from Word or
+ * Google Docs keeps bold and colours. The HTML is copied back into the textarea; the server sanitizes it. */
+(function () {
+  var COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed', '#db2777'];
+  var MARKS = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fbcfe8', '#fed7aa'];
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function toHtml(v) {
+    v = (v || '').trim();
+    if (!v) return '';
+    if (/<(p|br|div|ul|ol|li|h[1-6]|span|strong|b|table|blockquote)\b/i.test(v)) return v;
+    return v.split(/\n\s*\n/).map(function (p) { return '<p>' + esc(p.trim()).replace(/\n/g, '<br>') + '</p>'; }).join('');
+  }
+  function safe(html) { // the admin's own content, but never run scripts in the editor
+    var doc = new DOMParser().parseFromString('<div>' + html + '</div>', 'text/html');
+    doc.querySelectorAll('script,style,iframe,object,embed,link,meta').forEach(function (n) { n.remove(); });
+    doc.querySelectorAll('*').forEach(function (n) { Array.prototype.slice.call(n.attributes).forEach(function (a) { if (/^on/i.test(a.name) || /javascript:/i.test(a.value)) n.removeAttribute(a.name); }); });
+    return doc.body.firstChild.innerHTML;
+  }
+  document.querySelectorAll('textarea[data-rich]').forEach(function (ta) {
+    var box = document.createElement('div'); box.className = 'rte';
+    var bar = document.createElement('div'); bar.className = 'rte-bar';
+    var area = document.createElement('div'); area.className = 'rte-area prose'; area.contentEditable = 'true'; area.dir = 'rtl';
+    area.style.minHeight = Math.max(4, parseInt(ta.getAttribute('rows') || '6', 10)) * 1.9 + 'em';
+    area.innerHTML = safe(toHtml(ta.value));
+    var btn = function (label, title, fn, cls) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'rte-btn ' + (cls || ''); b.innerHTML = label; b.title = title;
+      b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      b.addEventListener('click', function () { area.focus(); fn(); sync(); });
+      bar.appendChild(b); return b;
+    };
+    var cmd = function (c, v) { return function () { try { document.execCommand('styleWithCSS', false, c === 'hiliteColor' || c === 'foreColor'); } catch (e) {} document.execCommand(c, false, v || null); }; };
+    var sep = function () { var s = document.createElement('span'); s.className = 'rte-sep'; bar.appendChild(s); };
+    btn('<b>B</b>', 'درشت (بولد)', cmd('bold'));
+    btn('<i>I</i>', 'کج', cmd('italic'));
+    btn('<u>U</u>', 'زیرخط', cmd('underline'));
+    sep();
+    btn('تیتر', 'تیتر بزرگ', cmd('formatBlock', '<h2>'));
+    btn('زیرتیتر', 'تیتر کوچک', cmd('formatBlock', '<h3>'));
+    btn('متن', 'پاراگراف معمولی', cmd('formatBlock', '<p>'));
+    sep();
+    btn('• فهرست', 'فهرست نقطه‌ای', cmd('insertUnorderedList'));
+    btn('۱. فهرست', 'فهرست شماره‌دار', cmd('insertOrderedList'));
+    sep();
+    var pal = function (title, list, c) {
+      var w = document.createElement('span'); w.className = 'rte-pal'; w.title = title;
+      list.forEach(function (col) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'rte-sw' + (c === 'hiliteColor' ? ' is-mark' : ''); b.style.background = col; b.title = title;
+        b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        b.addEventListener('click', function () { area.focus(); cmd(c, col)(); sync(); });
+        w.appendChild(b);
+      });
+      bar.appendChild(w);
+    };
+    var lbl = function (t) { var s = document.createElement('span'); s.className = 'rte-lbl'; s.textContent = t; bar.appendChild(s); };
+    lbl('رنگ:'); pal('رنگ متن', COLORS, 'foreColor');
+    lbl('ماژیک:'); pal('رنگ پس‌زمینه (هایلایت)', MARKS, 'hiliteColor');
+    sep();
+    btn('راست', 'راست‌چین', cmd('justifyRight'));
+    btn('وسط', 'وسط‌چین', cmd('justifyCenter'));
+    btn('تراز', 'تراز دو طرف', cmd('justifyFull'));
+    sep();
+    btn('لینک', 'افزودن لینک به متن انتخاب‌شده', function () { var u = window.prompt('آدرس لینک (با https:// شروع شود):', 'https://'); if (u && /^https?:\/\//i.test(u)) document.execCommand('createLink', false, u); });
+    btn('پاک‌کردن قالب', 'حذف بولد، رنگ و ... از متن انتخاب‌شده', function () { document.execCommand('removeFormat'); document.execCommand('unlink'); }, 'rte-clear');
+    var srcBtn = btn('HTML', 'نمایش/ویرایش کد', function () {
+      var on = box.classList.toggle('is-src');
+      if (on) { sync(); ta.style.display = ''; area.style.display = 'none'; } else { area.innerHTML = safe(toHtml(ta.value)); ta.style.display = 'none'; area.style.display = ''; }
+    }, 'rte-src');
+    function sync() {
+      if (box.classList.contains('is-src')) return;
+      var h = area.innerHTML.trim();
+      if (h === '<br>' || h === '<p><br></p>' || area.textContent.trim() === '' && !area.querySelector('img')) h = '';
+      ta.value = h;
+    }
+    area.addEventListener('input', sync);
+    area.addEventListener('blur', sync);
+    ta.addEventListener('input', function () { if (!box.classList.contains('is-src')) area.innerHTML = safe(toHtml(ta.value)); });
+    if (ta.form) ta.form.addEventListener('submit', function () { if (box.classList.contains('is-src')) srcBtn.click(); sync(); });
+    ta.parentNode.insertBefore(box, ta);
+    box.appendChild(bar); box.appendChild(area); box.appendChild(ta);
+    ta.style.display = 'none'; ta.classList.add('rte-code');
+  });
+})();
+
+/* ---------------------------------------------------------------- live word counter for textarea[data-wordcount] */
+(function () {
+  var fa = function (s) { return String(s).replace(/\d/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'[d]; }); };
+  var count = function (t) {
+    var parts = String(t || '').trim().split(/[\s ​ - 　]+/);
+    var n = 0;
+    for (var i = 0; i < parts.length; i++) if (/[\p{L}\p{N}]/u.test(parts[i])) n++;
+    return n;
+  };
+  document.querySelectorAll('textarea[data-wordcount]').forEach(function (ta) {
+    var out = document.createElement('div');
+    out.className = 'wc-live';
+    ta.parentNode.insertBefore(out, ta.nextSibling);
+    var upd = function () {
+      var w = count(ta.value), c = ta.value.replace(/\s/g, '').length;
+      out.innerHTML = '<span class="wc-badge"><b>' + fa(w) + '</b> کلمه</span><span class="faint small">' + fa(c) + ' نویسه</span>';
+    };
+    ta.addEventListener('input', upd);
+    upd();
+  });
+})();
+
+/* ---------------------------------------------------------------- settings: highlight the section in view */
+(function () {
+  var links = document.querySelectorAll('[data-set-link]');
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var mark = function (id) { links.forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-set-link') === id); }); };
+  mark(links[0].getAttribute('data-set-link'));
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) { if (en.isIntersecting) mark(en.target.id); });
+  }, { rootMargin: '-90px 0px -60% 0px' });
+  links.forEach(function (a) { var s = document.getElementById(a.getAttribute('data-set-link')); if (s) io.observe(s); });
+})();
+
+/* ---------------------------------------------------------------- sidebar keeps its scroll position between pages */
+(function () {
+  var nav = document.querySelector('.sb-nav');
+  if (!nav) return;
+  var KEY = 'sb-scroll';
+  var saved = null;
+  try { saved = sessionStorage.getItem(KEY); } catch (e) {}
+  var active = nav.querySelector('.sb-link.active');
+  if (saved !== null) nav.scrollTop = parseInt(saved, 10) || 0;
+  // the selected item must always be visible (also when arriving from a link outside the sidebar)
+  if (active) {
+    var top = active.offsetTop - nav.offsetTop, h = active.offsetHeight;
+    if (top < nav.scrollTop + 8 || top + h > nav.scrollTop + nav.clientHeight - 8) nav.scrollTop = Math.max(0, top - nav.clientHeight / 2 + h / 2);
+  }
+  var save = function () { try { sessionStorage.setItem(KEY, String(nav.scrollTop)); } catch (e) {} };
+  nav.addEventListener('click', function (e) { if (e.target.closest('a')) save(); });
+  window.addEventListener('pagehide', save);
+})();
+
+/* ---------------------------------------------------------------- course form: levels follow the chosen audience groups */
+(function () {
+  var box = document.querySelector('[data-aud-groups]'), lv = document.querySelector('[data-aud-levels]');
+  if (!box || !lv) return;
+  var groups = Array.prototype.slice.call(box.querySelectorAll('input[name="audience[]"]'));
+  var kids = {};
+  groups.forEach(function (i) { var p = i.getAttribute('data-parent') || '0'; (kids[p] = kids[p] || []).push(i.value); });
+  var sync = function () {
+    var chosen = groups.filter(function (i) { return i.checked; }).map(function (i) { return i.value; });
+    var allow = null;
+    if (chosen.length) {
+      allow = {};
+      var stack = chosen.slice();
+      while (stack.length) { var g = stack.pop(); if (allow[g]) continue; allow[g] = true; (kids[g] || []).forEach(function (k) { stack.push(k); }); }
+    }
+    var shown = 0;
+    lv.querySelectorAll('.aud-item[data-group]').forEach(function (el) {
+      var ok = !allow || allow[el.getAttribute('data-group')];
+      el.hidden = !ok;
+      if (!ok) { var cb = el.querySelector('input'); if (cb) cb.checked = false; } else shown++;
+    });
+    lv.querySelectorAll('.aud-head[data-group]').forEach(function (el) { el.hidden = !!allow && !allow[el.getAttribute('data-group')]; });
+    var none = lv.querySelector('[data-aud-nolevel]');
+    if (none) none.hidden = !(allow && shown === 0 && lv.querySelectorAll('.aud-item[data-group]').length);
+  };
+  groups.forEach(function (i) { i.addEventListener('change', sync); });
+  sync();
+})();
+
+/* ---------------------------------------------------------------- Bale settings: rules box follows the delay field while typing */
+(function () {
+  var i = document.querySelector('[data-delay-input]'); if (!i) return;
+  i.addEventListener('input', function () {
+    var v = String(Math.max(0, parseInt(String(i.value).replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); }) || '0', 10) || 0)).replace(/\d/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'[d]; });
+    document.querySelectorAll('[data-delay-mirror]').forEach(function (b) { b.textContent = v; });
   });
 })();

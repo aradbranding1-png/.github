@@ -13,14 +13,18 @@ use App\Core\Settings;
 use App\Core\Validator;
 use App\Core\Xlsx;
 use App\Services\Health;
-use App\Services\SsoClient;
 use App\Services\Targeting;
 
-/** Settings, SSO, health, errors, audit log, API tokens, broadcast notifications */
+/** Settings, health, errors, audit log, API tokens, broadcast notifications */
 final class SystemController
 {
     public function settings(): string
     {
+        // people who only manage e.g. backups land on the first settings section they may open
+        if (!can('settings.view')) {
+            foreach (['health.view' => '/admin/system/health', 'backups.view' => '/admin/system/backups', 'migrations.view' => '/admin/system/migrations', 'errors.view' => '/admin/system/errors'] as $p => $to) if (can($p)) redirect($to);
+            throw new \App\Core\HttpException(403);
+        }
         return view('admin/system/settings', ['title' => 'تنظیمات سامانه', 's' => Settings::all(), 'editable' => can('settings.edit')]);
     }
 
@@ -35,6 +39,8 @@ final class SystemController
             'minutes_enabled' => Request::bool('minutes_enabled') ? '1' : '0', 'minutes_charge_text' => mb_substr(Request::str('minutes_charge_text'), 0, 500),
             'inactivity_days' => (string)max(1, (int)$d['inactivity_days']), 'deadline_warning_days' => (string)max(0, (int)$d['deadline_warning_days']),
             'max_upload_mb' => (string)max(1, min(4096, (int)$d['max_upload_mb'])), 'video_complete_percent' => (string)max(50, min(100, (int)$d['video_complete_percent'])),
+            'completion_audit' => Request::bool('completion_audit') ? '1' : '0',
+            'completion_audit_pct' => (string)max(20, min(95, Request::int('completion_audit_pct', 60))),
             'update_require_signature' => is_root() ? (Request::bool('update_require_signature') ? '1' : '0') : (string)setting('update_require_signature'),
         ]);
         Audit::log('settings.update', 'settings', null);
@@ -42,41 +48,9 @@ final class SystemController
         redirect('/admin/settings');
     }
 
-    public function sso(): string
-    {
-        return view('admin/system/sso', ['title' => 'اتصال SSO', 's' => Settings::all(), 'errors' => SsoClient::configErrors(), 'callback' => SsoClient::callbackUrl(), 'editable' => can('sso.edit'),
-            'env' => ['SSO_CLIENT_ID' => (bool)env('SSO_CLIENT_ID'), 'SSO_CLIENT_SECRET' => (bool)env('SSO_CLIENT_SECRET'), 'SSO_SHARED_SECRET' => (bool)env('SSO_SHARED_SECRET'), 'MY_API_KEY' => (bool)env('MY_API_KEY')],
-            'linked' => (int)DB::value('SELECT COUNT(*) FROM users WHERE my_user_id IS NOT NULL AND deleted_at IS NULL'),
-            'probe' => Request::str('probe') === '1' ? SsoClient::probe() : null]);
-    }
-
-    public function saveSso(): never
-    {
-        $urls = ['sso_authorize_url', 'sso_token_url', 'sso_userinfo_url', 'sso_logout_url'];
-        $vals = [];
-        foreach ($urls as $k) {
-            $v = trim((string)($_POST[$k] ?? ''));
-            if ($v !== '' && !filter_var(str_replace('{id}', '0', $v), FILTER_VALIDATE_URL)) { flash('danger', 'آدرس «' . $k . '» معتبر نیست.'); redirect('/admin/sso'); }
-            $vals[$k] = $v;
-        }
-        foreach (['sso_scopes', 'sso_button_label', 'sso_map_id', 'sso_map_first_name', 'sso_map_last_name', 'sso_map_mobile', 'sso_map_email', 'sso_map_avatar', 'sso_map_status', 'sso_active_values'] as $k) {
-            $vals[$k] = mb_substr(trim((string)($_POST[$k] ?? '')), 0, 200);
-        }
-        $vals['sso_mode'] = Request::str('sso_mode') === 'jwt' ? 'jwt' : 'oauth2';
-        $vals['sso_enabled'] = Request::bool('sso_enabled') ? '1' : '0';
-        $vals['sso_auto_register'] = Request::bool('sso_auto_register') ? '1' : '0';
-        $vals['sso_sync_avatar'] = Request::bool('sso_sync_avatar') ? '1' : '0';
-        $vals['sso_default_segment'] = in_array(Request::str('sso_default_segment'), ['merchant', 'employee', 'agent'], true) ? Request::str('sso_default_segment') : 'merchant';
-        Settings::set($vals);
-        Audit::log('sso.update', 'settings', null, 'success', ['enabled' => $vals['sso_enabled'], 'mode' => $vals['sso_mode']]);
-        $errs = SsoClient::configErrors();
-        flash($errs && $vals['sso_enabled'] === '1' ? 'warning' : 'success', 'تنظیمات SSO ذخیره شد.' . ($errs && $vals['sso_enabled'] === '1' ? ' موارد ناقص: ' . implode('، ', $errs) : ''));
-        redirect('/admin/sso');
-    }
-
     public function health(): string
     {
-        $checks = Health::run(Request::str('deep') === '1');
+        $checks = Health::run();
         return view('admin/system/health', ['title' => 'سلامت سامانه', 'checks' => $checks, 'summary' => Health::summary($checks),
             'info' => ['php' => PHP_VERSION, 'sapi' => PHP_SAPI, 'server' => $_SERVER['SERVER_SOFTWARE'] ?? '—', 'upload_max' => ini_get('upload_max_filesize'), 'post_max' => ini_get('post_max_size'), 'memory' => ini_get('memory_limit'), 'max_exec' => ini_get('max_execution_time'), 'db' => (string)DB::value('SELECT VERSION()'), 'version' => app_version(), 'tz' => date_default_timezone_get()]]);
     }

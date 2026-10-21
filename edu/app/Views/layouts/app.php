@@ -14,6 +14,9 @@ $badgeCounts = [];
 if ($me && can('reviews.view')) {
     $badgeCounts['reviews'] = (int)DB::value("SELECT (SELECT COUNT(*) FROM exercise_submissions WHERE status = 'submitted') + (SELECT COUNT(*) FROM exam_attempts WHERE status = 'pending_review')");
 }
+if ($me && can_any(['reports.report', 'courses.report'])) {
+    $badgeCounts['suspicious_completions'] = \App\Services\CompletionAudit::openCount();
+}
 if ($me && can('growth.approve')) {
     try { $badgeCounts['growth_reviews'] = (int)DB::value("SELECT (SELECT COUNT(*) FROM tg_deals WHERE status = 'pending') + (SELECT COUNT(*) FROM tg_requests WHERE status = 'pending')"); } catch (\Throwable) {}
 }
@@ -24,6 +27,7 @@ $isActive = function (string $href) use ($cur): bool {
     if ($href === '/') return $cur === '/';
     if ($href === '/admin') return $cur === '/admin';
     if ($href === '/admin/growth') return $cur === '/admin/growth' || preg_match('~^/admin/growth/(stages|settings|legacy|user)~', $cur) === 1;
+    if ($href === '/admin/settings') return preg_match('~^/admin/(settings|integrations/(arad-contact|bale)|system/(health|backups|migrations|errors))(/|$)~', $cur) === 1;
     if ($href === '/learn') return $cur === '/learn' || preg_match('~^/learn/(course|lesson)~', $cur) === 1;
     return $cur === $href || str_starts_with($cur, $href . '/');
 };
@@ -95,7 +99,7 @@ $imp = Auth::isImpersonating() ? Auth::impersonator() : null;
                 <details class="dropdown dd-user-wrap">
                     <summary class="user-chip" aria-label="منوی حساب کاربری">
                         <?= avatar_html($me, 'sm') ?>
-                        <span><span class="nm"><?= user_name_html($me) ?></span><br><span class="rl"><?= e($roleNames[0] ?? '') ?></span></span>
+                        <span><span class="nm"><?= user_name_html($me) ?></span><?php if (empty($me['is_root'])): ?><br><span class="rl"><?= e($roleNames[0] ?? '') ?></span><?php endif; ?></span>
                         <?= icon('chevron-down', 'faint uc-chev') ?>
                     </summary>
                     <div class="dd-backdrop" data-dd-close aria-hidden="true"></div>
@@ -131,6 +135,7 @@ $imp = Auth::isImpersonating() ? Auth::impersonator() : null;
             <?php foreach (flashes() as $f): ?>
                 <div class="alert alert-<?= e($f['type']) ?>" data-autohide><?= icon($f['type'] === 'success' ? 'circle-check' : ($f['type'] === 'danger' ? 'circle-x' : 'info')) ?><div><?= $f['msg'] /* already escaped by producer */ ?></div></div>
             <?php endforeach; ?>
+            <?php if ($me && preg_match('~^/admin/(settings|integrations/(arad-contact|bale)|system/(health|backups|migrations|errors))(/|$)~', $cur)) include APP_PATH . '/Views/admin/system/_settings_tabs.php'; ?>
             <?= $content ?>
         </main>
         <footer class="footer">© <?= fa(App\Core\Jalali::format('Y', time())) ?> آراد برندینگ — سامانه جامع آموزش</footer>

@@ -11,8 +11,8 @@ $v = fn($k, $d = '') => old($k, $c[$k] ?? $d);
                 <h3><?= icon('book-open') ?> اطلاعات دوره</h3>
                 <div class="field"><label>عنوان <span class="req">*</span></label><input type="text" name="title" value="<?= e($v('title')) ?>" required></div>
                 <div class="field"><label>خلاصه (نمایش در کارت دوره)</label><input type="text" name="summary" value="<?= e($v('summary')) ?>" maxlength="500"></div>
-                <div class="field"><label>توضیحات کامل</label><textarea name="description" rows="7"><?= e($v('description')) ?></textarea><div class="hint">متن ساده، HTML پایه یا متن خروجی هوش مصنوعی (Markdown). علامت‌های ## تیتر، **بولد** و * بولت خودکار به قالب‌بندی تبدیل می‌شوند.</div></div>
-                <div class="field"><label>سرفصل تفصیلی</label><textarea name="syllabus" rows="6"><?= e($v('syllabus')) ?></textarea></div>
+                <div class="field"><label>توضیحات کامل</label><textarea name="description" rows="7" data-rich><?= e($v('description')) ?></textarea><div class="hint">متن ساده، HTML پایه یا متن خروجی هوش مصنوعی (Markdown). علامت‌های ## تیتر، **بولد** و * بولت خودکار به قالب‌بندی تبدیل می‌شوند.</div></div>
+                <div class="field"><label>سرفصل تفصیلی</label><textarea name="syllabus" rows="6" data-rich><?= e($v('syllabus')) ?></textarea></div>
             </div>
             <div class="card">
                 <h3><?= icon('settings') ?> قوانین دوره</h3>
@@ -46,9 +46,28 @@ $v = fn($k, $d = '') => old($k, $c[$k] ?? $d);
             <div class="card">
                 <h3><?= icon('target') ?> دسته‌بندی و مخاطب</h3>
                 <div class="field"><label>موضوع</label><select name="category_id"><option value="">—</option><?php foreach ($cats as $ct): ?><option value="<?= (int)$ct['id'] ?>"<?= selected($ct['id'], $v('category_id')) ?>><?= $ct['parent_id'] ? '— ' : '' ?><?= e($ct['name']) ?></option><?php endforeach; ?></select></div>
-                <div class="field"><label>گروه هدف</label><select name="target_segment"><option value="">همه</option><?php foreach (['merchant', 'employee', 'agent'] as $s): ?><option value="<?= $s ?>"<?= selected($s, $v('target_segment')) ?>><?= e(label('segment', $s)) ?></option><?php endforeach; ?></select></div>
-                <div class="field"><label>محدود به گروه خاص</label><select name="group_id"><option value="">—</option><?php foreach ($groups as $g): ?><option value="<?= (int)$g['id'] ?>"<?= selected($g['id'], $v('group_id')) ?>><?= e($g['name']) ?></option><?php endforeach; ?></select></div>
-                <div class="field"><label>سطح</label><select name="level_id"><option value="">—</option><?php foreach ($levels as $l): ?><option value="<?= (int)$l['id'] ?>"<?= selected($l['id'], $v('level_id')) ?>><?= e($l['name']) ?></option><?php endforeach; ?></select></div>
+                <?php $selAud = array_map('intval', (array)old('audience', $audience)); $selLv = array_map('intval', (array)old('levels', $courseLevels)); ?>
+                <div class="field" data-aud-groups>
+                    <label>مخاطبان دوره</label>
+                    <div class="aud-list">
+                        <?php foreach ($groups as $g): ?>
+                            <label class="aud-item" style="padding-inline-start:<?= (int)$g['depth'] * 1.1 ?>rem"><input type="checkbox" name="audience[]" value="<?= (int)$g['id'] ?>" data-parent="<?= (int)($g['parent_id'] ?? 0) ?>"<?= in_array((int)$g['id'], $selAud, true) ? ' checked' : '' ?>> <span><?= $g['depth'] ? '└ ' : '' ?><?= e($g['name']) ?></span></label>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="hint">هیچ‌کدام انتخاب نشود = همه. دوره فقط برای اعضای گروه‌های انتخاب‌شده (و زیرگروه‌هایشان) نمایش داده می‌شود و فقط همان‌ها می‌توانند ثبت‌نام شوند.</div>
+                </div>
+                <div class="field" data-aud-levels>
+                    <label>سطح</label>
+                    <div class="aud-list">
+                        <?php $lastG = null; foreach ($levels as $l): ?>
+                            <?php if ($lastG !== (int)$l['group_id']): $lastG = (int)$l['group_id']; ?><div class="aud-head" data-group="<?= $lastG ?>"><?= e($l['group_name']) ?></div><?php endif; ?>
+                            <label class="aud-item" data-group="<?= (int)$l['group_id'] ?>"><input type="checkbox" name="levels[]" value="<?= (int)$l['id'] ?>"<?= in_array((int)$l['id'], $selLv, true) ? ' checked' : '' ?>> <span><?= e($l['name']) ?></span></label>
+                        <?php endforeach; ?>
+                        <?php if (!$levels): ?><div class="muted small">هنوز سطحی تعریف نشده است.</div><?php endif; ?>
+                        <div class="muted small" data-aud-nolevel hidden>برای مخاطبان انتخاب‌شده سطحی تعریف نشده است.</div>
+                    </div>
+                    <div class="hint">فقط سطح‌های مخاطبان انتخاب‌شده نمایش داده می‌شود. هیچ‌کدام انتخاب نشود = همه سطح‌ها؛ در غیر این صورت فقط دارندگان این سطح‌ها دوره را می‌بینند.</div>
+                </div>
                 <div class="field"><label>مدرس</label><select name="instructor_id"><option value="">—</option><?php foreach ($instructors as $i): ?><option value="<?= (int)$i['id'] ?>"<?= selected($i['id'], $v('instructor_id')) ?>><?= e(full_name($i)) ?></option><?php endforeach; ?></select></div>
                 <div class="field"><label>پیش‌نیازها</label><select name="prerequisites[]" multiple size="6"><?php foreach ($allCourses as $ac): ?><option value="<?= (int)$ac['id'] ?>"<?= selected($ac['id'], $prereqs) ?>><?= e($ac['title']) ?></option><?php endforeach; ?></select><div class="hint">تا تکمیل پیش‌نیازها، دوره برای فراگیر قفل است.</div></div>
             </div>

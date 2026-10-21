@@ -1,6 +1,8 @@
 <?php $q = $_GET; unset($q['r'], $q['page']); ?>
 <div class="page-head"><div><div class="crumbs"><a href="<?= url('/admin/reports') ?>">گزارش‌ها</a></div><h1>گزارش پیشرفت و عملکرد</h1></div><?php if (can('reports.export')): ?><a class="btn btn-outline" href="<?= url('/admin/reports/progress', $q + ['export' => 1]) ?>"><?= icon('file-spreadsheet') ?> Excel</a><?php endif; ?></div>
-<form class="card filters" method="get" action="<?= url('/admin/reports/progress') ?>">
+<?php $audSegments = true; include APP_PATH . '/Views/partials/report_audience.php'; ?>
+
+<form class="card filters" method="get" action="<?= url('/admin/reports/progress') ?><?= aud_hidden() ?>">
     <div class="field"><label>وضعیت</label><select name="state"><option value="">همه</option><option value="overdue"<?= selected('overdue', $_GET['state'] ?? '') ?>>عقب‌افتاده / منقضی</option><?php foreach (['not_started', 'in_progress', 'completed', 'needs_retake', 'failed', 'locked', 'expired'] as $s): ?><option value="<?= $s ?>"<?= selected($s, $_GET['state'] ?? '') ?>><?= e(label('status', $s)) ?></option><?php endforeach; ?></select></div>
     <div class="field grow"><label>دوره</label><select name="course"><option value="">همه</option><?php foreach ($courses as $k => $t): ?><option value="<?= (int)$k ?>"<?= selected($k, $_GET['course'] ?? '') ?>><?= e($t) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label>گروه</label><select name="group"><option value="">همه</option><?php foreach ($groups as $k => $t): ?><option value="<?= (int)$k ?>"<?= selected($k, $_GET['group'] ?? '') ?>><?= e($t) ?></option><?php endforeach; ?></select></div>

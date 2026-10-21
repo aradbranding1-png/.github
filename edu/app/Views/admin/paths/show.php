@@ -1,6 +1,6 @@
 <?php $edit = can('paths.edit'); ?>
 <div class="page-head">
-    <div><div class="crumbs"><a href="<?= url('/admin/paths') ?>">مسیرهای آموزشی</a></div><h1><?= e($p['title']) ?></h1><div class="sub"><?= status_badge($p['status']) ?></div></div>
+    <div><div class="crumbs"><a href="<?= url('/admin/paths', ['seg' => $p['target_segment'] ?: 'all']) ?>">مسیرهای آموزشی <?= $p['target_segment'] ? e(label('segment', $p['target_segment'])) : '' ?></a></div><h1><?= e($p['title']) ?></h1><div class="sub"><?= status_badge($p['status']) ?> <span class="badge badge-primary"><?= icon('users') ?> <?= $p['target_segment'] ? 'مخصوص ' . e(label('segment', $p['target_segment'])) : 'مشترک برای همه گروه‌ها' ?></span></div></div>
     <div class="btn-group">
         <a class="btn btn-outline" href="<?= url('/learn/path/' . $p['id']) ?>" target="_blank"><?= icon('eye') ?> نمای فراگیر</a>
         <?php if (can('assignments.assign')): ?><a class="btn btn-primary" href="<?= url('/admin/assignments', ['path_id' => $p['id']]) ?>"><?= icon('send') ?> تخصیص مسیر</a><?php endif; ?>
@@ -65,8 +65,8 @@
             <h3><?= icon('pencil') ?> مشخصات مسیر</h3>
             <div class="field"><label>عنوان</label><input type="text" name="title" value="<?= e($p['title']) ?>" required></div>
             <div class="field"><label>توضیحات</label><textarea name="description" rows="3"><?= e($p['description']) ?></textarea></div>
-            <div class="field"><label>گروه هدف</label><select name="target_segment"><option value="">همه</option><?php foreach (['merchant', 'employee', 'agent'] as $s): ?><option value="<?= $s ?>"<?= selected($s, $p['target_segment']) ?>><?= e(label('segment', $s)) ?></option><?php endforeach; ?></select></div>
-            <div class="field"><label>گروه خاص</label><select name="group_id"><option value="">—</option><?php foreach ($groups as $k => $v): ?><option value="<?= (int)$k ?>"<?= selected($k, $p['group_id']) ?>><?= e($v) ?></option><?php endforeach; ?></select></div>
+            <div class="field"><label>این مسیر برای کدام گروه است؟</label><select name="target_segment"><option value="">همه گروه‌ها (مشترک)</option><?php foreach (['merchant', 'employee', 'agent'] as $s): ?><option value="<?= $s ?>"<?= selected($s, $p['target_segment']) ?>><?= e(label('segment', $s)) ?></option><?php endforeach; ?></select></div>
+            <div class="field"><label>محدود به گروه سازمانی خاص (اختیاری)</label><select name="group_id"><option value="">—</option><?php foreach ($groups as $k => $v): ?><option value="<?= (int)$k ?>"<?= selected($k, $p['group_id']) ?>><?= e($v) ?></option><?php endforeach; ?></select></div>
             <div class="field"><label>رنگ</label><input class="ltr" type="text" name="color" value="<?= e($p['color']) ?>"></div>
             <?php if (can('paths.publish')): ?><div class="field"><label>وضعیت انتشار</label><select name="status"><?php foreach (['draft', 'published', 'archived'] as $s): ?><option value="<?= $s ?>"<?= selected($s, $p['status']) ?>><?= e(label('status', $s)) ?></option><?php endforeach; ?></select></div><?php endif; ?>
             <button class="btn btn-primary"><?= icon('save') ?> ذخیره</button>

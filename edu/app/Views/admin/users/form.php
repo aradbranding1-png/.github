@@ -27,7 +27,7 @@ foreach ($groups as $g) $bySeg[$g['segment']][] = $g;
                         <input class="ltr" type="password" id="user-pw" name="password" autocomplete="new-password" data-nofill readonly disabled placeholder="رمز جدید">
                         <div class="hint">فقط اگر تیک بالا را بزنید رمز کاربر عوض می‌شود؛ در غیر این صورت رمز فعلی او دست‌نخورده می‌ماند.</div></div>
                     <?php else: ?>
-                    <div class="field"><label>رمز عبور</label><input class="ltr" type="password" name="password" autocomplete="new-password" data-nofill readonly><div class="hint">حداقل ۸ کاراکتر شامل حرف و عدد. برای کاربران SSO می‌تواند خالی بماند.</div></div>
+                    <div class="field"><label>رمز عبور</label><input class="ltr" type="password" name="password" autocomplete="new-password" data-nofill readonly><div class="hint">حداقل ۸ کاراکتر شامل حرف و عدد. اگر خالی بماند، کاربر تا تعیین رمز نمی‌تواند وارد شود.</div></div>
                     <?php endif; ?>
                     <div class="field"><label>مسئول آموزش (سرپرست)</label><select name="supervisor_id"><option value="">—</option><?php foreach ($supervisors as $s): if ($isEdit && (int)$s['id'] === (int)$u['id']) continue; ?><option value="<?= (int)$s['id'] ?>"<?= selected($s['id'], $v('supervisor_id')) ?>><?= e(full_name($s)) ?></option><?php endforeach; ?></select></div>
                 </div>

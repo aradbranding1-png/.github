@@ -13,7 +13,7 @@ $hasEn = isset($c['progress_pct']) && isset($c['status']) && isset($c['course_id
     <div class="course-body">
         <div class="course-tags">
             <?php if (!empty($c['cat_name'] ?? $c['category_name'] ?? '')): ?><span class="small grow" style="color:<?= e($color) ?>;font-weight:700"><?= e($c['cat_name'] ?? $c['category_name']) ?></span><?php else: ?><span class="grow"></span><?php endif; ?>
-            <?php if (!empty($c['last_lesson_at']) && strtotime((string)$c['last_lesson_at']) >= time() - 14 * 86400): ?><span class="badge badge-success" title="درس جدید در <?= e(jdate($c['last_lesson_at'])) ?>"><?= icon('sparkles') ?> درس جدید</span><?php endif; ?>
+            <?php if (!empty($c['last_lesson_at']) && strtotime((string)$c['last_lesson_at']) >= time() - 14 * 86400): ?><span class="badge badge-success" title="درس جدید در <?= e(jdate($c['last_lesson_at'])) ?>" aria-label="درس جدید"><?= icon('sparkles') ?></span><?php endif; ?>
             <?php if (!empty($c['training_type'])): ?><span class="badge badge-<?= $c['training_type'] === 'mandatory' ? 'danger' : 'gray' ?>"><?= e(label('training_type', $c['training_type'])) ?></span><?php endif; ?>
             <?php if ($hasEn): ?><?= status_badge($c['status']) ?><?php endif; ?>
         </div>

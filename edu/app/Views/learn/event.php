@@ -14,7 +14,7 @@ $enough = $have >= $cost;
         <div class="card">
             <span class="ev-kind"><?= icon($t['icon']) ?> <?= e($t['label']) ?></span>
             <h1 class="mt-1"><?= e($e['title']) ?></h1>
-            <?php if ($e['summary']): ?><p class="muted"><?= e($e['summary']) ?></p><?php endif; ?>
+            <?php if ($e['summary']): ?><p class="muted text-justify"><?= e($e['summary']) ?></p><?php endif; ?>
             <div class="ev-facts">
                 <div><span><?= icon('calendar') ?> تاریخ</span><b><?= $ts ? jdate($e['starts_at'], 'l j F Y') : '—' ?></b></div>
                 <div><span><?= icon('clock') ?> ساعت شروع</span><b><?= $ts ? fa(date('H:i', $ts)) : '—' ?></b></div>

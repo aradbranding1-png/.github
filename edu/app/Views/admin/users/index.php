@@ -23,7 +23,7 @@
     <div class="field"><label>گروه</label><select name="group"><option value="">همه</option><?php foreach ($groups as $g): ?><option value="<?= (int)$g['id'] ?>"<?= selected($g['id'], $_GET['group'] ?? '') ?>><?= $g['parent_id'] ? '— ' : '' ?><?= e($g['name']) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label>واحد سازمانی</label><select name="org"><option value="">همه</option><?php foreach ($orgs as $o): ?><option value="<?= (int)$o['id'] ?>"<?= selected($o['id'], $_GET['org'] ?? '') ?>><?= e($o['type_name'] . ': ' . $o['name']) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label>وضعیت</label><select name="status"><option value="">همه</option><?php foreach (['active', 'inactive', 'pending'] as $s): ?><option value="<?= $s ?>"<?= selected($s, $_GET['status'] ?? '') ?>><?= e(label('status', $s)) ?></option><?php endforeach; ?></select></div>
-    <div class="field"><label>SSO</label><select name="sso"><option value="">همه</option><option value="1"<?= selected('1', $_GET['sso'] ?? '') ?>>متصل به my</option><option value="0"<?= selected('0', $_GET['sso'] ?? '') ?>>غیرمتصل</option></select></div>
+    <div class="field"><label>رمز عبور</label><select name="pw"><option value="">همه</option><option value="0"<?= selected('0', $_GET['pw'] ?? '') ?>>بدون رمز عبور</option><option value="1"<?= selected('1', $_GET['pw'] ?? '') ?>>دارای رمز عبور</option></select></div>
     <button class="btn btn-primary"><?= icon('filter') ?> اعمال</button>
 </form>
 
@@ -50,7 +50,7 @@
         <?php foreach ($page['rows'] as $u): ?>
             <tr>
                 <td><?php if (!$u['is_root']): ?><input type="checkbox" name="ids[]" value="<?= (int)$u['id'] ?>" class="check"><?php endif; ?></td>
-                <td><a class="person" href="<?= url('/admin/users/' . $u['id']) ?>" style="color:var(--text)"><?= avatar_html($u, 'sm') ?><div><div class="nm"><?= user_name_html($u) ?></div><div class="sub">#<?= (int)$u['id'] ?><?= $u['my_user_id'] ? ' · <span style="color:var(--success)">my ✓</span>' : '' ?></div></div></a></td>
+                <td><a class="person" href="<?= url('/admin/users/' . $u['id']) ?>" style="color:var(--text)"><?= avatar_html($u, 'sm') ?><div><div class="nm"><?= user_name_html($u) ?></div><div class="sub">#<?= (int)$u['id'] ?><?= empty($u['password_hash']) ? ' · <span style="color:var(--warning)" title="این کاربر رمز عبور ندارد و تا تعیین رمز نمی‌تواند وارد شود">بدون رمز</span>' : '' ?></div></div></a></td>
                 <td class="ltr num"><?= e($u['mobile']) ?></td>
                 <td><span class="badge badge-gray"><?= e(label('segment_one', $u['segment'])) ?></span></td>
                 <td class="small"><?= e(str_limit($u['role_names'], 40)) ?></td>

@@ -5,6 +5,7 @@ $cards = [
     ['/admin/reports/progress', 'gauge', 'success', 'گزارش پیشرفت و عملکرد', 'همه ثبت‌نام‌ها با فیلتر وضعیت، دوره، گروه و نوع آموزش', ['reports.report']],
     ['/admin/reports/courses', 'book-open', 'purple', 'گزارش دوره‌ها', 'فراگیران، نرخ تکمیل، میانگین پیشرفت و نمره هر دوره', ['reports.report', 'courses.report']],
     ['/admin/reports/exams', 'clipboard-check', 'warning', 'گزارش آزمون‌ها', 'شرکت‌کنندگان، میانگین نمره و نرخ قبولی', ['reports.report', 'exams.report']],
+    ['/admin/reports/suspicious', 'triangle-alert', 'danger', 'تکمیل مشکوک درس‌ها', 'کسانی که درس را بدون دیدن/شنیدن کامل تکمیل کرده‌اند — به تفکیک تاجر، کارمند و نماینده', ['reports.report', 'courses.report']],
     ['/admin/reports/inactive', 'user-x', 'danger', 'افراد غیرفعال', 'کاربرانی که مدتی وارد نشده‌اند + ارسال یادآوری', ['reports.report']],
     ['/admin/reports/needs', 'lightbulb', 'warning', 'گزارش نیاز آموزشی', 'نیازهای باز، برنامه‌ریزی‌شده و رفع‌شده به تفکیک موضوع', ['reports.report']],
     ['/admin/reports/content', 'eye', 'info', 'استفاده از محتوا', 'پربازدیدترین درس‌ها و فایل‌ها، زمان مطالعه', ['reports.report']],

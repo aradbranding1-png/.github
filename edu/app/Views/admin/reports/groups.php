@@ -5,8 +5,10 @@ $chart = ['type' => 'bar', 'labels' => array_map(fn($r) => str_limit($r['name'],
 ?>
 <div class="page-head"><div><div class="crumbs"><a href="<?= url('/admin/reports') ?>">گزارش‌ها</a></div><h1>گزارش گروهی</h1><div class="sub">تعداد افراد، فعال/غیرفعال، میانگین پیشرفت، دوره‌های تکمیل‌شده و افراد عقب‌مانده</div></div>
 <?php if (can('reports.export')): ?><a class="btn btn-outline" href="<?= url('/admin/reports/groups', $q) ?>"><?= icon('file-spreadsheet') ?> Excel</a><?php endif; ?></div>
+<?php $audSegments = true; include APP_PATH . '/Views/partials/report_audience.php'; ?>
+
 <div class="pill-nav"><?php foreach ($dims as $k => $t): ?><a class="<?= $dim === $k ? 'active' : '' ?>" href="<?= url('/admin/reports/groups', ['dim' => $k]) ?>"><?= e($t) ?></a><?php endforeach; ?></div>
-<form class="card filters" method="get" action="<?= url('/admin/reports/groups') ?>"><input type="hidden" name="dim" value="<?= e($dim) ?>">
+<form class="card filters" method="get" action="<?= url('/admin/reports/groups') ?><?= aud_hidden() ?>"><input type="hidden" name="dim" value="<?= e($dim) ?>">
     <div class="field grow"><label>انتخاب مورد (برای جزئیات افراد)</label><select name="id"><option value="">— همه —</option><?php foreach ($entities as $k => $t): ?><option value="<?= (int)$k ?>"<?= selected($k, $selected) ?>><?= e($t) ?></option><?php endforeach; ?></select></div>
     <button class="btn btn-primary"><?= icon('filter') ?></button>
 </form>

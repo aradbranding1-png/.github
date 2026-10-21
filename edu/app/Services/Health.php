@@ -96,7 +96,7 @@ final class Health
         // Cron
         $last = setting('cron_last_run');
         $age = $last ? time() - strtotime((string)$last) : null;
-        $out[] = self::c('cron', 'Cron (کارهای زمان‌بندی‌شده)', $age === null ? 'warning' : ($age > 7200 ? 'warning' : 'ok'), $age === null ? 'هنوز اجرا نشده — Cron را در DirectAdmin تنظیم کنید' : 'آخرین اجرا: ' . time_ago((string)$last));
+        $out[] = self::c('cron', 'Cron (کارهای زمان‌بندی‌شده)', $age === null ? 'warning' : ($age > 7200 ? 'warning' : 'ok'), ($age === null ? 'هنوز اجرا نشده' : 'آخرین اجرا: ' . time_ago((string)$last)) . (($age === null || $age > 7200) ? ' — ' . self::cronHint() : ''));
         $out[] = self::c('queue', 'Queue', 'ok', 'این سامانه به Queue جداگانه نیاز ندارد؛ کارهای پس‌زمینه با Cron انجام می‌شود');
 
         // Session / cache
@@ -120,19 +120,6 @@ final class Health
         $root = DB::one("SELECT id, status FROM users WHERE is_root = 1 AND deleted_at IS NULL LIMIT 1");
         $out[] = self::c('auth', 'Authentication', $root && $root['status'] === 'active' ? 'ok' : 'error', $root ? 'مدیر کل فعال است' : 'مدیر کل یافت نشد');
 
-        // SSO
-        if (setting('sso_enabled') === '1') {
-            $sso = SsoClient::configErrors();
-            $status = $sso ? 'error' : 'ok';
-            $msg = $sso ? implode('؛ ', $sso) : 'پیکربندی کامل است (' . (setting('sso_mode') === 'jwt' ? 'Signed Token' : 'OAuth2') . ')';
-            if (!$sso && $deep) {
-                $probe = SsoClient::probe();
-                if ($probe !== true) { $status = 'warning'; $msg .= ' — ' . $probe; }
-            }
-            $out[] = self::c('sso', 'SSO با my.aradbranding.me', $status, $msg);
-        } else {
-            $out[] = self::c('sso', 'SSO با my.aradbranding.me', 'warning', 'غیرفعال — پس از دریافت API رسمی my از بخش تنظیمات SSO فعال شود');
-        }
 
         // API
         $out[] = self::c('api', 'API داخلی (v1)', 'ok', 'فعال — ' . fa((int)DB::value('SELECT COUNT(*) FROM api_tokens WHERE revoked_at IS NULL')) . ' کلید فعال');
@@ -147,5 +134,35 @@ final class Health
     {
         $st = array_column($checks, 'status');
         return in_array('error', $st, true) ? 'error' : (in_array('warning', $st, true) ? 'warning' : 'ok');
+    }
+
+    /** Why cron does not run, from the attempt record cron.php writes (storage/logs/cron-attempt.json) */
+    public static function cronHint(): string
+    {
+        $cli = self::cliPhpGuess();
+        $cmd = $cli . ' ' . BASE_PATH . '/cron.php >/dev/null 2>&1';
+        $f = STORAGE_PATH . '/logs/cron-attempt.json';
+        $a = is_file($f) ? json_decode((string)file_get_contents($f), true) : null;
+        if (!is_array($a)) return 'هیچ تلاشی برای اجرا ثبت نشده؛ یعنی DirectAdmin اصلاً این فایل را اجرا نمی‌کند (مسیر فایل یا مسیر PHP اشتباه است). دستور پیشنهادی (هر ۱۵ دقیقه): ' . $cmd;
+        $when = 'آخرین تلاش: ' . time_ago(date('Y-m-d H:i:s', strtotime((string)$a['at']))) . ' با PHP ' . ($a['php'] ?? '?') . (!empty($a['binary']) ? ' (' . $a['binary'] . ')' : '') . '. ';
+        return $when . match ($a['status'] ?? '') {
+            'old_php' => 'نسخه PHP دستور Cron قدیمی است. در DirectAdmin به‌جای ' . ($a['binary'] ?: '/usr/local/bin/php') . ' مسیر PHP سایت را بگذارید: ' . $cmd,
+            'not_installed' => 'Cron فایل نصب (.env / storage/installed.lock) را پیدا نکرد؛ مسیر دستور را بررسی کنید.',
+            'skipped' => 'اجرا رد شد: ' . ($a['error'] ?? '') . (str_contains((string)($a['error'] ?? ''), 'maintenance') ? ' — حالت تعمیر فعال مانده است.' : ''),
+            'error', 'started' => 'اجرا با خطا متوقف شد: ' . ($a['error'] ?: 'نامشخص'),
+            'ok' => 'اجرا موفق بود ولی زمان آن ثبت نشد؛ کش تنظیمات را پاک کنید.',
+            default => 'دستور پیشنهادی: ' . $cmd,
+        };
+    }
+
+    /** CLI binary of the PHP that serves this site (php-fpm → bin/php) */
+    public static function cliPhpGuess(): string
+    {
+        $b = defined('PHP_BINARY') ? (string)PHP_BINARY : '';
+        if ($b !== '' && preg_match('~^(.*)/sbin/php-fpm[0-9.]*$~', $b, $m) && @is_file($m[1] . '/bin/php')) return $m[1] . '/bin/php';
+        if ($b !== '' && preg_match('~/php[0-9.]*$~', $b)) return $b;
+        $v = PHP_MAJOR_VERSION . PHP_MINOR_VERSION;
+        foreach (["/usr/local/php$v/bin/php", "/usr/local/php$v/bin/php-cli", "/opt/alt/php$v/usr/bin/php"] as $p) if (@is_file($p)) return $p;
+        return "/usr/local/php$v/bin/php";
     }
 }

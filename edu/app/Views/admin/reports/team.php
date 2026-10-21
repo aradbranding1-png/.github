@@ -6,6 +6,8 @@ $avg = $total ? array_sum(array_map(fn($r) => (float)$r['prog'], $rows)) / $tota
 <div class="page-head"><div><h1>تیم تحت مسئولیت من</h1><div class="sub">وضعیت آموزش افرادی که مسئول آموزش آن‌ها هستید
 <?php foreach ($groups as $g): ?><span class="badge badge-gray"><?= e($g['name']) ?></span><?php endforeach; ?><?php foreach ($units as $u): ?><span class="badge badge-info"><?= e($u['type_name'] . ': ' . $u['name']) ?></span><?php endforeach; ?></div></div>
 <?php if (can('assignments.assign')): ?><a class="btn btn-grad" href="<?= url('/admin/assignments') ?>"><?= icon('send') ?> تخصیص آموزش به تیم</a><?php endif; ?></div>
+<?php $audSegments = true; include APP_PATH . '/Views/partials/report_audience.php'; ?>
+
 <div class="grid g-4 mb-3">
     <div class="card stat tone-primary"><div class="bubble"><?= icon('users') ?></div><div><div class="v"><?= fa($total) ?></div><div class="l">عضو تیم</div></div></div>
     <div class="card stat tone-info"><div class="bubble"><?= icon('gauge') ?></div><div><div class="v"><?= fa(round($avg)) ?>٪</div><div class="l">میانگین پیشرفت</div></div></div>

@@ -1,9 +1,19 @@
 <?php $left = $left ?? null; ?>
 <div class="crumbs"><a href="<?= url('/learn/exams') ?>">آزمون‌های من</a><?php if ($x['course_id']): ?> / <a href="<?= url('/learn/course/' . $x['course_id']) ?>"><?= e($x['course_title']) ?></a><?php endif; ?></div>
+<?php $canExamEdit = can_edit_exam($x); if ($canExamEdit || can('exams.view') || can('exams.report')): ?>
+<div class="staff-bar">
+    <span class="sb-label"><?= icon('shield-check') ?> ابزار مدیریت آزمون</span>
+    <div class="flex flex-wrap">
+        <?php if ($canExamEdit): ?><a class="btn btn-primary btn-sm" href="<?= url('/admin/exams/' . $x['id']) ?>"><?= icon('pencil') ?> ویرایش آزمون</a><a class="btn btn-outline btn-sm" href="<?= url('/admin/exams/' . $x['id']) ?>#questions"><?= icon('file-pen-line') ?> ویرایش سؤالات</a><?php elseif (can('exams.view')): ?><a class="btn btn-outline btn-sm" href="<?= url('/admin/exams/' . $x['id']) ?>"><?= icon('eye') ?> مشاهده در مدیریت</a><?php endif; ?>
+        <?php if (can('exams.report')): ?><a class="btn btn-outline btn-sm" href="<?= url('/admin/exams/' . $x['id'] . '/report') ?>"><?= icon('chart-column') ?> گزارش آزمون</a><?php endif; ?>
+        <?php if (!empty($x['lesson_id']) && can('lessons.edit')): ?><a class="btn btn-ghost btn-sm" href="<?= url('/admin/lessons/' . $x['lesson_id'] . '/edit') ?>#lesson-extras"><?= icon('settings') ?> آزمون و تمرین‌های درس</a><?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 <div class="grid g-main">
     <div class="card">
         <h1><?= e($x['title']) ?></h1>
-        <?php if ($x['description']): ?><p class="muted"><?= nl2br(e($x['description'])) ?></p><?php endif; ?>
+        <?php if ($x['description']): ?><div class="prose mb-2"><?= clean_html($x['description']) ?></div><?php endif; ?>
         <div class="grid g-4 mt-2">
             <div class="card stat tone-purple"><div class="bubble"><?= icon('circle-help') ?></div><div><div class="v"><?= fa($qcount) ?></div><div class="l">سؤال</div></div></div>
             <div class="card stat tone-info"><div class="bubble"><?= icon('clock') ?></div><div><div class="v"><?= $x['time_limit_minutes'] ? fa($x['time_limit_minutes']) : '∞' ?></div><div class="l">دقیقه</div></div></div>
@@ -14,6 +24,9 @@
         <div class="alert alert-info mt-2"><?= icon('info') ?><div>با شروع آزمون، زمان‌سنج فعال می‌شود و در پایان زمان، پاسخ‌ها به صورت خودکار ارسال می‌شوند. از بستن صفحه در حین آزمون خودداری کنید.</div></div>
         <?php if ($passed): ?>
             <div class="alert alert-success"><?= icon('circle-check') ?> شما در این آزمون قبول شده‌اید.</div>
+        <?php elseif (!$open && !empty($gate)): ?>
+            <div class="alert alert-warning task-gate"><?= icon('lock') ?><div><b>این آزمون هنوز برای شما فعال نشده است.</b><div class="mt-1"><?= e($gate['msg']) ?></div></div></div>
+            <a class="btn btn-primary" href="<?= url('/learn/lesson/' . $gate['lesson']['id']) ?>"><?= icon('circle-play') ?> رفتن به درس «<?= e($gate['lesson']['title']) ?>»</a>
         <?php elseif (!$open && !$credit['ok']): ?>
             <div class="alert alert-danger"><?= icon('lock') ?><div>
                 <b>اعتبار این دوره آموزشی را ندارید.</b>

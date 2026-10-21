@@ -1,5 +1,7 @@
 <div class="page-head"><div><div class="crumbs"><a href="<?= url('/admin/reports') ?>">گزارش‌ها</a></div><h1>گزارش کامل کاربر</h1><div class="sub">کاربر را بر اساس نام، نام خانوادگی، موبایل، شناسه، نقش یا گروه جست‌وجو کنید</div></div></div>
-<form class="card filters" method="get" action="<?= url('/admin/reports/users') ?>">
+<?php $audSegments = true; include APP_PATH . '/Views/partials/report_audience.php'; ?>
+
+<form class="card filters" method="get" action="<?= url('/admin/reports/users') ?><?= aud_hidden() ?>">
     <div class="field grow"><label>نام / موبایل / شناسه</label><input type="search" name="q" value="<?= e($q) ?>" autofocus></div>
     <div class="field"><label>نقش</label><select name="role"><option value="">—</option><?php foreach ($roles as $k => $v): ?><option value="<?= (int)$k ?>"<?= selected($k, $_GET['role'] ?? '') ?>><?= e($v) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label>گروه</label><select name="group"><option value="">—</option><?php foreach ($groups as $k => $v): ?><option value="<?= (int)$k ?>"<?= selected($k, $_GET['group'] ?? '') ?>><?= e($v) ?></option><?php endforeach; ?></select></div>

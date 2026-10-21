@@ -12,5 +12,4 @@
 | سامانه در «حالت تعمیر» ماند | از پنل مدیر کل: بروزرسانی سامانه → خروج از حالت تعمیر؛ یا حذف فایل `storage/maintenance.flag`؛ یا `php cli.php maintenance:off`. |
 | بروزرسانی: «پوشه‌ها قابل نوشتن نیستند» | مالک فایل‌ها باید کاربر DirectAdmin باشد (Reset Permissions در File Manager). |
 | فراموشی رمز مدیر کل | `php cli.php root:password 'NewPass2026'` (از Terminal یا Cronjob یک‌باره). |
-| ورود SSO خطای «پاسخ نامعتبر از my» | نگاشت فیلدها و آدرس User Info را در «اتصال SSO» بررسی کنید؛ جزئیات در لاگ (بدون افشای توکن). |
 | ساعت/تاریخ اشتباه | `APP_TIMEZONE=Asia/Tehran` در `.env`. |

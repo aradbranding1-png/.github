@@ -18,7 +18,7 @@ $copying = !$isEdit && $e;
                 <h3><?= icon($t['icon']) ?> مشخصات</h3>
                 <div class="field"><label>عنوان <span class="req">*</span></label><input type="text" name="title" value="<?= e($v('title')) ?>" required placeholder="<?= $type === 'webinar' ? 'مثلاً: وبینار مذاکره با مشتری خارجی' : ($type === 'workshop' ? 'مثلاً: کارگاه قیمت‌گذاری صادراتی' : 'مثلاً: میتینگ هفتگی تاجران') ?>"></div>
                 <div class="field"><label>خلاصه (نمایش روی کارت)</label><input type="text" name="summary" value="<?= e($v('summary')) ?>" maxlength="500"></div>
-                <div class="field"><label>توضیحات کامل</label><textarea name="description" rows="7"><?= e($v('description')) ?></textarea><div class="hint">متن ساده، HTML پایه یا متن خروجی هوش مصنوعی (Markdown).</div></div>
+                <div class="field"><label>توضیحات کامل</label><textarea name="description" rows="7" data-rich><?= e($v('description')) ?></textarea><div class="hint">متن ساده، HTML پایه یا متن خروجی هوش مصنوعی (Markdown).</div></div>
                 <div class="field"><label>لینک ورود</label><input type="url" class="ltr" name="join_url" value="<?= e($v('join_url')) ?>" placeholder="https://…"><div class="hint">پس از ثبت‌نام<?= $type === 'meeting' ? ' (برای میتینگ: با اشتراک فعال)' : '' ?> به فراگیر نمایش داده می‌شود. از فهرست هم می‌توانید لینک را سریع عوض کنید.</div></div>
                 <div class="field"><label>ارائه‌دهنده / میزبان (اختیاری)</label><input type="text" name="host_name" value="<?= e($v('host_name')) ?>"></div>
             </div>

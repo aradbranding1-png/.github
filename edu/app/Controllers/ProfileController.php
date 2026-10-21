@@ -9,7 +9,6 @@ use App\Core\DB;
 use App\Core\Request;
 use App\Core\Upload;
 use App\Core\Validator;
-use App\Services\SsoClient;
 use App\Services\UserReport;
 
 final class ProfileController
@@ -20,7 +19,7 @@ final class ProfileController
         $roles = DB::all('SELECT r.* FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?', [(int)$me['id']]);
         $groups = DB::all('SELECT g.* FROM `groups` g JOIN group_members gm ON gm.group_id = g.id WHERE gm.user_id = ?', [(int)$me['id']]);
         $org = DB::all('SELECT o.name, t.name AS type_name FROM user_org_units x JOIN org_units o ON o.id = x.org_unit_id JOIN org_unit_types t ON t.id = o.type_id WHERE x.user_id = ?', [(int)$me['id']]);
-        return view('profile/show', ['title' => 'پروفایل من', 'me' => $me, 'roles' => $roles, 'groups' => $groups, 'org' => $org, 'sso' => SsoClient::enabled()]);
+        return view('profile/show', ['title' => 'پروفایل من', 'me' => $me, 'roles' => $roles, 'groups' => $groups, 'org' => $org]);
     }
 
     public function update(): never
@@ -43,6 +42,7 @@ final class ProfileController
         if ($new !== (string)($_POST['password_confirmation'] ?? '') || !Auth::passwordStrongEnough($new)) { flash('danger', 'رمز جدید باید حداقل ۸ کاراکتر، شامل حرف و عدد و با تکرار آن یکسان باشد.'); redirect('/profile'); }
         DB::update('users', ['password_hash' => Auth::hashPassword($new), 'must_change_password' => 0, 'updated_at' => now()], 'id = ?', [(int)$me['id']]);
         \App\Services\AradContact::forgetPassword((int)$me['id']);
+        \App\Core\RememberMe::forgetUser((int)$me['id'], true); // other devices must sign in with the new password
         Audit::log('profile.password', 'user', (int)$me['id']);
         flash('success', 'رمز عبور تغییر کرد.');
         redirect('/profile');
@@ -56,7 +56,7 @@ final class ProfileController
         $path = Upload::avatar($f);
         $this->removeOldAvatar($me);
         DB::update('users', ['avatar_path' => $path, 'avatar_source' => 'edu', 'updated_at' => now()], 'id = ?', [(int)$me['id']]);
-        flash('success', 'تصویر پروفایل به‌روزرسانی شد. (این تغییر فقط در سامانه آموزش اعمال می‌شود و تصویر شما در my تغییر نمی‌کند)');
+        flash('success', 'تصویر پروفایل به‌روزرسانی شد.');
         redirect('/profile');
     }
 
@@ -64,14 +64,7 @@ final class ProfileController
     {
         $me = Auth::user();
         $src = Request::str('source');
-        if ($src === 'my') {
-            if (!$me['my_avatar_url']) { flash('warning', 'تصویری در my.aradbranding.me برای شما ثبت نشده است.'); redirect('/profile'); }
-            $path = SsoClient::downloadAvatar((string)$me['my_avatar_url']);
-            if (!$path) { flash('danger', 'دریافت تصویر از my ناموفق بود.'); redirect('/profile'); }
-            $this->removeOldAvatar($me);
-            DB::update('users', ['avatar_path' => $path, 'avatar_source' => 'my'], 'id = ?', [(int)$me['id']]);
-            flash('success', 'تصویر پروفایل از my.aradbranding.me همگام شد.');
-        } elseif ($src === 'none') {
+        if ($src === 'none') {
             $this->removeOldAvatar($me);
             DB::update('users', ['avatar_path' => null, 'avatar_source' => 'none'], 'id = ?', [(int)$me['id']]);
             flash('success', 'تصویر پروفایل حذف شد.');
@@ -82,13 +75,6 @@ final class ProfileController
     private function removeOldAvatar(array $u): void
     {
         if (!empty($u['avatar_path']) && str_starts_with((string)$u['avatar_path'], 'avatars/')) @unlink(STORAGE_PATH . '/' . basename(dirname((string)$u['avatar_path'])) . '/' . basename((string)$u['avatar_path']));
-    }
-
-    public function linkMy(): never
-    {
-        if (!SsoClient::enabled()) { flash('warning', 'اتصال به my.aradbranding.me هنوز فعال نشده است.'); redirect('/profile'); }
-        header('Location: ' . SsoClient::authorizeUrl('link'));
-        exit;
     }
 
     public function report(): string

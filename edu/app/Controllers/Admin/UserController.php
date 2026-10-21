@@ -29,13 +29,13 @@ final class UserController
             array_push($p, $like, $like, $like, $like, $like, ctype_digit($q) ? (int)$q : 0, $q);
         }
         if (($s = Request::str('segment')) && isset(\App\Core\Labels::SEGMENT[$s])) { $w .= ' AND u.segment = ?'; $p[] = $s; }
+        if (Request::str('pw') === '0') $w .= " AND (u.password_hash IS NULL OR u.password_hash = '')";
+        if (Request::str('pw') === '1') $w .= " AND u.password_hash IS NOT NULL AND u.password_hash <> ''";
         if (($s = Request::str('status')) && in_array($s, ['active', 'inactive', 'pending'], true)) { $w .= ' AND u.status = ?'; $p[] = $s; }
         if ($r = Request::int('role')) { $w .= ' AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role_id = ?)'; $p[] = $r; }
         if ($g = Request::int('group')) { $ids = Targeting::descendants('groups', $g); $w .= ' AND EXISTS (SELECT 1 FROM group_members gm WHERE gm.user_id = u.id AND gm.group_id IN (' . DB::in($ids) . '))'; $p = array_merge($p, $ids); }
         if ($o = Request::int('org')) { $ids = Targeting::descendants('org_units', $o); $w .= ' AND EXISTS (SELECT 1 FROM user_org_units x WHERE x.user_id = u.id AND x.org_unit_id IN (' . DB::in($ids) . '))'; $p = array_merge($p, $ids); }
-        if (Request::str('sso') === '1') $w .= ' AND u.my_user_id IS NOT NULL';
-        if (Request::str('sso') === '0') $w .= ' AND u.my_user_id IS NULL';
-        $sc = Scope::userSql('u.id');
+        $sc = Scope::userSql('u.id', true);
         $w .= $sc['sql'];
         $p = array_merge($p, $sc['params']);
         return [$w, $p];
@@ -62,14 +62,14 @@ final class UserController
     public function export(): never
     {
         [$w, $p] = $this->filters();
-        $rows = DB::all("SELECT u.id, u.first_name, u.last_name, u.mobile, u.email, u.segment, u.status, u.my_user_id, u.created_at, u.first_login_at, u.last_login_at, u.login_count,
+        $rows = DB::all("SELECT u.id, u.first_name, u.last_name, u.mobile, u.email, u.segment, u.status, u.password_hash, u.created_at, u.first_login_at, u.last_login_at, u.login_count,
                                 (SELECT GROUP_CONCAT(r.name SEPARATOR '، ') FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = u.id) roles,
                                 (SELECT GROUP_CONCAT(g.name SEPARATOR '، ') FROM `groups` g JOIN group_members gm ON gm.group_id = g.id WHERE gm.user_id = u.id) grps,
                                 (SELECT COUNT(*) FROM enrollments e WHERE e.user_id = u.id) enr, (SELECT COUNT(*) FROM enrollments e WHERE e.user_id = u.id AND e.status = 'completed') done,
                                 (SELECT ROUND(AVG(progress_pct),1) FROM enrollments e WHERE e.user_id = u.id) prog
                            FROM users u WHERE $w ORDER BY u.id", $p);
-        $out = array_map(fn($r) => [(int)$r['id'], $r['first_name'], $r['last_name'], $r['mobile'], $r['email'], label('segment_one', $r['segment']), label('status', $r['status']), $r['my_user_id'] ? 'بله' : 'خیر', $r['roles'], $r['grps'], jdate($r['created_at']), jdatetime($r['first_login_at']), jdatetime($r['last_login_at']), (int)$r['login_count'], (int)$r['enr'], (int)$r['done'], (float)$r['prog']], $rows);
-        Xlsx::download('users-' . date('Ymd'), ['شناسه', 'نام', 'نام خانوادگی', 'موبایل', 'ایمیل', 'نوع', 'وضعیت', 'متصل به my', 'نقش‌ها', 'گروه‌ها', 'تاریخ ثبت', 'اولین ورود', 'آخرین ورود', 'تعداد ورود', 'دوره‌ها', 'تکمیل‌شده', 'میانگین پیشرفت'], $out, 'کاربران');
+        $out = array_map(fn($r) => [(int)$r['id'], $r['first_name'], $r['last_name'], $r['mobile'], $r['email'], label('segment_one', $r['segment']), label('status', $r['status']), !empty($r['password_hash']) ? 'بله' : 'خیر', $r['roles'], $r['grps'], jdate($r['created_at']), jdatetime($r['first_login_at']), jdatetime($r['last_login_at']), (int)$r['login_count'], (int)$r['enr'], (int)$r['done'], (float)$r['prog']], $rows);
+        Xlsx::download('users-' . date('Ymd'), ['شناسه', 'نام', 'نام خانوادگی', 'موبایل', 'ایمیل', 'نوع', 'وضعیت', 'رمز عبور دارد', 'نقش‌ها', 'گروه‌ها', 'تاریخ ثبت', 'اولین ورود', 'آخرین ورود', 'تعداد ورود', 'دوره‌ها', 'تکمیل‌شده', 'میانگین پیشرفت'], $out, 'کاربران');
     }
 
     private function formData(?array $u = null): array
@@ -207,7 +207,7 @@ final class UserController
         if ($pw !== '') $upd['password_hash'] = \App\Core\Auth::hashPassword($pw);
         DB::update('users', $upd, 'id = ?', [$id]);
         // the temporary password generated for Arad Contact no longer works → never hand it out again on a retried order
-        if ($pw !== '') \App\Services\AradContact::forgetPassword($id);
+        if ($pw !== '') { \App\Services\AradContact::forgetPassword($id); \App\Core\RememberMe::forgetUser($id); }
         if ($approvedNow) UserService::approve($id);
         if (can('roles.assign') && (int)$u['is_root'] !== 1 && $id !== (int)Auth::id()) {
             $want = array_flip(Request::ints('roles'));
@@ -309,16 +309,6 @@ final class UserController
         redirect('/admin/users');
     }
 
-    public function unlinkMy(int $id): never
-    {
-        $u = $this->load($id);
-        if (!Gate::canManageUser($u)) throw new HttpException(403);
-        DB::update('users', ['my_user_id' => null, 'my_linked_at' => null], 'id = ?', [$id]);
-        Audit::log('sso.unlink', 'user', $id, 'success', ['my_user_id' => $u['my_user_id']]);
-        flash('success', 'اتصال حساب my قطع شد.');
-        redirect('/admin/users/' . $id);
-    }
-
     public function impersonate(int $id): never
     {
         $u = DB::one('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [$id]) ?? throw new HttpException(404);
@@ -336,7 +326,7 @@ final class UserController
         $t = DB::one('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [$dst]);
         if (!$s || !$t || $src === $dst || (int)$s['is_root'] === 1) { flash('danger', 'انتخاب کاربران برای ادغام معتبر نیست.'); back(); }
         if (!Gate::canManageUser($s) || !Gate::canManageUser($t)) throw new HttpException(403);
-        if ($s['my_user_id'] && $t['my_user_id'] && $s['my_user_id'] !== $t['my_user_id']) { flash('danger', 'هر دو حساب به حساب‌های my متفاوتی متصل هستند و قابل ادغام نیستند.'); back(); }
+        if ($s['my_user_id'] && $t['my_user_id'] && $s['my_user_id'] !== $t['my_user_id']) { flash('danger', 'هر دو حساب شناسهٔ خارجی متفاوتی دارند و قابل ادغام نیستند.'); back(); }
         UserService::merge($src, $dst);
         flash('success', 'حساب‌ها ادغام شدند. تمام سوابق آموزشی به حساب مقصد منتقل شد.');
         redirect('/admin/users/' . $dst);
@@ -354,8 +344,10 @@ final class UserController
             foreach ($ids as $uid) { DB::run('INSERT IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?,?,?)', [$g, $uid, now()]); Targeting::syncUser($uid); }
             flash('success', fa(count($ids)) . ' کاربر به گروه اضافه شدند.');
         } elseif ($act === 'course' && can('assignments.assign') && ($c = Request::int('course_id'))) {
-            foreach ($ids as $uid) Enrollment::enroll($uid, $c, ['source' => 'assignment', 'training_type' => Request::str('training_type', 'mandatory')]);
-            flash('success', 'دوره به ' . fa(count($ids)) . ' کاربر تخصیص داده شد.');
+            $ok = \App\Services\CourseAudience::filterUsers($c, $ids);
+            foreach ($ok as $uid) Enrollment::enroll($uid, $c, ['source' => 'assignment', 'training_type' => Request::str('training_type', 'mandatory')]);
+            flash('success', 'دوره به ' . fa(count($ok)) . ' کاربر تخصیص داده شد.');
+            if (count($ids) > count($ok)) flash('warning', fa(count($ids) - count($ok)) . ' کاربر خارج از مخاطبان این دوره (گروه/سطح) بودند و ثبت‌نام نشدند.');
         } elseif ($act === 'approve' && can('users.approve')) {
             $n = 0;
             foreach ($ids as $uid) { if (DB::value("SELECT 1 FROM users WHERE id = ? AND status = 'pending'", [$uid])) { UserService::approve($uid); $n++; } }

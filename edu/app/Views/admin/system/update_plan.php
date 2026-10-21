@@ -3,23 +3,82 @@ $m = $v['manifest'] ?? [];
 $p = $v['plan'] ?? [];
 $tone = ['ok' => 'success', 'warning' => 'warning', 'error' => 'danger'];
 ?>
-<div class="page-head"><div><div class="crumbs"><a href="<?= url('/admin/system/updates') ?>">بروزرسانی سامانه</a></div><h1>بروزرسانی #<?= fa($u['id']) ?>: <span dir="rtl"><bdi dir="ltr"><?= e($u['from_version']) ?></bdi> ← <bdi dir="ltr"><?= e($u['to_version'] ?? '?') ?></bdi></span></h1><div class="sub"><?= status_badge($u['status']) ?> <span class="ltr small"><?= e($u['package_name']) ?></span></div></div></div>
-
-<?php foreach ($v['errors'] ?? [] as $er): ?><div class="alert alert-danger"><?= icon('circle-x') ?><div><?= e($er) ?></div></div><?php endforeach; ?>
-<?php foreach ($v['warnings'] ?? [] as $w): ?><div class="alert alert-warning"><?= icon('triangle-alert') ?><div><?= e($w) ?></div></div><?php endforeach; ?>
-<?php if ($u['error'] && $u['status'] !== 'fail'): ?><div class="alert alert-danger"><?= icon('circle-x') ?><div><b>خطا:</b> <?= e($u['error']) ?><?= $u['failed_migration'] ? '<br>Migration ناقص: <code class="ltr">' . e($u['failed_migration']) . '</code>' : '' ?></div></div><?php endif; ?>
-
-<div class="grid g-5 mb-3">
-    <div class="card stat tone-success"><div class="bubble"><?= icon('plus') ?></div><div><div class="v"><?= fa(count($p['new'] ?? [])) ?></div><div class="l">فایل جدید</div></div></div>
-    <div class="card stat tone-warning"><div class="bubble"><?= icon('pencil') ?></div><div><div class="v"><?= fa(count($p['changed'] ?? [])) ?></div><div class="l">فایل تغییرکرده</div></div></div>
-    <div class="card stat tone-danger"><div class="bubble"><?= icon('trash-2') ?></div><div><div class="v"><?= fa(count($p['deleted'] ?? [])) ?></div><div class="l">فایل حذف‌شونده</div></div></div>
-    <div class="card stat tone-purple"><div class="bubble"><?= icon('database') ?></div><div><div class="v"><?= fa(count($p['migrations'] ?? [])) ?></div><div class="l">Migration جدید</div></div></div>
-    <div class="card stat tone-info"><div class="bubble"><?= icon('check') ?></div><div><div class="v"><?= fa($p['unchanged'] ?? 0) ?></div><div class="l">بدون تغییر</div></div></div>
+<?php
+$sigWarn = [];
+$otherWarn = [];
+foreach ($v['warnings'] ?? [] as $w) {
+    if (str_contains($w, 'امضا')) $sigWarn[] = $w; else $otherWarn[] = $w;
+}
+$stats = [
+    ['plus', 'success', count($p['new'] ?? []), 'فایل جدید'],
+    ['pencil', 'warning', count($p['changed'] ?? []), 'فایل تغییرکرده'],
+    ['trash-2', 'danger', count($p['deleted'] ?? []), 'فایل حذف‌شونده'],
+    ['database', 'purple', count($p['migrations'] ?? []), 'Migration جدید'],
+    ['check', 'info', (int)($p['unchanged'] ?? 0), 'بدون تغییر'],
+];
+?>
+<div class="crumbs mb-1"><a href="<?= url('/admin/system/updates') ?>">بروزرسانی سامانه</a></div>
+<?php $stTone = ['validated' => '#6366f1', 'success' => '#10b981', 'failed' => '#ef4444', 'rolled_back' => '#f59e0b']; ?>
+<div class="card chero upd-chero mb-3" style="--cc:<?= $stTone[$u['status']] ?? '#6366f1' ?>">
+    <div class="chero-top">
+        <div class="chero-cover"><?= icon($u['status'] === 'success' ? 'circle-check' : ($u['status'] === 'failed' ? 'triangle-alert' : 'rocket')) ?></div>
+        <div class="chero-main">
+            <h1>بروزرسانی <span class="faint">#<?= fa($u['id']) ?></span></h1>
+            <div class="chero-tags">
+                <?= status_badge($u['status']) ?>
+                <span class="upd-vpill ltr"><b><?= e($u['from_version']) ?></b><?= icon('chevron-right') ?><b class="is-to"><?= e($u['to_version'] ?? '?') ?></b></span>
+                <span class="chero-meta ltr"><?= icon('package') ?> <?= e($u['package_name']) ?></span>
+                <?php if ($sigWarn): ?><span class="chero-meta" title="<?= e(implode(' ', $sigWarn)) ?>"><?= icon('shield') ?> بدون امضای دیجیتال — Checksum بررسی شد</span>
+                <?php elseif (!empty($m['signature'])): ?><span class="chero-meta" style="color:var(--success)"><?= icon('shield-check') ?> امضای دیجیتال معتبر</span><?php endif; ?>
+            </div>
+        </div>
+        <div class="chero-acts">
+            <?php if ($u['status'] === 'validated'): ?>
+                <form method="post" action="<?= url('/admin/system/updates/' . $u['id'] . '/discard') ?>"><?= csrf_field() ?><button class="btn btn-ghost"><?= icon('x') ?> انصراف و حذف بسته</button></form>
+            <?php else: ?>
+                <a class="btn btn-outline" href="<?= url('/admin/system/updates') ?>"><?= icon('upload') ?> آپلود بسته دیگر</a>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php if ($u['status'] === 'validated'):
+        $bad = array_values(array_filter($health, fn($c) => $c['status'] !== 'ok')); ?>
+    <div class="upd-panel">
+        <form class="upd-act-form" method="post" action="<?= url('/admin/system/updates/' . $u['id'] . '/apply') ?>"><?= csrf_field() ?>
+            <label class="switch"><input type="checkbox" name="with_backup" value="1"> Backup قبل از بروزرسانی</label>
+            <?= confirm_password_inline() ?>
+            <button class="btn btn-grad btn-lg"><?= icon('rocket') ?> شروع بروزرسانی</button>
+        </form>
+        <div class="upd-health">
+            <span class="faint small"><?= icon('heart-pulse') ?> Health Check:</span>
+            <?php if (!$bad): ?><span class="chip tone-ok"><?= icon('circle-check') ?> همه <?= fa(count($health)) ?> مورد سالم است</span>
+            <?php else: foreach ($bad as $c): ?><span class="chip tone-<?= $c['status'] === 'error' ? 'err' : 'warn' ?>"><span class="dot-st dot-<?= e($c['status']) ?>"></span><?= e($c['label']) ?></span><?php endforeach; endif; ?>
+        </div>
+    </div>
+    <?php elseif ($u['status'] === 'success'): ?>
+    <div class="upd-panel">
+        <div class="upd-done"><?= icon('circle-check') ?> بروزرسانی در <?= jdatetime($u['finished_at']) ?> با موفقیت انجام شد.</div>
+        <form class="upd-act-form" method="post" action="<?= url('/admin/system/updates/' . $u['id'] . '/rollback') ?>" data-confirm="نسخه قبلی بازگردانی شود؟"><?= csrf_field() ?>
+            <?php if ($backup): ?><label class="switch" title="داده‌های ثبت‌شده پس از بروزرسانی از بین می‌روند"><input type="checkbox" name="restore_db" value="1"> بازیابی دیتابیس هم</label><?php endif; ?>
+            <?= confirm_password_inline() ?>
+            <button class="btn btn-outline"><?= icon('rotate-ccw') ?> بازگردانی به نسخه قبل</button>
+        </form>
+    </div>
+    <?php endif; ?>
+    <div class="chero-stats">
+        <?php $toneC = ['success' => 'var(--success)', 'warning' => 'var(--warning)', 'danger' => 'var(--danger)', 'purple' => '#8b5cf6', 'info' => '#0ea5e9']; ?>
+        <?php foreach ($stats as [$ic, $tn, $n, $label]): ?>
+            <div class="cs<?= $n ? '' : ' is-zero' ?>" style="--tc:<?= $toneC[$tn] ?>"><span class="cs-ic"><?= icon($ic) ?></span><span><b><?= fa($n) ?></b><small><?= e($label) ?></small></span></div>
+        <?php endforeach; ?>
+    </div>
 </div>
 
-<div class="grid g-main">
-    <div class="stack">
-        <?php if (!empty($m['changelog'])): ?><div class="card"><h3><?= icon('sparkles') ?> تغییرات نسخه <?= e($m['version']) ?></h3><ul><?php foreach ((array)$m['changelog'] as $c): ?><li><?= e($c) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+<?php foreach ($v['errors'] ?? [] as $er): ?><div class="alert alert-danger"><?= icon('circle-x') ?><div><?= e($er) ?></div></div><?php endforeach; ?>
+<?php foreach ($otherWarn as $w): ?><div class="alert alert-warning"><?= icon('triangle-alert') ?><div><?= e($w) ?></div></div><?php endforeach; ?>
+<?php if ($u['error'] && $u['status'] !== 'fail'): ?><div class="alert alert-danger"><?= icon('circle-x') ?><div><b>خطا:</b> <?= e($u['error']) ?><?= $u['failed_migration'] ? '<br>Migration ناقص: <code class="ltr">' . e($u['failed_migration']) . '</code>' : '' ?></div></div><?php endif; ?>
+
+<div class="stack">
+    <?php if (!empty($m['changelog'])): ?><div class="card"><h3><?= icon('sparkles') ?> تغییرات نسخه <?= e($m['version']) ?></h3><ul><?php foreach ((array)$m['changelog'] as $c): ?><li><?= e($c) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+    <div class="grid g-2">
         <div class="card"><h3><?= icon('file') ?> فایل‌ها</h3>
             <div class="diff-list">
                 <?php foreach ($p['new'] ?? [] as $f): ?><div class="diff-add">+ <?= e($f) ?></div><?php endforeach; ?>
@@ -28,37 +87,13 @@ $tone = ['ok' => 'success', 'warning' => 'warning', 'error' => 'danger'];
                 <?php if (empty($p['new']) && empty($p['changed']) && empty($p['deleted'])): ?><div class="faint">—</div><?php endif; ?>
             </div>
         </div>
-        <div class="card"><h3><?= icon('database') ?> تغییرات دیتابیس (Migrationهایی که اجرا می‌شوند)</h3>
-            <?php foreach ($p['migrations'] ?? [] as $mg): ?><div class="ltr small"><code><?= e($mg) ?></code></div><?php endforeach; ?>
-            <?php if (empty($p['migrations'])): ?><div class="faint small">تغییری در ساختار دیتابیس وجود ندارد.</div><?php endif; ?>
+        <div class="stack">
+            <div class="card"><h3><?= icon('database') ?> تغییرات دیتابیس (Migrationها)</h3>
+                <?php foreach ($p['migrations'] ?? [] as $mg): ?><div class="ltr small"><code><?= e($mg) ?></code></div><?php endforeach; ?>
+                <?php if (empty($p['migrations'])): ?><div class="faint small">تغییری در ساختار دیتابیس وجود ندارد.</div><?php endif; ?>
+            </div>
+            <div class="card"><h3><?= icon('info') ?> اطلاعات بسته</h3><dl class="kv small"><dt>نسخه</dt><dd class="ltr"><?= e($m['version'] ?? '—') ?></dd><dt>حداقل نسخه</dt><dd class="ltr"><?= e($m['min_version'] ?? '—') ?></dd><dt>PHP لازم</dt><dd class="ltr"><?= e($m['requires_php'] ?? '—') ?></dd><dt>امضا</dt><dd><?= !empty($m['signature']) ? 'دارد' : 'ندارد' ?></dd><dt>SHA-256</dt><dd class="ltr small" style="word-break:break-all"><?= e($u['package_sha256']) ?></dd><?php if ($backup): ?><dt>پشتیبان</dt><dd class="ltr small"><?= e($backup['filename']) ?></dd><?php endif; ?></dl></div>
         </div>
-        <?php if ($u['log_text']): ?><div class="card"><h3><?= icon('scroll-text') ?> گزارش اجرا</h3><div class="code-block"><?= e($u['log_text']) ?></div></div><?php endif; ?>
     </div>
-    <div class="stack">
-        <?php if ($u['status'] === 'validated'): ?>
-            <form class="card" method="post" action="<?= url('/admin/system/updates/' . $u['id'] . '/apply') ?>" data-confirm="بروزرسانی اجرا شود؟"><?= csrf_field() ?>
-                <h3><?= icon('rocket') ?> اجرای بروزرسانی</h3>
-                <label class="switch mb-2"><input type="checkbox" name="with_backup" value="1" checked> تهیه Backup قبل از بروزرسانی</label>
-                <div class="hint mb-2">در صورت روشن بودن: دیتابیس، فایل‌های برنامه و تنظیمات پیش از بروزرسانی پشتیبان‌گیری می‌شوند و در صورت شکست Migration، دیتابیس به صورت خودکار بازیابی می‌شود. در هر حالت از فایل‌های تغییرکننده نسخه برگشت تهیه می‌شود.</div>
-                <?= confirm_password_field() ?>
-                <button class="btn btn-grad btn-lg w-100"><?= icon('rocket') ?> شروع بروزرسانی</button>
-            </form>
-            <div class="card"><h3><?= icon('heart-pulse') ?> Health Check پیش از بروزرسانی</h3>
-                <?php foreach ($health as $c): ?><div class="flex between small" style="padding:.25rem 0"><span><span class="dot-st dot-<?= e($c['status']) ?>"></span><?= e($c['label']) ?></span><?= status_badge($c['status']) ?></div><?php endforeach; ?>
-            </div>
-            <form method="post" action="<?= url('/admin/system/updates/' . $u['id'] . '/discard') ?>"><?= csrf_field() ?><button class="btn btn-ghost w-100"><?= icon('x') ?> انصراف و حذف بسته</button></form>
-        <?php elseif ($u['status'] === 'success'): ?>
-            <div class="card"><div class="alert alert-success"><?= icon('circle-check') ?> بروزرسانی در <?= jdatetime($u['finished_at']) ?> با موفقیت انجام شد.</div>
-                <form method="post" action="<?= url('/admin/system/updates/' . $u['id'] . '/rollback') ?>" data-confirm="نسخه قبلی بازگردانی شود؟"><?= csrf_field() ?>
-                    <h4><?= icon('rotate-ccw') ?> بازگردانی به نسخه قبل</h4>
-                    <?php if ($backup): ?><label class="switch mb-1"><input type="checkbox" name="restore_db" value="1"> بازیابی دیتابیس از پشتیبان پیش از بروزرسانی</label><div class="hint mb-1">توجه: داده‌های ثبت‌شده پس از بروزرسانی از بین می‌روند.</div><?php endif; ?>
-                    <?= confirm_password_field() ?>
-                    <button class="btn btn-outline w-100"><?= icon('rotate-ccw') ?> بازگردانی</button>
-                </form>
-            </div>
-        <?php else: ?>
-            <div class="card"><a class="btn btn-outline w-100" href="<?= url('/admin/system/updates') ?>"><?= icon('upload') ?> آپلود بسته دیگر</a></div>
-        <?php endif; ?>
-        <div class="card"><h3><?= icon('info') ?> اطلاعات بسته</h3><dl class="kv small"><dt>نسخه</dt><dd class="ltr"><?= e($m['version'] ?? '—') ?></dd><dt>حداقل نسخه</dt><dd class="ltr"><?= e($m['min_version'] ?? '—') ?></dd><dt>PHP لازم</dt><dd class="ltr"><?= e($m['requires_php'] ?? '—') ?></dd><dt>امضا</dt><dd><?= !empty($m['signature']) ? 'دارد' : 'ندارد' ?></dd><dt>SHA-256</dt><dd class="ltr small" style="word-break:break-all"><?= e($u['package_sha256']) ?></dd><?php if ($backup): ?><dt>پشتیبان</dt><dd class="ltr small"><?= e($backup['filename']) ?></dd><?php endif; ?></dl></div>
-    </div>
+    <?php if ($u['log_text']): ?><div class="card"><h3><?= icon('scroll-text') ?> گزارش اجرا</h3><div class="code-block"><?= e($u['log_text']) ?></div></div><?php endif; ?>
 </div>

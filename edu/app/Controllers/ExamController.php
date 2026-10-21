@@ -23,6 +23,8 @@ final class ExamController
         if ($x['course_id']) {
             $en = Enrollment::get($uid, (int)$x['course_id']);
             if ((!$en || $en['status'] === 'locked') && !$staff) throw new HttpException(403, 'برای شرکت در این آزمون ابتدا در دوره مربوطه ثبت‌نام کنید و پیش‌نیازها را تکمیل کنید.');
+            // the exam opens only after the lesson (or, for a course exam, every lesson) was really seen
+            $x['_gate'] = $staff ? null : Enrollment::taskGate($uid, $x);
         }
         return $x;
     }
@@ -52,7 +54,7 @@ final class ExamController
         $passed = (bool)array_filter($attempts, fn($a) => (int)$a['passed'] === 1);
         $qcount = $x['random_count'] ?: (int)DB::value('SELECT COUNT(*) FROM exam_questions WHERE exam_id = ?', [$id]);
         $window = (!$x['available_from'] || $x['available_from'] <= now()) && (!$x['available_until'] || $x['available_until'] >= now());
-        return view('learn/exam_intro', ['title' => $x['title'], 'x' => $x, 'credit' => Credit::examAccess($x), 'used' => $used, 'left' => ExamService::remainingToday($x, $uid), 'open' => $open, 'attempts' => $attempts, 'passed' => $passed, 'qcount' => $qcount, 'window' => $window]);
+        return view('learn/exam_intro', ['title' => $x['title'], 'x' => $x, 'credit' => Credit::examAccess($x), 'used' => $used, 'left' => ExamService::remainingToday($x, $uid), 'open' => $open, 'attempts' => $attempts, 'passed' => $passed, 'qcount' => $qcount, 'window' => $window, 'gate' => $x['_gate'] ?? null]);
     }
 
     public function start(int $id): never
@@ -62,6 +64,7 @@ final class ExamController
         if ($x['available_from'] && $x['available_from'] > now()) { flash('warning', 'زمان شروع آزمون هنوز فرا نرسیده است.'); redirect('/learn/exam/' . $id); }
         if ($x['available_until'] && $x['available_until'] < now()) { flash('warning', 'مهلت شرکت در این آزمون به پایان رسیده است.'); redirect('/learn/exam/' . $id); }
         $open = DB::value("SELECT id FROM exam_attempts WHERE exam_id = ? AND user_id = ? AND status = 'in_progress'", [$id, $uid]);
+        if (!$open && !empty($x['_gate'])) { flash('warning', $x['_gate']['msg']); redirect('/learn/exam/' . $id); }
         if (!$open && !Credit::examAccess($x)['ok']) { flash('danger', 'اعتبار این دوره آموزشی را ندارید. برای دریافت اعتبار با کارشناسان آراد برندینگ تماس بگیرید.'); redirect('/learn/exam/' . $id); }
         if (!$open && ExamService::remainingToday($x, $uid) === 0) { flash('warning', 'امروز ' . fa((int)$x['max_attempts']) . ' بار در این آزمون شرکت کرده‌اید که سقف مجاز روزانه است. از فردا دوباره می‌توانید شرکت کنید.'); redirect('/learn/exam/' . $id); }
         if (!$open && DB::value('SELECT 1 FROM exam_attempts WHERE exam_id = ? AND user_id = ? AND passed = 1', [$id, $uid])) { flash('info', 'شما قبلاً در این آزمون قبول شده‌اید.'); redirect('/learn/exam/' . $id); }

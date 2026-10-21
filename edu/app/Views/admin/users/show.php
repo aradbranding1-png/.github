@@ -29,7 +29,7 @@ $avg = $en ? array_sum(array_column($en, 'progress_pct')) / count($en) : 0;
                     <?= status_badge($u['status']) ?><span class="badge badge-gray"><?= e(label('segment_one', $u['segment'])) ?></span>
                     <?php if ($u['is_root']): ?><span class="badge badge-root"><?= icon('crown') ?> مدیر کل</span><?php endif; ?>
                     <?php foreach ($myRoles as $r): ?><span class="badge badge-<?= e($r['color']) ?>"><?= e($r['name']) ?></span><?php endforeach; ?>
-                    <?php if ($u['my_user_id']): ?><span class="badge badge-success"><?= icon('fingerprint') ?> متصل به my (<?= e($u['my_user_id']) ?>)</span><?php else: ?><span class="badge badge-gray">غیرمتصل به my</span><?php endif; ?>
+                    
                 </div>
             </div>
         </div>
@@ -139,7 +139,7 @@ $avg = $en ? array_sum(array_column($en, 'progress_pct')) / count($en) : 0;
         </div>
         <div class="card flush"><div class="card-head"><h3><?= icon('log-in') ?> آخرین ورودها</h3></div>
             <div class="table-wrap"><table class="table"><thead><tr><th>زمان</th><th>روش</th><th>شناسه واردشده</th><th>IP</th><th>نتیجه</th></tr></thead><tbody>
-            <?php foreach ($logins as $l): ?><tr><td class="num"><?= jdatetime($l['created_at']) ?></td><td><?= e(['password' => 'رمز عبور', 'sso' => 'SSO (my)', 'register' => 'ثبت‌نام', 'impersonate' => 'مدیر کل'][$l['method']] ?? $l['method']) ?></td><td class="ltr small"><?= e((string)($l['identifier'] ?? '')) ?: '—' ?></td><td class="ltr num small"><?= e($l['ip']) ?></td><td><?= $l['success'] ? status_badge('success') : '<span class="badge badge-danger">' . e($reasons[$l['reason'] ?? ''] ?? 'ناموفق') . '</span>' ?></td></tr><?php endforeach; ?>
+            <?php foreach ($logins as $l): ?><tr><td class="num"><?= jdatetime($l['created_at']) ?></td><td><?= e(['password' => 'رمز عبور', 'sso' => 'ورود خارجی (غیرفعال‌شده)', 'register' => 'ثبت‌نام', 'impersonate' => 'مدیر کل'][$l['method']] ?? $l['method']) ?></td><td class="ltr small"><?= e((string)($l['identifier'] ?? '')) ?: '—' ?></td><td class="ltr num small"><?= e($l['ip']) ?></td><td><?= $l['success'] ? status_badge('success') : '<span class="badge badge-danger">' . e($reasons[$l['reason'] ?? ''] ?? 'ناموفق') . '</span>' ?></td></tr><?php endforeach; ?>
             <?php if (!$logins): ?><tr><td colspan="5" class="faint text-center">ورودی ثبت نشده</td></tr><?php endif; ?>
             </tbody></table></div>
         </div>
@@ -169,7 +169,6 @@ $avg = $en ? array_sum(array_column($en, 'progress_pct')) / count($en) : 0;
             <h3><?= icon('settings') ?> عملیات</h3>
             <div class="btn-group">
                 <form method="post" action="<?= url('/admin/users/' . $u['id'] . '/status') ?>"><?= csrf_field() ?><input type="hidden" name="status" value="<?= $u['status'] === 'active' ? 'inactive' : 'active' ?>"><button class="btn btn-sm <?= $u['status'] === 'active' ? 'btn-outline' : 'btn-success' ?>"><?= icon($u['status'] === 'active' ? 'user-x' : 'user-check') ?> <?= $u['status'] === 'active' ? 'غیرفعال‌سازی' : ($u['status'] === 'pending' ? 'تأیید و فعال‌سازی' : 'فعال‌سازی') ?></button></form>
-                <?php if ($u['my_user_id']): ?><form method="post" action="<?= url('/admin/users/' . $u['id'] . '/unlink-my') ?>" data-confirm="اتصال این کاربر به my قطع شود؟"><?= csrf_field() ?><button class="btn btn-sm btn-outline"><?= icon('link') ?> قطع اتصال my</button></form><?php endif; ?>
                 <?php if (can('users.delete')): ?><form method="post" action="<?= url('/admin/users/' . $u['id'] . '/delete') ?>" data-confirm="کاربر حذف شود؟ سوابق آموزشی برای گزارش حفظ می‌شود."><?= csrf_field() ?><button class="btn btn-sm btn-danger"><?= icon('trash-2') ?> حذف</button></form><?php endif; ?>
             </div>
         </div>

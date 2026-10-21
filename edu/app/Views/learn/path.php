@@ -2,7 +2,7 @@
 <div class="card hero mb-3" style="background:linear-gradient(135deg, <?= e($p['color']) ?>, #0f172a)">
     <div class="flex between flex-wrap gap-2">
         <div class="grow"><div class="crumbs" style="color:rgba(255,255,255,.7)"><a style="color:inherit" href="<?= url('/learn/paths') ?>">مسیرهای آموزشی</a></div><h1><?= e($p['title']) ?></h1>
-            <?php if (trim((string)$p['description']) !== ''): ?><p class="muted mb-0"><?= nl2br(e($p['description'])) ?></p><?php endif; ?>
+            <?php if (trim((string)$p['description']) !== ''): ?><p class="muted mb-0 text-justify"><?= nl2br(e($p['description'])) ?></p><?php endif; ?>
             <div class="flex flex-wrap mt-1" style="gap:.35rem"><span class="badge" style="background:rgba(255,255,255,.15);color:#fff"><?= icon('route') ?> <?= fa(count($steps)) ?> مرحله</span>
                 <?php if ($staff): ?><span class="badge" style="background:rgba(255,255,255,.15);color:#fff"><?= icon('users') ?> <?= e($audLabels[$audience] ?? $audience) ?><?= $p['group_name'] ? ' · ' . e($p['group_name']) : '' ?></span><?php endif; ?></div></div>
         <div class="text-center">

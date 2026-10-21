@@ -56,7 +56,7 @@ final class EventController
         Audit::log('events.create', 'event', $id, 'success', ['type' => $type]);
         if (\App\Services\TraderGrowth::eventTypeUsed($type)) \App\Services\TraderGrowth::markAllDirty();
         $sent = EventService::announce($id);
-        flash('success', EventService::TYPES[$type]['label'] . ' ایجاد شد.' . ($sent ? ' اعلان آن برای ' . fa($sent) . ' کاربر ارسال شد.' : ''));
+        flash('success', EventService::TYPES[$type]['label'] . ' ایجاد شد.' . ($sent ? ' اعلان آن برای ' . fa($sent) . ' کاربر (' . $this->audienceText($id) . ') ارسال شد.' : ''));
         redirect('/admin/events/' . $type);
     }
 
@@ -74,7 +74,7 @@ final class EventController
         Audit::log('events.update', 'event', $id);
         if (\App\Services\TraderGrowth::eventTypeUsed($e['type'])) \App\Services\TraderGrowth::markAllDirty();
         $sent = EventService::announce($id); // e.g. just published
-        flash('success', 'تغییرات ذخیره شد.' . ($sent ? ' اعلان آن برای ' . fa($sent) . ' کاربر ارسال شد.' : ''));
+        flash('success', 'تغییرات ذخیره شد.' . ($sent ? ' اعلان آن برای ' . fa($sent) . ' کاربرِ تازه‌اضافه‌شده به مخاطبان (' . $this->audienceText($id) . ') ارسال شد؛ بقیه قبلاً اعلان گرفته بودند.' : ''));
         redirect('/admin/events/' . $e['type']);
     }
 
@@ -107,7 +107,7 @@ final class EventController
     public function registrations(int $id): string
     {
         $e = $this->load($id);
-        $rows = DB::all("SELECT r.*, u.first_name, u.last_name, u.mobile, u.segment, u.avatar_path, u.is_root, u.id AS uid FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? ORDER BY r.status, r.id DESC", [$id]);
+        $rows = DB::all("SELECT r.*, u.first_name, u.last_name, u.mobile, u.segment, u.avatar_path, u.is_root, u.id AS uid FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ?" . \App\Services\Scope::userSql('u.id')['sql'] . " ORDER BY r.status, r.id DESC", array_merge([$id], \App\Services\Scope::userSql('u.id')['params']));
         if (Request::str('export') === '1') {
             Xlsx::download('event-' . $id, ['نام', 'نام خانوادگی', 'موبایل', 'نوع کاربر', 'تاریخ ثبت‌نام', 'اعتبار کسرشده', 'ورود به جلسه', 'دفعات ورود', 'وضعیت'],
                 array_map(fn($r) => [$r['first_name'], $r['last_name'], $r['mobile'], label('segment_one', $r['segment']), jdatetime($r['created_at']), (int)$r['cost'], $r['joined_at'] ? jdatetime($r['joined_at']) : '—', (int)$r['join_count'], $r['status'] === 'registered' ? 'ثبت‌نام شده' : 'لغو شده'], $rows),
@@ -122,6 +122,15 @@ final class EventController
         EventService::cancel($rid, Request::bool('refund'), (int)Auth::id());
         flash('success', 'ثبت‌نام لغو شد' . (Request::bool('refund') ? ' و اعتبار برگشت داده شد.' : '.'));
         back();
+    }
+
+    /** Who an event is announced to, in words — e.g. «کارمندان · گروه فروش» or «همه کاربران» */
+    private function audienceText(int $id): string
+    {
+        $e = DB::one('SELECT e.segments, g.name AS group_name FROM events e LEFT JOIN `groups` g ON g.id = e.group_id WHERE e.id = ?', [$id]);
+        $segs = array_filter(explode(',', (string)($e['segments'] ?? '')));
+        $txt = $segs ? implode(' و ', array_map(fn($k) => \App\Core\Labels::SEGMENT[$k] ?? $k, $segs)) : 'همه کاربران';
+        return $txt . (!empty($e['group_name']) ? ' · گروه «' . $e['group_name'] . '»' : '');
     }
 
     private function groups(): array

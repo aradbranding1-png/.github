@@ -1,69 +1,99 @@
-<?php $n = (int)$stats['n']; ?>
-<div class="page-head">
-    <div><div class="crumbs"><a href="<?= url('/admin/courses') ?>">دوره‌ها</a></div><h1><?= e($c['title']) ?></h1>
-        <div class="sub flex flex-wrap"><?= status_badge($c['status']) ?><span class="badge badge-gray"><?= e(label('training_type', $c['training_type'])) ?></span><?= $c['category_name'] ? '<span class="badge badge-primary">' . e($c['category_name']) . '</span>' : '' ?><?= $c['target_segment'] ? '<span class="badge badge-gray">' . e(label('segment', $c['target_segment'])) . '</span>' : '' ?><?= $instructor ? '<span class="badge badge-gray">' . icon('user') . ' ' . e(full_name($instructor)) . '</span>' : '' ?></div></div>
-    <div class="btn-group">
-        <a class="btn btn-outline" href="<?= url('/learn/course/' . $c['id']) ?>" target="_blank"><?= icon('eye') ?> پیش‌نمایش</a>
-        <?php if (can('courses.edit')): ?><a class="btn btn-outline" href="<?= url('/admin/courses/' . $c['id'] . '/edit') ?>"><?= icon('pencil') ?> ویرایش</a><?php endif; ?>
-        <?php if (can('courses.publish')): ?>
-            <?php if ($c['status'] !== 'published'): ?>
-                <form class="inline" method="post" action="<?= url('/admin/courses/' . $c['id'] . '/publish') ?>"><?= csrf_field() ?><input type="hidden" name="status" value="published"><label class="check small" style="display:inline-flex"><input type="checkbox" name="notify" value="1" checked> اعلان به مخاطبان</label> <button class="btn btn-success"><?= icon('rocket') ?> انتشار</button></form>
-            <?php else: ?>
-                <form class="inline" method="post" action="<?= url('/admin/courses/' . $c['id'] . '/publish') ?>"><?= csrf_field() ?><input type="hidden" name="status" value="draft"><button class="btn btn-outline"><?= icon('eye-off') ?> لغو انتشار</button></form>
+<?php
+$n = (int)$stats['n'];
+$donePct = $n ? (int)round($stats['done'] * 100 / $n) : 0;
+$cColor = $c['category_color'] ?: '#6366f1';
+$cCover = image_url($c['image_file_id'] ?? null, 320);
+?>
+<div class="crumbs mb-1"><a href="<?= url('/admin/courses') ?>">دوره‌ها</a> / <?= e($c['title']) ?></div>
+<div class="card chero" style="--cc:<?= e($cColor) ?>">
+    <div class="chero-top">
+        <div class="chero-cover"><?php if ($cCover): ?><img src="<?= e($cCover) ?>" alt=""><?php else: ?><?= icon('graduation-cap') ?><?php endif; ?></div>
+        <div class="chero-main">
+            <h1><?= e($c['title']) ?></h1>
+            <div class="chero-tags">
+                <?= status_badge($c['status']) ?>
+                <span class="badge badge-<?= $c['training_type'] === 'mandatory' ? 'danger' : 'gray' ?>"><?= e(label('training_type', $c['training_type'])) ?></span>
+                <?php if ($c['category_name']): ?><span class="chero-cat"><?= e($c['category_name']) ?></span><?php endif; ?>
+                <span class="chero-meta"><?= icon('users') ?> مخاطبان: <?= e(App\Services\CourseAudience::label((int)$c['id'])) ?></span>
+                <?php if ($instructor): ?><span class="chero-meta"><?= icon('user') ?> <?= e(full_name($instructor)) ?></span><?php endif; ?>
+            </div>
+        </div>
+        <div class="chero-acts">
+            <?php if (can('reports.report') || can('courses.report')): ?><a class="btn btn-primary" href="<?= url('/admin/reports/course/' . $c['id']) ?>"><?= icon('chart-column') ?> گزارش مدیریتی</a><?php endif; ?>
+            <a class="btn btn-outline" href="<?= url('/learn/course/' . $c['id']) ?>" target="_blank"><?= icon('eye') ?> پیش‌نمایش</a>
+            <?php if (can('courses.edit')): ?><a class="btn btn-outline" href="<?= url('/admin/courses/' . $c['id'] . '/edit') ?>"><?= icon('pencil') ?> ویرایش</a><?php endif; ?>
+            <?php if (can('courses.publish')): ?>
+                <?php if ($c['status'] !== 'published'): ?>
+                    <form class="inline chero-pub" method="post" action="<?= url('/admin/courses/' . $c['id'] . '/publish') ?>"><?= csrf_field() ?><input type="hidden" name="status" value="published"><label class="check small"><input type="checkbox" name="notify" value="1" checked> اعلان به مخاطبان</label><button class="btn btn-success"><?= icon('rocket') ?> انتشار</button></form>
+                <?php else: ?>
+                    <form class="inline" method="post" action="<?= url('/admin/courses/' . $c['id'] . '/publish') ?>"><?= csrf_field() ?><input type="hidden" name="status" value="draft"><button class="btn btn-ghost" title="لغو انتشار"><?= icon('eye-off') ?> لغو انتشار</button></form>
+                <?php endif; ?>
             <?php endif; ?>
-        <?php endif; ?>
-        <?php if (can('courses.delete')): ?><form class="inline" method="post" action="<?= url('/admin/courses/' . $c['id'] . '/delete') ?>" data-confirm="دوره حذف شود؟ سوابق آموزشی کاربران حفظ می‌شود."><?= csrf_field() ?><button class="btn btn-ghost" style="color:var(--danger)"><?= icon('trash-2') ?></button></form><?php endif; ?>
+            <?php if (can('courses.delete')): ?><form class="inline" method="post" action="<?= url('/admin/courses/' . $c['id'] . '/delete') ?>" data-confirm="دوره حذف شود؟ سوابق آموزشی کاربران حفظ می‌شود."><?= csrf_field() ?><button class="btn btn-icon btn-ghost chero-del" title="حذف دوره"><?= icon('trash-2') ?></button></form><?php endif; ?>
+        </div>
     </div>
-</div>
-
-<div class="grid g-5 mb-3">
-    <div class="card stat tone-primary"><div class="bubble"><?= icon('users') ?></div><div><div class="v"><?= nf($n) ?></div><div class="l">فراگیر</div></div></div>
-    <div class="card stat tone-success"><div class="bubble"><?= icon('circle-check') ?></div><div><div class="v"><?= nf($stats['done']) ?></div><div class="l">تکمیل (<?= fa($n ? round($stats['done'] * 100 / $n) : 0) ?>٪)</div></div></div>
-    <div class="card stat tone-info"><div class="bubble"><?= icon('circle-play') ?></div><div><div class="v"><?= nf($stats['active']) ?></div><div class="l">در حال انجام</div></div></div>
-    <div class="card stat tone-warning"><div class="bubble"><?= icon('gauge') ?></div><div><div class="v"><?= fa(round((float)$stats['prog'])) ?>٪</div><div class="l">میانگین پیشرفت</div></div></div>
-    <div class="card stat tone-purple"><div class="bubble"><?= icon('award') ?></div><div><div class="v"><?= $stats['score'] !== null ? fa(round((float)$stats['score'])) : '—' ?></div><div class="l">میانگین نمره</div></div></div>
+    <div class="chero-stats">
+        <div class="cs" style="--tc:var(--primary)"><span class="cs-ic"><?= icon('users') ?></span><span><b><?= nf($n) ?></b><small>فراگیر</small></span></div>
+        <div class="cs" style="--tc:var(--success)"><span class="cs-ic"><?= icon('circle-check') ?></span><span><b><?= nf($stats['done']) ?> <i><?= fa($donePct) ?>٪</i></b><small>تکمیل کرده</small></span></div>
+        <div class="cs" style="--tc:#0ea5e9"><span class="cs-ic"><?= icon('circle-play') ?></span><span><b><?= nf($stats['active']) ?></b><small>در حال یادگیری</small></span></div>
+        <div class="cs" style="--tc:var(--warning)"><span class="cs-ic"><?= icon('gauge') ?></span><span><b><?= fa(round((float)$stats['prog'])) ?>٪</b><small>میانگین پیشرفت</small></span></div>
+        <div class="cs" style="--tc:#8b5cf6"><span class="cs-ic"><?= icon('award') ?></span><span><b><?= $stats['score'] !== null ? fa(round((float)$stats['score'])) : '—' ?></b><small>میانگین نمره</small></span></div>
+    </div>
 </div>
 
 <?php if ((int)$c['has_certificate'] === 1 && !$exams): ?>
 <div class="alert alert-warning"><?= icon('triangle-alert') ?><div><b>این دوره گواهی دارد ولی آزمونی ندارد.</b> گواهی با تکمیل همه درس‌ها<?= $exercises ? ' و تمرین‌های الزامی' : '' ?> صادر می‌شود و «حداقل نمره قبولی» (<?= fa((float)$c['pass_score']) ?>٪) اعمال نمی‌شود. برای سنجش، از تب «آزمون‌ها» یک آزمون الزامی اضافه کنید.</div></div>
 <?php endif; ?>
-<div class="tabs">
-    <a class="<?= $tab === 'lessons' ? 'active' : '' ?>" href="<?= url('/admin/courses/' . $c['id']) ?>"><?= icon('list') ?> درس‌ها (<?= fa(count($lessons)) ?>)</a>
-    <a class="<?= $tab === 'exams' ? 'active' : '' ?>" href="<?= url('/admin/courses/' . $c['id'], ['tab' => 'exams']) ?>"><?= icon('clipboard-check') ?> آزمون‌ها (<?= fa(count($exams)) ?>)</a>
-    <a class="<?= $tab === 'exercises' ? 'active' : '' ?>" href="<?= url('/admin/courses/' . $c['id'], ['tab' => 'exercises']) ?>"><?= icon('notebook-pen') ?> تمرین‌ها (<?= fa(count($exercises)) ?>)</a>
-    <a class="<?= $tab === 'learners' ? 'active' : '' ?>" href="<?= url('/admin/courses/' . $c['id'], ['tab' => 'learners']) ?>"><?= icon('users') ?> فراگیران</a>
-</div>
+<?php $tabList = [
+    'lessons' => ['درس‌ها', 'list', count($lessons), url('/admin/courses/' . $c['id'])],
+    'exams' => ['آزمون‌ها', 'clipboard-check', count($exams), url('/admin/courses/' . $c['id'], ['tab' => 'exams'])],
+    'exercises' => ['تمرین‌ها', 'notebook-pen', count($exercises), url('/admin/courses/' . $c['id'], ['tab' => 'exercises'])],
+    'learners' => ['فراگیران', 'users', $n, url('/admin/courses/' . $c['id'], ['tab' => 'learners'])],
+]; ?>
+<nav class="ctabs" aria-label="بخش‌های دوره">
+    <?php foreach ($tabList as $k => [$t, $ti, $cnt, $u]): ?>
+        <a class="<?= $tab === $k || ($k === 'learners' && !isset($tabList[$tab])) ? 'active' : '' ?>" href="<?= $u ?>"<?= $tab === $k ? ' aria-current="page"' : '' ?>><?= icon($ti) ?><span><?= $t ?></span><em><?= fa($cnt) ?></em></a>
+    <?php endforeach; ?>
+</nav>
 
 <?php if ($tab === 'lessons'): ?>
+<?php $sortOn = can('lessons.edit') && count($lessons) > 1; $ctIc = ['video' => 'video', 'audio' => 'music', 'pdf' => 'file-text', 'image' => 'image', 'file' => 'file', 'link' => 'link', 'text' => 'file-text']; ?>
 <div class="card flush">
     <div class="card-head" style="padding:1rem 1.25rem"><h3><?= icon('list') ?> درس‌ها و سرفصل‌ها</h3><?php if (can('lessons.create')): ?><a class="btn btn-primary btn-sm" href="<?= url('/admin/courses/' . $c['id'] . '/lessons/create') ?>"><?= icon('plus') ?> درس جدید</a><?php endif; ?></div>
-    <?php if (can('lessons.edit') && count($lessons) > 1): ?><div class="drag-hint"><?= icon('grip-vertical') ?> برای تغییر ترتیب، ردیف درس را با ماوس بگیرید و بالا یا پایین بکشید — ترتیب خودکار ذخیره می‌شود.</div><?php endif; ?>
-    <div class="table-wrap"><table class="table">
-        <thead><tr><th>#</th><th>عنوان</th><th>سرفصل</th><th>نوع</th><th>مشاهده / تکمیل</th><th>وضعیت</th><th></th></tr></thead>
-        <tbody<?= can('lessons.edit') && count($lessons) > 1 ? ' data-sortable="' . url('/admin/courses/' . $c['id'] . '/lessons/order') . '" data-row-drag' : '' ?>>
-        <?php foreach ($lessons as $i => $l): ?>
-            <tr data-id="<?= (int)$l['id'] ?>">
-                <td class="num nowrap"><?php if (can('lessons.edit') && count($lessons) > 1): ?><span class="drag-h" title="برای جابه‌جایی بکشید"><?= icon('grip-vertical') ?></span><?php endif; ?><span data-row-no><?= fa($i + 1) ?></span></td>
-                <td class="fw-b"><?= e($l['title']) ?><?= $l['is_preview'] ? ' <span class="badge badge-info">پیش‌نمایش</span>' : '' ?><?= $l['prerequisite_lesson_id'] ? ' <span class="badge badge-gray">' . icon('lock') . ' پیش‌نیاز</span>' : '' ?></td>
-                <td class="small"><?= e($l['section_title'] ?? '—') ?></td>
-                <td><span class="badge badge-gray"><?= e(label('content_type', $l['content_type'])) ?></span></td>
-                <td class="num"><?= fa($l['viewers']) ?> / <?= fa($l['completers']) ?></td>
-                <td><?= status_badge($l['status']) ?></td>
-                <td class="actions">
+    <?php if ($sortOn): ?><div class="drag-hint"><?= icon('grip-vertical') ?> برای تغییر ترتیب، کارت درس را با ماوس بگیرید و بالا یا پایین بکشید — ترتیب خودکار ذخیره می‌شود.</div><?php endif; ?>
+    <?php if ($lessons): ?>
+    <div class="crows"<?= $sortOn ? ' data-sortable="' . url('/admin/courses/' . $c['id'] . '/lessons/order') . '" data-row-drag' : '' ?>>
+    <?php foreach ($lessons as $i => $l): ?>
+        <div class="crow" data-id="<?= (int)$l['id'] ?>">
+            <?php if ($sortOn): ?><span class="drag-h" title="برای جابه‌جایی بکشید"><?= icon('grip-vertical') ?></span><?php endif; ?>
+            <span class="crow-no" data-row-no><?= fa($i + 1) ?></span>
+            <span class="crow-ic" style="--tc:var(--info,#0ea5e9)"><?= icon($ctIc[$l['content_type']] ?? 'file') ?></span>
+            <span class="crow-main">
+                <?php if (can('lessons.edit')): ?><a class="crow-title" href="<?= url('/admin/lessons/' . $l['id'] . '/edit') ?>"><?= e($l['title']) ?></a><?php else: ?><span class="crow-title"><?= e($l['title']) ?></span><?php endif; ?>
+                <span class="crow-meta">
+                    <span class="crow-tag"><?= icon($ctIc[$l['content_type']] ?? 'file') ?> <?= e(label('content_type', $l['content_type'])) ?></span>
+                    <?php if ($l['duration_minutes']): ?><span><?= icon('clock') ?> <?= fa($l['duration_minutes']) ?> دقیقه</span><?php endif; ?>
+                    <?php if ($l['section_title']): ?><span><?= icon('layers') ?> <?= e($l['section_title']) ?></span><?php endif; ?>
+                    <span title="مشاهده / تکمیل"><?= icon('eye') ?> <?= fa($l['viewers']) ?> مشاهده · <?= fa($l['completers']) ?> تکمیل</span>
+                    <?php if ($l['is_preview']): ?><span class="crow-info">پیش‌نمایش رایگان</span><?php endif; ?>
+                    <?php if ($l['prerequisite_lesson_id']): ?><span><?= icon('lock') ?> پیش‌نیاز دارد</span><?php endif; ?>
+                </span>
+            </span>
+            <span class="crow-side">
+                <?= status_badge($l['status']) ?>
+                <span class="crow-acts">
                     <?php if (can('lessons.edit')): ?>
-                        <form class="inline" method="post" action="<?= url('/admin/lessons/' . $l['id'] . '/move') ?>"><?= csrf_field() ?><input type="hidden" name="dir" value="down"><button class="btn btn-xs btn-ghost" title="انتقال به پایین"><?= icon('chevron-right') ?></button></form>
-                        <form class="inline" method="post" action="<?= url('/admin/lessons/' . $l['id'] . '/move') ?>"><?= csrf_field() ?><input type="hidden" name="dir" value="up"><button class="btn btn-xs btn-ghost" title="انتقال به بالا"><?= icon('chevron-left') ?></button></form>
-                        <a class="btn btn-xs btn-ghost" href="<?= url('/admin/lessons/' . $l['id'] . '/edit') ?>"><?= icon('pencil') ?></a>
-                        <?php if ($moveTargets): ?><button type="button" class="btn btn-xs btn-ghost" title="انتقال به دوره دیگر" data-move-lesson="<?= (int)$l['id'] ?>" data-title="<?= e($l['title']) ?>" data-section="<?= e($l['section_title'] ?? '') ?>"><?= icon('arrow-left-right') ?></button><?php endif; ?>
+                        <a class="btn btn-sm btn-outline" href="<?= url('/admin/lessons/' . $l['id'] . '/edit') ?>"><?= icon('pencil') ?> ویرایش</a>
+                        <?php if ($moveTargets): ?><button type="button" class="btn btn-icon btn-ghost" title="انتقال به دوره دیگر" data-move-lesson="<?= (int)$l['id'] ?>" data-title="<?= e($l['title']) ?>" data-section="<?= e($l['section_title'] ?? '') ?>"><?= icon('arrow-left-right') ?></button><?php endif; ?>
                     <?php endif; ?>
-                    <a class="btn btn-xs btn-ghost" href="<?= url('/learn/lesson/' . $l['id']) ?>" target="_blank"><?= icon('eye') ?></a>
-                    <?php if (can('lessons.delete')): ?><form class="inline" method="post" action="<?= url('/admin/lessons/' . $l['id'] . '/delete') ?>" data-confirm="درس حذف شود؟"><?= csrf_field() ?><button class="btn btn-xs btn-ghost" style="color:var(--danger)"><?= icon('trash-2') ?></button></form><?php endif; ?>
-                </td>
-            </tr>
-        <?php endforeach; ?>
-        <?php if (!$lessons): ?><tr><td colspan="7"><div class="empty"><?= icon('list') ?><div>هنوز درسی اضافه نشده</div></div></td></tr><?php endif; ?>
-        </tbody>
-    </table></div>
+                    <a class="btn btn-icon btn-ghost" title="نمایش برای فراگیر" href="<?= url('/learn/lesson/' . $l['id']) ?>" target="_blank"><?= icon('eye') ?></a>
+                    <?php if (can('lessons.delete')): ?><form class="inline" method="post" action="<?= url('/admin/lessons/' . $l['id'] . '/delete') ?>" data-confirm="درس حذف شود؟"><?= csrf_field() ?><button class="btn btn-icon btn-ghost crow-del" title="حذف"><?= icon('trash-2') ?></button></form><?php endif; ?>
+                </span>
+            </span>
+        </div>
+    <?php endforeach; ?>
+    </div>
+    <?php else: ?><div class="empty"><?= icon('list') ?><div>هنوز درسی اضافه نشده</div></div><?php endif; ?>
 </div>
 <?php if ($moveTargets): ?>
 <dialog class="modal" id="move-dialog">
@@ -89,51 +119,95 @@
 <?php elseif ($tab === 'exams'): ?>
 <div class="card flush">
     <div class="card-head" style="padding:1rem 1.25rem"><h3><?= icon('clipboard-check') ?> آزمون‌های دوره</h3><?php if (can('exams.create')): ?><a class="btn btn-primary btn-sm" href="<?= url('/admin/exams/create', ['course_id' => $c['id']]) ?>"><?= icon('plus') ?> آزمون جدید</a><?php endif; ?></div>
-    <div class="table-wrap"><table class="table"><thead><tr><th>عنوان</th><th>سؤال</th><th>زمان</th><th>قبولی</th><th>دفعات در روز</th><th>شرکت‌کننده</th><th>وضعیت</th><th></th></tr></thead><tbody>
-    <?php foreach ($exams as $x): ?><tr><td class="fw-b"><?= e($x['title']) ?> <?= $x['is_required'] ? '<span class="badge badge-danger">الزامی</span>' : '' ?></td><td class="num"><?= fa($x['random_count'] ?: $x['qn']) ?></td><td class="num"><?= $x['time_limit_minutes'] ? fa($x['time_limit_minutes']) . ' دقیقه' : '—' ?></td><td class="num"><?= fa((float)$x['pass_score']) ?>٪</td><td class="num"><?= $x['max_attempts'] ? fa($x['max_attempts']) : '∞' ?></td><td class="num"><?= fa($x['attempts']) ?></td><td><?= status_badge($x['status']) ?></td>
-        <td class="actions"><a class="btn btn-xs btn-ghost" href="<?= url('/admin/exams/' . $x['id']) ?>"><?= icon('pencil') ?></a><?php if (can('exams.report')): ?><a class="btn btn-xs btn-ghost" href="<?= url('/admin/exams/' . $x['id'] . '/report') ?>"><?= icon('chart-column') ?></a><?php endif; ?></td></tr><?php endforeach; ?>
-    <?php if (!$exams): ?><tr><td colspan="8" class="faint text-center">آزمونی تعریف نشده</td></tr><?php endif; ?>
-    </tbody></table></div>
+    <?php if ($exams): ?><div class="crows">
+    <?php foreach ($exams as $x): ?>
+        <div class="crow is-link">
+            <span class="crow-ic" style="--tc:var(--purple,#8b5cf6)"><?= icon('clipboard-check') ?></span>
+            <span class="crow-main">
+                <a class="crow-title stretch" href="<?= url('/admin/exams/' . $x['id']) ?>"><?= e($x['title']) ?></a>
+                <span class="crow-meta">
+                    <span class="crow-tag"><?= icon('circle-help') ?> <?= fa($x['random_count'] ?: $x['qn']) ?> سؤال<?= $x['random_count'] ? ' (تصادفی)' : '' ?></span>
+                    <span><?= icon('clock') ?> <?= $x['time_limit_minutes'] ? fa($x['time_limit_minutes']) . ' دقیقه' : 'بدون محدودیت' ?></span>
+                    <span><?= icon('target') ?> قبولی <?= fa((float)$x['pass_score']) ?>٪</span>
+                    <span><?= icon('repeat') ?> <?= $x['max_attempts'] ? fa($x['max_attempts']) . ' بار در روز' : 'دفعات نامحدود' ?></span>
+                    <span><?= icon('users') ?> <?= fa($x['attempts']) ?> شرکت</span>
+                    <?php if ($x['is_required']): ?><span class="crow-req">الزامی</span><?php endif; ?>
+                    <?php if (!(int)$x['qn'] && !$x['random_count']): ?><span class="crow-warn"><?= icon('triangle-alert') ?> بدون سؤال</span><?php endif; ?>
+                </span>
+            </span>
+            <span class="crow-side">
+                <?= status_badge($x['status']) ?>
+                <span class="crow-acts">
+                    <?php if (can('exams.report')): ?><a class="btn btn-icon btn-ghost" title="گزارش آزمون" href="<?= url('/admin/exams/' . $x['id'] . '/report') ?>"><?= icon('chart-column') ?></a><?php endif; ?>
+                    <a class="btn btn-sm btn-outline" href="<?= url('/admin/exams/' . $x['id']) ?>"><?= icon('pencil') ?> ویرایش</a>
+                </span>
+            </span>
+        </div>
+    <?php endforeach; ?>
+    </div><?php else: ?><div class="empty"><?= icon('clipboard-check') ?><div>آزمونی تعریف نشده</div></div><?php endif; ?>
 </div>
 
 <?php elseif ($tab === 'exercises'): ?>
-<div class="grid g-main">
-    <div class="card flush">
-        <div class="card-head" style="padding:1rem 1.25rem"><h3><?= icon('notebook-pen') ?> تمرین‌ها</h3></div>
-        <?php foreach ($exercises as $x): ?>
-            <details class="list-item" style="display:block;padding:.8rem 1.25rem">
-                <summary class="flex between" style="cursor:pointer"><b><?= e($x['title']) ?></b><span class="flex"><?= $x['is_required'] ? '<span class="badge badge-danger">الزامی</span>' : '' ?><span class="badge badge-gray"><?= fa($x['subs']) ?> ارسال</span><?php if ($x['pending']): ?><span class="badge badge-warning"><?= fa($x['pending']) ?> منتظر بررسی</span><?php endif; ?></span></summary>
-                <?php if (can('lessons.edit')): ?>
-                <form method="post" action="<?= url('/admin/exercises/' . $x['id']) ?>" class="mt-1"><?= csrf_field() ?>
-                    <?php $ex = $x; include __DIR__ . '/_exercise_fields.php'; ?>
-                    <div class="flex"><button class="btn btn-sm btn-primary"><?= icon('save') ?> ذخیره</button></div>
-                </form>
-                <?php endif; ?>
-                <?php if (can('lessons.delete')): ?><form method="post" action="<?= url('/admin/exercises/' . $x['id'] . '/delete') ?>" data-confirm="تمرین حذف شود؟" class="mt-1"><?= csrf_field() ?><button class="btn btn-xs btn-ghost" style="color:var(--danger)"><?= icon('trash-2') ?> حذف</button></form><?php endif; ?>
-            </details>
+<div class="card flush">
+        <div class="card-head" style="padding:1rem 1.25rem"><h3><?= icon('notebook-pen') ?> تمرین‌های دوره</h3><?php if (can('lessons.create')): ?><button type="button" class="btn btn-primary btn-sm" data-open="dlg-new-ex"><?= icon('plus') ?> تمرین جدید</button><?php endif; ?></div>
+        <?php $fmtNames = ['text' => ['متن', 'message-square'], 'audio' => ['صوت', 'music'], 'file' => ['Word/PDF', 'file-text'], 'image' => ['تصویر', 'image'], 'video' => ['ویدیو', 'video']]; $lessonTitles = array_column($lessons, 'title', 'id'); ?>
+        <?php if ($exercises): ?><div class="crows">
+        <?php foreach ($exercises as $x): $canEx = can_edit_exercise($x); $exUrl = $canEx ? url('/admin/exercises/' . $x['id'] . '/edit') : url('/learn/exercise/' . $x['id']); ?>
+            <div class="crow is-link" id="ex-<?= (int)$x['id'] ?>">
+                <span class="crow-ic" style="--tc:var(--warning)"><?= icon('notebook-pen') ?></span>
+                <span class="crow-main">
+                    <a class="crow-title stretch" href="<?= $exUrl ?>"><?= e($x['title']) ?></a>
+                    <span class="crow-meta">
+                        <?php foreach (array_intersect_key($fmtNames, array_flip(explode(',', (string)$x['formats']))) as [$fn, $fi]): ?><span class="crow-tag"><?= icon($fi) ?> <?= e($fn) ?></span><?php endforeach; ?>
+                        <?php if (!empty($lessonTitles[$x['lesson_id']])): ?><span><?= icon('book-open') ?> <?= e($lessonTitles[$x['lesson_id']]) ?></span><?php endif; ?>
+                        <span><?= icon('send') ?> <?= fa($x['subs']) ?> ارسال</span>
+                        <?php if ($x['pending']): ?><span class="crow-warn"><?= fa($x['pending']) ?> منتظر بررسی</span><?php endif; ?>
+                        <?php if ($x['is_required']): ?><span class="crow-req">الزامی</span><?php endif; ?>
+                    </span>
+                </span>
+                <span class="crow-side">
+                    <?= status_badge($x['status']) ?>
+                    <span class="crow-acts"><a class="btn btn-sm btn-outline" href="<?= $exUrl ?>"><?= icon($canEx ? 'pencil' : 'eye') ?> <?= $canEx ? 'ویرایش' : 'مشاهده' ?></a></span>
+                </span>
+            </div>
         <?php endforeach; ?>
+        </div><?php endif; ?>
         <?php if (!$exercises): ?><div class="empty"><?= icon('notebook-pen') ?><div>تمرینی تعریف نشده</div></div><?php endif; ?>
-    </div>
-    <?php if (can('lessons.create')): ?>
-    <form class="card" method="post" action="<?= url('/admin/courses/' . $c['id'] . '/exercises') ?>"><?= csrf_field() ?>
-        <h3><?= icon('plus') ?> تمرین جدید</h3>
-        <?php $ex = null; include __DIR__ . '/_exercise_fields.php'; ?>
-        <button class="btn btn-primary"><?= icon('plus') ?> افزودن تمرین</button>
-    </form>
-    <?php endif; ?>
 </div>
+<?php if (can('lessons.create')): ?>
+<dialog class="modal" id="dlg-new-ex" style="max-width:760px"><div class="modal-head"><b><?= icon('plus') ?> تمرین جدید</b><button class="btn btn-ghost btn-icon" data-close><?= icon('x') ?></button></div>
+<form class="modal-body" method="post" action="<?= url('/admin/courses/' . $c['id'] . '/exercises') ?>"><?= csrf_field() ?>
+    <?php $ex = null; include __DIR__ . '/_exercise_fields.php'; ?>
+    <div class="flex"><button class="btn btn-primary"><?= icon('plus') ?> افزودن تمرین</button><button type="button" class="btn btn-ghost" data-close>انصراف</button></div>
+</form>
+</dialog>
+<?php endif; ?>
 
 <?php else: ?>
+<?php $srcNames = ['self' => 'ثبت‌نام خود', 'assignment' => 'تخصیص', 'rule' => 'قانون خودکار', 'path' => 'مسیر', 'api' => 'API']; ?>
 <div class="card flush">
     <div class="card-head" style="padding:1rem 1.25rem"><h3><?= icon('users') ?> فراگیران دوره</h3>
         <div class="btn-group"><?php if (can('courses.export')): ?><a class="btn btn-sm btn-outline" href="<?= url('/admin/courses/' . $c['id'] . '/export') ?>"><?= icon('file-spreadsheet') ?> Excel</a><?php endif; ?><?php if (can('assignments.assign')): ?><a class="btn btn-sm btn-primary" href="<?= url('/admin/assignments', ['course_id' => $c['id']]) ?>"><?= icon('send') ?> تخصیص</a><?php endif; ?></div></div>
-    <div class="table-wrap"><table class="table"><thead><tr><th>فراگیر</th><th>منبع</th><th>پیشرفت</th><th>نمره</th><th>وضعیت</th><th>مهلت</th><th>آخرین فعالیت</th></tr></thead><tbody>
-    <?php foreach ($learners['rows'] as $e): ?><tr><td><a class="person" href="<?= url('/admin/reports/user/' . $e['user_id']) ?>" style="color:var(--text)"><?= avatar_html(['id' => $e['user_id'], 'first_name' => $e['first_name'], 'last_name' => $e['last_name'], 'avatar_path' => $e['avatar_path']], 'sm') ?><span class="nm"><?= e($e['first_name'] . ' ' . $e['last_name']) ?></span></a></td>
-        <td class="small"><?= e(['self' => 'ثبت‌نام خود', 'assignment' => 'تخصیص', 'rule' => 'قانون خودکار', 'path' => 'مسیر', 'api' => 'API'][$e['source']] ?? $e['source']) ?></td>
-        <td style="min-width:130px"><div class="flex"><div class="grow"><?= progress_bar((float)$e['progress_pct']) ?></div><span class="small"><?= fa((int)$e['progress_pct']) ?>٪</span></div></td>
-        <td class="num"><?= $e['score'] !== null ? fa((float)$e['score']) : '—' ?></td><td><?= status_badge($e['status']) ?></td><td class="num small"><?= $e['due_at'] ? jdate($e['due_at']) : '—' ?></td><td class="small"><?= time_ago($e['last_activity_at']) ?></td></tr><?php endforeach; ?>
-    <?php if (!$learners['rows']): ?><tr><td colspan="7" class="faint text-center">فراگیری ندارد</td></tr><?php endif; ?>
-    </tbody></table></div>
+    <?php if ($learners['rows']): ?><div class="crows">
+    <?php foreach ($learners['rows'] as $e): $pp = (int)$e['progress_pct']; ?>
+        <div class="crow is-link">
+            <?= avatar_html(['id' => $e['user_id'], 'first_name' => $e['first_name'], 'last_name' => $e['last_name'], 'avatar_path' => $e['avatar_path']], 'md') ?>
+            <span class="crow-main">
+                <a class="crow-title stretch" href="<?= url('/admin/reports/user/' . $e['user_id']) ?>"><?= e($e['first_name'] . ' ' . $e['last_name']) ?></a>
+                <span class="crow-meta">
+                    <span class="crow-tag"><?= icon('user-plus') ?> <?= e($srcNames[$e['source']] ?? $e['source']) ?></span>
+                    <span><?= icon('activity') ?> <?= $e['last_activity_at'] ? time_ago($e['last_activity_at']) : 'بدون فعالیت' ?></span>
+                    <?php if ($e['due_at']): ?><span><?= icon('calendar') ?> مهلت <?= jdate($e['due_at']) ?></span><?php endif; ?>
+                    <?php if ($e['score'] !== null): ?><span><?= icon('award') ?> نمره <?= fa((float)$e['score']) ?></span><?php endif; ?>
+                </span>
+            </span>
+            <span class="crow-side">
+                <span class="crow-prog"><?= progress_bar((float)$pp) ?><b><?= fa($pp) ?>٪</b></span>
+                <?= status_badge($e['status']) ?>
+            </span>
+        </div>
+    <?php endforeach; ?>
+    </div><?php else: ?><div class="empty"><?= icon('users') ?><div>فراگیری ندارد</div></div><?php endif; ?>
     <div style="padding:0 1rem 1rem"><?= paginate_links($learners) ?></div>
 </div>
 <?php endif; ?>

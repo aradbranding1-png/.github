@@ -66,16 +66,26 @@ final class Targeting
         } ?: '—';
     }
 
+    /** Users left out of the last assignments because the course is not meant for them («مخاطبان دوره» / «سطح») */
+    public static int $skipped = 0;
+
     /** Apply an assignment row to its audience (idempotent). Returns number of users. */
     public static function applyAssignment(array $a, ?array $onlyUsers = null): int
     {
         $users = $onlyUsers ?? self::users($a['target_type'], (int)$a['target_id']);
+        if ($a['course_id'] && !$a['path_id']) {
+            $ok = CourseAudience::filterUsers((int)$a['course_id'], $users);
+            self::$skipped += count($users) - count($ok);
+            $users = $ok;
+        }
         $opts = ['source' => 'assignment', 'assignment_id' => (int)$a['id'], 'training_type' => $a['training_type'], 'due_at' => $a['due_at'], 'assigned_by' => $a['created_by']];
         foreach ($users as $uid) {
             if ($a['path_id']) PathService::enroll($uid, (int)$a['path_id'], $opts + ['source' => 'assignment']);
             elseif ($a['course_id']) Enrollment::enroll($uid, (int)$a['course_id'], $opts);
         }
-        DB::update('assignments', ['enrolled_count' => count(self::users($a['target_type'], (int)$a['target_id']))], 'id = ?', [$a['id']]);
+        $all = self::users($a['target_type'], (int)$a['target_id']);
+        if ($a['course_id'] && !$a['path_id']) $all = CourseAudience::filterUsers((int)$a['course_id'], $all);
+        DB::update('assignments', ['enrolled_count' => count($all)], 'id = ?', [$a['id']]);
         return count($users);
     }
 
@@ -115,6 +125,7 @@ final class Targeting
     {
         $users = self::ruleUsers($rule);
         if ($onlyUsers !== null) $users = array_values(array_intersect($users, $onlyUsers));
+        if ($rule['course_id'] && !$rule['path_id']) $users = CourseAudience::filterUsers((int)$rule['course_id'], $users);
         $due = $rule['due_days'] ? date('Y-m-d 23:59:59', strtotime('+' . (int)$rule['due_days'] . ' days')) : null;
         $n = 0;
         foreach ($users as $uid) {

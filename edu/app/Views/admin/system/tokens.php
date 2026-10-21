@@ -1,4 +1,4 @@
-<div class="page-head"><div><h1>کلیدهای API</h1><div class="sub">اتصال سامانه‌های دیگر (CRM، منابع انسانی، اپلیکیشن موبایل، my) به API نسخه ۱ — مستندات: docs/API.md</div></div></div>
+<div class="page-head"><div><h1>کلیدهای API</h1><div class="sub">اتصال سامانه‌های دیگر (CRM، منابع انسانی، اپلیکیشن موبایل) به API نسخه ۱ — مستندات: docs/API.md</div></div></div>
 <?php if ($new): ?><div class="alert alert-success"><?= icon('key-round') ?><div><b>کلید جدید ساخته شد. این کلید فقط همین یک بار نمایش داده می‌شود:</b><div class="flex mt-1"><code class="ltr grow" style="background:#fff;padding:.4rem .6rem;border-radius:8px;color:#065f46"><?= e($new) ?></code><button class="btn btn-sm btn-outline" data-copy="<?= e($new) ?>"><?= icon('copy') ?></button></div></div></div><?php endif; ?>
 <div class="grid g-main">
     <div class="card flush"><div class="table-wrap"><table class="table"><thead><tr><th>نام</th><th>کلید</th><th>دسترسی‌ها</th><th>آخرین استفاده</th><th>انقضا</th><th>وضعیت</th><th></th></tr></thead><tbody>

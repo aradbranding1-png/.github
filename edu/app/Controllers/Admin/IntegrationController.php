@@ -118,4 +118,67 @@ final class IntegrationController
         return view('admin/integrations/arad_contact_log', ['title' => 'جزئیات درخواست آراد کانتکت', 'log' => $log, 'order' => $order,
             'request' => $pretty($log['request_json']), 'response' => $pretty($log['response_json'])]);
     }
+
+    // ------------------------------------------------------------------ Bale bot (my.aradbranding.me)
+
+    public function bale(): string
+    {
+        $page = DB::paginate('SELECT * FROM bale_messages ORDER BY id DESC', [], 30);
+        $upcoming = \App\Services\BaleBroadcast::pending(false, 30);
+        $stats = DB::one("SELECT COUNT(*) n, COALESCE(SUM(status = 'sent'), 0) sent, COALESCE(SUM(status = 'failed'), 0) failed, COALESCE(SUM(recipients), 0) people FROM bale_messages") ?: [];
+        return view('admin/integrations/bale', ['title' => 'ارسال خبر به ربات بله', 'page' => $page, 'upcoming' => $upcoming, 'stats' => $stats]);
+    }
+
+    public function saveBale(): never
+    {
+        $url = rtrim(trim(Request::str('api_url')), '/');
+        if ($url !== '' && (!filter_var($url, FILTER_VALIDATE_URL) || !str_starts_with($url, 'https://'))) { flash('danger', 'آدرس API باید با https:// شروع شود.'); redirect('/admin/integrations/bale'); }
+        $set = [
+            'bale_enabled' => Request::bool('enabled') ? '1' : '0',
+            'bale_api_url' => $url,
+            'bale_delay_min' => (string)max(0, min(1440, Request::int('delay_min', 60))),
+            'bale_events' => Request::bool('events') ? '1' : '0',
+            'bale_courses' => Request::bool('courses') ? '1' : '0',
+        ];
+        $tok = trim((string)($_POST['api_token'] ?? ''));
+        if ($tok !== '') $set['bale_api_token'] = $tok;
+        if (Request::bool('clear_token')) $set['bale_api_token'] = '';
+        // only things published after the first switch-on are announced (never the old archive)
+        if ($set['bale_enabled'] === '1' && (string)setting('bale_since', '') === '') $set['bale_since'] = now();
+        Settings::set($set);
+        Audit::log('bale.settings', 'settings', null, 'success', ['enabled' => $set['bale_enabled'], 'url' => $url, 'delay' => $set['bale_delay_min']]);
+        flash('success', 'تنظیمات ارسال به ربات بله ذخیره شد.');
+        redirect('/admin/integrations/bale');
+    }
+
+    public function baleTest(): never
+    {
+        $r = \App\Services\BaleBroadcast::recipients('merchant');
+        $r['ok'] ? flash('success', 'اتصال برقرار است. تاجران متصل به ربات بله: ' . fa($r['count']) . ' نفر.') : flash('danger', 'اتصال برقرار نشد: ' . $r['error']);
+        redirect('/admin/integrations/bale');
+    }
+
+    /** skip = never send this item · send = send it now (without waiting) · retry = resend a failed message */
+    public function baleAction(): never
+    {
+        $act = Request::str('act'); $ref = Request::str('ref');
+        if (!preg_match('/^(event|course)-(\d+)$/', $ref, $m)) throw new HttpException(400);
+        $row = DB::one('SELECT * FROM bale_messages WHERE ref = ?', [$ref]);
+        if ($act === 'skip' && !$row) {
+            DB::insert('bale_messages', ['ref' => $ref, 'ref_type' => $m[1], 'ref_id' => (int)$m[2], 'title' => mb_substr(Request::str('title'), 0, 250), 'status' => 'skipped', 'created_by' => \App\Core\Auth::id(), 'created_at' => now()]);
+            flash('success', 'این مورد به ربات بله ارسال نمی‌شود.');
+        } elseif (($act === 'send' && !$row) || ($act === 'retry' && $row && $row['status'] !== 'sent')) {
+            if (!\App\Services\BaleBroadcast::configured()) { flash('danger', 'ابتدا آدرس و توکن API را وارد کنید.'); redirect('/admin/integrations/bale'); }
+            if (!$row) {
+                $src = $m[1] === 'event' ? DB::one('SELECT * FROM events WHERE id = ? AND deleted_at IS NULL', [(int)$m[2]]) : DB::one('SELECT * FROM courses WHERE id = ? AND deleted_at IS NULL', [(int)$m[2]]);
+                if (!$src) throw new HttpException(404);
+                $text = $m[1] === 'event' ? \App\Services\BaleBroadcast::eventText($src) : \App\Services\BaleBroadcast::courseText($src);
+                $id = DB::insert('bale_messages', ['ref' => $ref, 'ref_type' => $m[1], 'ref_id' => (int)$m[2], 'title' => mb_substr(Request::str('title') ?: $src['title'], 0, 250), 'text' => $text, 'status' => 'sending', 'created_by' => \App\Core\Auth::id(), 'created_at' => now()]);
+            } else $id = (int)$row['id'];
+            $ok = \App\Services\BaleBroadcast::deliver($id, url($m[1] === 'event' ? '/learn/event/' . $m[2] : '/learn/course/' . $m[2]));
+            $ok ? flash('success', 'پیام به ربات بله ارسال شد.') : flash('danger', 'ارسال ناموفق بود؛ جزئیات خطا در فهرست پایین آمده است.');
+        }
+        Audit::log('bale.' . $act, 'settings', null, 'success', ['ref' => $ref]);
+        redirect('/admin/integrations/bale');
+    }
 }

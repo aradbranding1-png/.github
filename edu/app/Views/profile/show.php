@@ -1,4 +1,4 @@
-<div class="page-head"><div><h1>پروفایل من</h1><div class="sub">اطلاعات حساب، تصویر پروفایل، امنیت و اتصال به my.aradbranding.me</div></div></div>
+<div class="page-head"><div><h1>پروفایل من</h1><div class="sub">اطلاعات حساب، تصویر پروفایل و امنیت</div></div></div>
 <div class="grid g-main">
     <div class="stack">
         <form class="card" method="post" action="<?= url('/profile') ?>">
@@ -18,7 +18,7 @@
             <?= csrf_field() ?>
             <h3><?= icon('lock') ?> تغییر رمز عبور</h3>
             <div class="form-grid">
-                <?php if ($me['password_hash']): ?><div class="field full"><label>رمز فعلی</label><input class="ltr" type="password" name="current_password" autocomplete="current-password" required></div><?php else: ?><div class="alert alert-info full"><?= icon('info') ?> حساب شما از طریق my ایجاد شده است؛ می‌توانید یک رمز برای ورود مستقیم تعیین کنید.</div><?php endif; ?>
+                <?php if ($me['password_hash']): ?><div class="field full"><label>رمز فعلی</label><input class="ltr" type="password" name="current_password" autocomplete="current-password" required></div><?php else: ?><div class="alert alert-info full"><?= icon('info') ?> برای حساب شما هنوز رمز عبور تعیین نشده است؛ یک رمز برای ورود تعیین کنید.</div><?php endif; ?>
                 <div class="field"><label>رمز جدید</label><input class="ltr" type="password" name="password" autocomplete="new-password" required></div>
                 <div class="field"><label>تکرار رمز جدید</label><input class="ltr" type="password" name="password_confirmation" autocomplete="new-password" required></div>
             </div>
@@ -36,21 +36,8 @@
                 <button class="btn btn-primary btn-sm mt-1 w-100"><?= icon('camera') ?> آپلود تصویر جدید</button>
             </form>
             <div class="flex mt-1" style="justify-content:center">
-                <?php if ($me['my_avatar_url']): ?><form method="post" action="<?= url('/profile/avatar/source') ?>"><?= csrf_field() ?><input type="hidden" name="source" value="my"><button class="btn btn-outline btn-sm"><?= icon('refresh-cw') ?> استفاده از تصویر my</button></form><?php endif; ?>
                 <?php if ($me['avatar_path']): ?><form method="post" action="<?= url('/profile/avatar/source') ?>" data-confirm="تصویر حذف شود؟"><?= csrf_field() ?><input type="hidden" name="source" value="none"><button class="btn btn-ghost btn-sm"><?= icon('trash-2') ?> حذف</button></form><?php endif; ?>
             </div>
-            <div class="small faint mt-1">تغییر تصویر در سامانه آموزش، تصویر اصلی شما در my را تغییر نمی‌دهد.</div>
-        </div>
-        <div class="card">
-            <h3><?= icon('fingerprint') ?> اتصال به my.aradbranding.me</h3>
-            <?php if ($me['my_user_id']): ?>
-                <div class="alert alert-success"><?= icon('circle-check') ?><div>حساب شما متصل است.<div class="small">تاریخ اتصال: <?= jdatetime($me['my_linked_at']) ?></div></div></div>
-            <?php elseif ($sso): ?>
-                <p class="small muted">با اتصال حساب، از این پس با حساب my وارد شوید. سوابق آموزشی شما حفظ می‌شود.</p>
-                <a class="btn btn-outline w-100" href="<?= url('/profile/link-my') ?>"><?= icon('link') ?> اتصال حساب</a>
-            <?php else: ?>
-                <div class="small faint">اتصال SSO هنوز توسط مدیر سامانه فعال نشده است.</div>
-            <?php endif; ?>
         </div>
         <div class="card">
             <h3><?= icon('shield-check') ?> نقش‌ها و عضویت‌ها</h3>

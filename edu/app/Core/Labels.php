@@ -108,7 +108,7 @@ final class Labels
 
     public const PRIORITY = ['low' => 'کم', 'medium' => 'متوسط', 'high' => 'زیاد'];
 
-    public const AVATAR_SOURCE = ['my' => 'my.aradbranding.me', 'edu' => 'آپلود در سامانه آموزش', 'none' => 'بدون تصویر'];
+    public const AVATAR_SOURCE = ['my' => 'تصویر قبلی', 'edu' => 'آپلود در سامانه آموزش', 'none' => 'بدون تصویر'];
 
     public const AUDIT = [
         'auth.login' => 'ورود',

@@ -3,7 +3,7 @@ use App\Core\Jalali;
 use App\Services\UserReport;
 /** @var array $R report data @var string $baseUrl */
 $u = $R['u'];
-$nav = function (array $q) use ($baseUrl, $R) { return url($baseUrl, array_merge(['view' => $R['view'], 'y' => $R['jy'], 'm' => $R['jm'], 'd' => $R['jd']], $q)); };
+$nav = function (array $q) use ($baseUrl, $R) { return url($baseUrl, array_merge(['view' => $R['view'], 'y' => $R['jy'], 'm' => $R['jm'], 'd' => $R['jd']], $q)) . '#activity'; };
 $prevM = $R['jm'] - 1; $prevY = $R['jy']; if ($prevM < 1) { $prevM = 12; $prevY--; }
 $nextM = $R['jm'] + 1; $nextY = $R['jy']; if ($nextM > 12) { $nextM = 1; $nextY++; }
 $hours = $R['totals']['seconds'] / 3600;
@@ -41,7 +41,42 @@ foreach ($R['statusDist'] as $k => $v) { $stLabels[] = label('status', $k); $stV
     <div class="card stat tone-warning"><div class="bubble"><?= icon('clock') ?></div><div><div class="v"><?= fa(round($R['overall']['total_seconds'] / 3600, 1)) ?></div><div class="l">ساعت فعالیت آموزشی</div></div></div>
 </div>
 
-<div class="card mb-3">
+<div class="grid g-main mb-3">
+    <div class="card"><div class="card-head"><h3><?= icon('trending-up') ?> روند فعالیت ۱۲ ماه اخیر</h3></div><div class="chart" data-chart='<?= e(json_encode($trendChart, JSON_UNESCAPED_UNICODE)) ?>' data-height="230"></div></div>
+    <div class="card"><div class="card-head"><h3><?= icon('chart-pie') ?> وضعیت آموزش‌ها</h3></div>
+        <div class="donut-wrap"><div class="chart" data-chart='<?= e(json_encode(['type' => 'donut', 'labels' => $stLabels, 'values' => $stVals, 'colors' => $stColors, 'center' => 'دوره'], JSON_UNESCAPED_UNICODE)) ?>'></div><div class="legend" data-for></div></div>
+    </div>
+</div>
+
+<div class="grid g-2">
+    <div class="card flush"><div class="card-head"><h3><?= icon('book-open') ?> دوره‌ها و میزان پیشرفت</h3></div>
+        <div class="table-wrap"><table class="table"><thead><tr><th>دوره</th><th>نوع</th><th>پیشرفت</th><th>نمره</th><th>وضعیت</th></tr></thead><tbody>
+        <?php foreach ($R['enrollments'] as $e): ?><tr><td><?= e($e['title']) ?><div class="small faint"><?= $e['due_at'] ? 'مهلت ' . jdate($e['due_at']) : '' ?></div></td><td><span class="badge badge-gray"><?= e(label('training_type', $e['training_type'])) ?></span></td><td style="min-width:120px"><div class="flex"><div class="grow"><?= progress_bar((float)$e['progress_pct']) ?></div><span class="small"><?= fa((int)$e['progress_pct']) ?>٪</span></div></td><td class="num"><?= $e['score'] !== null ? fa((float)$e['score']) : '—' ?></td><td><?= status_badge($e['status']) ?></td></tr><?php endforeach; ?>
+        <?php if (!$R['enrollments']): ?><tr><td colspan="5" class="faint text-center">دوره‌ای ثبت نشده</td></tr><?php endif; ?>
+        </tbody></table></div>
+    </div>
+    <div class="stack">
+        <div class="card flush"><div class="card-head"><h3><?= icon('clipboard-check') ?> آزمون‌ها و نمرات</h3></div>
+            <div class="table-wrap"><table class="table"><thead><tr><th>آزمون</th><th>تاریخ</th><th>نمره</th><th>نتیجه</th></tr></thead><tbody>
+            <?php foreach ($R['exams'] as $a): ?><tr><td><?= e($a['title']) ?> <span class="faint small">(دفعه <?= fa($a['attempt_no']) ?>)</span></td><td class="num"><?= jdate($a['submitted_at']) ?></td><td class="num"><?= $a['percent'] !== null ? fa((float)$a['percent']) . '٪' : '—' ?></td><td><?= $a['status'] === 'pending_review' ? status_badge('pending_review') : ((int)$a['passed'] ? status_badge('passed') : status_badge('failed')) ?></td></tr><?php endforeach; ?>
+            <?php if (!$R['exams']): ?><tr><td colspan="4" class="faint text-center">آزمونی ثبت نشده</td></tr><?php endif; ?>
+            </tbody></table></div>
+        </div>
+        <div class="card flush"><div class="card-head"><h3><?= icon('notebook-pen') ?> تمرین‌ها</h3></div>
+            <div class="table-wrap"><table class="table"><thead><tr><th>تمرین</th><th>تاریخ</th><th>نمره</th><th>وضعیت</th></tr></thead><tbody>
+            <?php foreach ($R['exercises'] as $s): ?><tr><td><?= e($s['title']) ?></td><td class="num"><?= jdate($s['created_at']) ?></td><td class="num"><?= $s['score'] !== null ? fa((float)$s['score']) : '—' ?></td><td><?= status_badge($s['status']) ?></td></tr><?php endforeach; ?>
+            <?php if (!$R['exercises']): ?><tr><td colspan="4" class="faint text-center">تمرینی ارسال نشده</td></tr><?php endif; ?>
+            </tbody></table></div>
+        </div>
+        <?php if ($R['paths']): ?>
+        <div class="card"><h3><?= icon('route') ?> مسیرهای آموزشی (مرحله آموزشی)</h3>
+            <?php foreach ($R['paths'] as $p): ?><div class="list-item"><div class="grow"><b><?= e($p['title']) ?></b><div class="small faint">مرحله <?= fa(min((int)$p['current_step'], (int)$p['steps'])) ?> از <?= fa($p['steps']) ?></div></div><div style="width:140px"><?= progress_bar((float)$p['progress_pct']) ?></div><?= status_badge($p['status']) ?></div><?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card mt-3 ucal" id="activity">
     <div class="card-head">
         <h3><?= icon('calendar') ?> تقویم فعالیت</h3>
         <div class="flex flex-wrap">
@@ -126,39 +161,4 @@ foreach ($R['statusDist'] as $k => $v) { $stLabels[] = label('status', $k); $stV
         </div>
     <?php endif; ?>
     <div class="heat-legend mt-2"><span><i style="background:#e0f2fe;outline:1px solid #7dd3fc"></i> فقط ورود</span><span><i style="background:var(--primary-soft);outline:1px solid #a5b4fc"></i> فعالیت آموزشی</span><span><i style="background:var(--success-soft);outline:1px solid #6ee7b7"></i> تکمیل آموزش</span><span><i style="background:var(--purple)"></i> آزمون</span><span><i style="background:var(--warning)"></i> تمرین</span></div>
-</div>
-
-<div class="grid g-main mb-3">
-    <div class="card"><div class="card-head"><h3><?= icon('trending-up') ?> روند فعالیت ۱۲ ماه اخیر</h3></div><div class="chart" data-chart='<?= e(json_encode($trendChart, JSON_UNESCAPED_UNICODE)) ?>' data-height="230"></div></div>
-    <div class="card"><div class="card-head"><h3><?= icon('chart-pie') ?> وضعیت آموزش‌ها</h3></div>
-        <div class="donut-wrap"><div class="chart" data-chart='<?= e(json_encode(['type' => 'donut', 'labels' => $stLabels, 'values' => $stVals, 'colors' => $stColors, 'center' => 'دوره'], JSON_UNESCAPED_UNICODE)) ?>'></div><div class="legend" data-for></div></div>
-    </div>
-</div>
-
-<div class="grid g-2">
-    <div class="card flush"><div class="card-head"><h3><?= icon('book-open') ?> دوره‌ها و میزان پیشرفت</h3></div>
-        <div class="table-wrap"><table class="table"><thead><tr><th>دوره</th><th>نوع</th><th>پیشرفت</th><th>نمره</th><th>وضعیت</th></tr></thead><tbody>
-        <?php foreach ($R['enrollments'] as $e): ?><tr><td><?= e($e['title']) ?><div class="small faint"><?= $e['due_at'] ? 'مهلت ' . jdate($e['due_at']) : '' ?></div></td><td><span class="badge badge-gray"><?= e(label('training_type', $e['training_type'])) ?></span></td><td style="min-width:120px"><div class="flex"><div class="grow"><?= progress_bar((float)$e['progress_pct']) ?></div><span class="small"><?= fa((int)$e['progress_pct']) ?>٪</span></div></td><td class="num"><?= $e['score'] !== null ? fa((float)$e['score']) : '—' ?></td><td><?= status_badge($e['status']) ?></td></tr><?php endforeach; ?>
-        <?php if (!$R['enrollments']): ?><tr><td colspan="5" class="faint text-center">دوره‌ای ثبت نشده</td></tr><?php endif; ?>
-        </tbody></table></div>
-    </div>
-    <div class="stack">
-        <div class="card flush"><div class="card-head"><h3><?= icon('clipboard-check') ?> آزمون‌ها و نمرات</h3></div>
-            <div class="table-wrap"><table class="table"><thead><tr><th>آزمون</th><th>تاریخ</th><th>نمره</th><th>نتیجه</th></tr></thead><tbody>
-            <?php foreach ($R['exams'] as $a): ?><tr><td><?= e($a['title']) ?> <span class="faint small">(دفعه <?= fa($a['attempt_no']) ?>)</span></td><td class="num"><?= jdate($a['submitted_at']) ?></td><td class="num"><?= $a['percent'] !== null ? fa((float)$a['percent']) . '٪' : '—' ?></td><td><?= $a['status'] === 'pending_review' ? status_badge('pending_review') : ((int)$a['passed'] ? status_badge('passed') : status_badge('failed')) ?></td></tr><?php endforeach; ?>
-            <?php if (!$R['exams']): ?><tr><td colspan="4" class="faint text-center">آزمونی ثبت نشده</td></tr><?php endif; ?>
-            </tbody></table></div>
-        </div>
-        <div class="card flush"><div class="card-head"><h3><?= icon('notebook-pen') ?> تمرین‌ها</h3></div>
-            <div class="table-wrap"><table class="table"><thead><tr><th>تمرین</th><th>تاریخ</th><th>نمره</th><th>وضعیت</th></tr></thead><tbody>
-            <?php foreach ($R['exercises'] as $s): ?><tr><td><?= e($s['title']) ?></td><td class="num"><?= jdate($s['created_at']) ?></td><td class="num"><?= $s['score'] !== null ? fa((float)$s['score']) : '—' ?></td><td><?= status_badge($s['status']) ?></td></tr><?php endforeach; ?>
-            <?php if (!$R['exercises']): ?><tr><td colspan="4" class="faint text-center">تمرینی ارسال نشده</td></tr><?php endif; ?>
-            </tbody></table></div>
-        </div>
-        <?php if ($R['paths']): ?>
-        <div class="card"><h3><?= icon('route') ?> مسیرهای آموزشی (مرحله آموزشی)</h3>
-            <?php foreach ($R['paths'] as $p): ?><div class="list-item"><div class="grow"><b><?= e($p['title']) ?></b><div class="small faint">مرحله <?= fa(min((int)$p['current_step'], (int)$p['steps'])) ?> از <?= fa($p['steps']) ?></div></div><div style="width:140px"><?= progress_bar((float)$p['progress_pct']) ?></div><?= status_badge($p['status']) ?></div><?php endforeach; ?>
-        </div>
-        <?php endif; ?>
-    </div>
 </div>

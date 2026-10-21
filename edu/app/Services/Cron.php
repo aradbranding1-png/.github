@@ -14,6 +14,12 @@ final class Cron
 {
     public static function run(bool $verbose = false): array
     {
+        // during an update / restore the files and database are being replaced → do nothing this round
+        if (is_file(STORAGE_PATH . '/maintenance.flag')) return ['skipped' => 'maintenance mode'];
+        // hard ceiling: a stuck job can never live past 10 minutes (the next run starts 15 minutes later);
+        // the lock below is released by the OS even if the process is killed, so runs never pile up
+        @set_time_limit(600);
+        @ini_set('memory_limit', '512M');
         $lockFile = STORAGE_PATH . '/cache/cron.lock';
         $lock = fopen($lockFile, 'c');
         if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) return ['skipped' => 'another cron is running'];
@@ -29,6 +35,7 @@ final class Cron
         $step('recalc_queue', fn() => \App\Services\Enrollment::processQueue());
         $step('deadline_reminders', fn() => self::deadlineReminders());
         $step('event_announcements', fn() => EventService::announce());
+        $step('bale_broadcast', fn() => \App\Services\BaleBroadcast::process());
         $step('growth_recalc', fn() => TraderGrowth::processDirty(3000, 30.0));
         $step('growth_services_sync', fn() => ServiceSync::continueRuns(45.0));
 
@@ -38,6 +45,7 @@ final class Cron
             $step('rule_engine', fn() => Targeting::runAll());
             $step('growth_evaluate', fn() => self::evaluateGrowth());
             $step('inactivity_reminders', fn() => self::inactivityReminders());
+            $step('completion_audit', fn() => \App\Services\CompletionAudit::scan(20000));
             $step('nightly_backup', fn() => setting('auto_backup', '1') === '1' ? Backup::create('db', 'پشتیبان خودکار شبانه')['filename'] : 'off');
             $step('prune_backups', fn() => Backup::prune(10));
             $step('cleanup', fn() => self::cleanup());
@@ -78,6 +86,7 @@ final class Cron
     private static function cleanup(): array
     {
         RateLimiter::cleanup();
+        \App\Core\RememberMe::cleanup();
         $tmp = 0;
         foreach (glob(STORAGE_PATH . '/tmp/*') ?: [] as $f) if (is_file($f) && filemtime($f) < time() - 86400) { @unlink($f); $tmp++; }
         $logs = 0;

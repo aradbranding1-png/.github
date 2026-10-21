@@ -7,7 +7,7 @@
 | فایل‌های حساس | هیچ `config.php / db.php / migrate.php / update.php / install.php / setup.php` قابل اجرای مستقیمی وجود ندارد. نصب فقط پیش از نصب فعال است و پس از آن 404؛ Migration/Update/Backup فقط از طریق مسیرهای احرازهویت‌شده **مدیر کل** + تأیید رمز + Audit Log، یا CLI (که از وب اجرا نمی‌شود). |
 | اجرای PHP در Web Root | `.htaccess` اجرای هر فایل PHP به جز index.php را مسدود می‌کند؛ آپلودها با نام تصادفی خارج از Web Root ذخیره می‌شوند. |
 | Directory Listing | `Options -Indexes` |
-| Secrets | همه از `.env` (دیتابیس، SSO، API Key، کلید امضا). هیچ رمز/توکنی در کد نیست. کلید API به صورت SHA-256 ذخیره می‌شود. رمز کاربران با Argon2id/Bcrypt. |
+| Secrets | همه از `.env` (دیتابیس، API Key، کلید امضا). هیچ رمز/توکنی در کد نیست. کلید API به صورت SHA-256 ذخیره می‌شود. رمز کاربران با Argon2id/Bcrypt. |
 | لاگ‌ها | `storage/logs` خارج از Web Root؛ کلیدهای password/token/secret/authorization خودکار REDACT می‌شوند. |
 | Error Handling | در Production هیچ Stack Trace، مسیر سرور، خطای دیتابیس یا تنظیمات نمایش داده نمی‌شود؛ فقط پیام فارسی و «کد پیگیری». مدیر کل خطاها را در «خطاهای سامانه» می‌بیند. |
 | Authentication | Session امن (HttpOnly, SameSite=Lax, Secure روی HTTPS، strict mode، بازتولید شناسه هنگام ورود، انقضای عدم فعالیت، اتصال به User-Agent)، Rate Limit ورود (۶ تلاش برای هر نام کاربری و ۲۰ برای هر IP در ۱۵ دقیقه). |
@@ -18,7 +18,6 @@
 | آپلود | allow-list پسوند + تطبیق MIME واقعی (finfo) + بررسی تصویر + محدودیت حجم + رد محتوای اسکریپت + بازنویسی آواتار با GD؛ سرو فایل فقط پس از بررسی دسترسی (ثبت‌نام در دوره) و پرچم «مشاهده آنلاین/دانلود». |
 | Headers | X-Frame-Options، X-Content-Type-Options، Referrer-Policy، Permissions-Policy، CSP، HSTS روی HTTPS. |
 | Impersonation | فقط مدیر کل، با ثبت مدیر، کاربر مقصد، زمان شروع/پایان، مدت، IP؛ نوار هشدار دائمی و بازگشت امن. |
-| SSO | state + PKCE، بررسی امضا/انقضا/استفاده مجدد JWT، TLS اجباری، اتصال فقط با شناسه یکتای my. |
 | Backup | خارج از Web Root، دانلود/بازیابی فقط مدیر کل با تأیید مجدد رمز. |
 | Update | Checksum، Path Traversal، Symlink، مسیرهای مجاز، بررسی نحوی PHP، امضای Ed25519 اختیاری، Atomic replace، Rollback. |
 | Excel | جلوگیری از Formula Injection در خروجی‌ها. |
@@ -42,7 +41,7 @@
 | Migration | ✅ ۴ Migration روی دیتابیس تمیز اجرا شد؛ داشبورد وضعیت تست شد |
 | Update | ✅ بروزرسانی واقعی 1.0.0→1.0.1 با Backup و Migration |
 | Recovery | ✅ بروزرسانی معیوب با بازگردانی خودکار فایل و دیتابیس؛ بازگردانی دستی |
-| Health Check | ✅ همه موارد OK (به جز Cron/SSO/HTTPS که به تنظیمات سرور واقعی وابسته است) |
+| Health Check | ✅ همه موارد OK (به جز Cron/HTTPS که به تنظیمات سرور واقعی وابسته است) |
 | نصب از صفر | ✅ |
 | Routeهای اصلی | ✅ بیش از ۶۰ صفحه پنل و یادگیری با کد 200 و بدون خطای JavaScript |
 

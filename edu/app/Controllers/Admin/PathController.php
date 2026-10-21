@@ -14,10 +14,20 @@ use App\Services\PathService;
 /** Learning paths (مسیر آموزشی مرحله‌ای) with pass conditions per step */
 final class PathController
 {
+    public const AUDIENCES = ['merchant' => 'تاجران', 'employee' => 'کارمندان', 'agent' => 'نمایندگان', 'all' => 'مشترک (همه گروه‌ها)'];
+
     public function index(): string
     {
-        $rows = DB::all('SELECT p.*, g.name AS group_name, (SELECT COUNT(*) FROM path_steps s WHERE s.path_id = p.id) steps, (SELECT COUNT(*) FROM path_enrollments pe WHERE pe.path_id = p.id) learners, (SELECT COUNT(*) FROM path_enrollments pe WHERE pe.path_id = p.id AND pe.status = \'completed\') done FROM learning_paths p LEFT JOIN `groups` g ON g.id = p.group_id WHERE p.deleted_at IS NULL ORDER BY p.sort, p.id');
-        return view('admin/paths/index', ['title' => 'مسیرهای آموزشی', 'rows' => $rows, 'groups' => DB::pairs('SELECT id, name FROM `groups` ORDER BY sort')]);
+        $all = DB::all('SELECT p.*, g.name AS group_name, g.segment AS group_segment, (SELECT COUNT(*) FROM path_steps s WHERE s.path_id = p.id) steps, (SELECT COUNT(*) FROM path_enrollments pe WHERE pe.path_id = p.id) learners, (SELECT COUNT(*) FROM path_enrollments pe WHERE pe.path_id = p.id AND pe.status = \'completed\') done FROM learning_paths p LEFT JOIN `groups` g ON g.id = p.group_id WHERE p.deleted_at IS NULL ORDER BY p.sort, p.id');
+        // every path belongs to one audience: a segment (merchant / employee / agent) or shared by all
+        $counts = array_fill_keys(array_keys(self::AUDIENCES), 0);
+        foreach ($all as &$p) { $p['audience'] = \App\Controllers\LearnController::pathAudience($p); $counts[$p['audience']] = ($counts[$p['audience']] ?? 0) + 1; }
+        unset($p);
+        $seg = Request::str('seg', 'merchant');
+        if (!isset(self::AUDIENCES[$seg])) $seg = 'merchant';
+        $rows = array_values(array_filter($all, fn($p) => $p['audience'] === $seg));
+        return view('admin/paths/index', ['title' => 'مسیرهای آموزشی', 'rows' => $rows, 'seg' => $seg, 'counts' => $counts, 'audiences' => self::AUDIENCES,
+            'groups' => DB::pairs('SELECT id, name FROM `groups` ORDER BY sort')]);
     }
 
     public function save(?int $id = null): never
@@ -35,17 +45,51 @@ final class PathController
             $id = DB::insert('learning_paths', $row + ['status' => 'draft', 'sort' => $sort, 'created_by' => Auth::id(), 'created_at' => now()]);
             Audit::log('paths.create', 'path', $id);
         }
-        flash('success', 'مسیر ذخیره شد.');
+        flash('success', 'مسیر ذخیره شد' . ($row['target_segment'] ? ' — مخصوص ' . label('segment', $row['target_segment']) : ' — مشترک برای همه گروه‌ها') . '. حالا مراحل (دوره‌ها) را تعریف کنید.');
         redirect('/admin/paths/' . $id);
+    }
+
+    /** Copy a path with all its steps for another group, to build that group's own version from it */
+    public function copy(int $id): never
+    {
+        $p = DB::one('SELECT * FROM learning_paths WHERE id = ? AND deleted_at IS NULL', [$id]) ?? throw new HttpException(404);
+        $seg = Request::str('target_segment');
+        $seg = in_array($seg, ['merchant', 'employee', 'agent'], true) ? $seg : null;
+        $title = trim(Request::str('title')) ?: $p['title'];
+        $newId = DB::transaction(function () use ($p, $seg, $title) {
+            $sort = (int)DB::value('SELECT COALESCE(MAX(sort), 0) + 1 FROM learning_paths WHERE deleted_at IS NULL');
+            $nid = DB::insert('learning_paths', ['title' => mb_substr($title, 0, 200), 'description' => $p['description'], 'target_segment' => $seg, 'group_id' => null,
+                'color' => $p['color'], 'status' => 'draft', 'sort' => $sort, 'created_by' => Auth::id(), 'created_at' => now()]);
+            foreach (DB::all('SELECT * FROM path_steps WHERE path_id = ? ORDER BY sort, id', [(int)$p['id']]) as $s) {
+                unset($s['id']);
+                $s['path_id'] = $nid;
+                DB::insert('path_steps', $s);
+            }
+            return $nid;
+        });
+        Audit::log('paths.copy', 'path', (int)$newId, 'success', ['from' => $id, 'segment' => $seg]);
+        flash('success', 'یک نسخه از مسیر برای «' . ($seg ? label('segment', $seg) : 'همه گروه‌ها') . '» ساخته شد (پیش‌نویس). مراحل را به دلخواه تغییر دهید و سپس منتشر کنید.');
+        redirect('/admin/paths/' . $newId);
     }
 
     /** Drag & drop order of the paths (first = first stop of the learners' roadmap) */
     public function order(): never
     {
-        $valid = array_map('intval', DB::column('SELECT id FROM learning_paths WHERE deleted_at IS NULL'));
+        // the list on screen is one group's paths: re-use the slots those paths already hold, so other groups keep their order
+        $current = DB::pairs('SELECT id, sort FROM learning_paths WHERE deleted_at IS NULL');
+        $ids = array_values(array_filter(array_unique(Request::ints('ids')), fn($pid) => isset($current[$pid])));
+        $slots = array_map(fn($pid) => (int)$current[$pid], $ids);
+        sort($slots);
+        if (count(array_unique($slots)) < count($slots)) { // duplicates (old data) → renumber everything first
+            $k = 0;
+            foreach (DB::column('SELECT id FROM learning_paths WHERE deleted_at IS NULL ORDER BY sort, id') as $pid) $current[(int)$pid] = ++$k;
+            foreach ($current as $pid => $sv) DB::update('learning_paths', ['sort' => $sv], 'id = ?', [$pid]);
+            $slots = array_map(fn($pid) => (int)$current[$pid], $ids);
+            sort($slots);
+        }
         $n = 0;
-        DB::transaction(function () use ($valid, &$n) {
-            foreach (Request::ints('ids') as $pid) if (in_array($pid, $valid, true)) DB::update('learning_paths', ['sort' => ++$n], 'id = ?', [$pid]);
+        DB::transaction(function () use ($ids, $slots, &$n) {
+            foreach ($ids as $i => $pid) { DB::update('learning_paths', ['sort' => $slots[$i]], 'id = ?', [$pid]); $n++; }
         });
         Audit::log('paths.reorder', 'path', null, 'success', ['n' => $n]);
         json_out(['ok' => true, 'n' => $n]);

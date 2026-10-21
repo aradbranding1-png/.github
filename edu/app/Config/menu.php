@@ -65,17 +65,12 @@ return [
     ]],
     ['section' => 'گزارش و پایش', 'items' => [
         ['/admin/reports', 'گزارش‌ها', 'chart-column', 'reports.view'],
+        ['/admin/reports/suspicious', 'تکمیل مشکوک درس‌ها', 'triangle-alert', ['reports.report', 'courses.report'], 'suspicious_completions'],
         ['/admin/notifications', 'ارسال اعلان', 'bell', 'notifications.view'],
         ['/admin/audit', 'Audit Log', 'scroll-text', 'audit.view'],
     ]],
     ['section' => 'سیستم', 'items' => [
-        ['/admin/settings', 'تنظیمات', 'settings', 'settings.view'],
-        ['/admin/sso', 'اتصال SSO', 'fingerprint', 'sso.view'],
-        ['/admin/integrations/arad-contact', 'اتصال آراد کانتکت', 'handshake', 'settings.view'],
-        ['/admin/system/health', 'سلامت سامانه', 'heart-pulse', 'health.view'],
-        ['/admin/system/backups', 'پشتیبان‌گیری', 'hard-drive', 'backups.view'],
-        ['/admin/system/migrations', 'Migrationها', 'database', 'migrations.view'],
+        ['/admin/settings', 'تنظیمات', 'settings', ['settings.view', 'health.view', 'backups.view', 'migrations.view', 'errors.view']],
         ['/admin/system/updates', 'بروزرسانی سامانه', 'refresh-cw', 'updates.view'],
-        ['/admin/system/errors', 'خطاهای سامانه', 'triangle-alert', 'errors.view'],
     ]],
 ];

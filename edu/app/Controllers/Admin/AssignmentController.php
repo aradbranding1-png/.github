@@ -57,7 +57,7 @@ final class AssignmentController
         if ($scopeIds !== null) $targets = array_values(array_intersect($targets, $scopeIds));
         $due = Jalali::parse((string)($d['due_at'] ?? ''));
         $due = $due ? $due . ' 23:59:59' : null;
-        $total = 0; $created = 0;
+        $total = 0; $created = 0; Targeting::$skipped = 0;
         $items = $pathId ? [['path_id' => $pathId, 'course_id' => null]] : array_map(fn($c) => ['course_id' => $c, 'path_id' => null], $courseIds);
         foreach ($items as $it) foreach ($targets as $tid) {
             $row = $it + ['target_type' => $type, 'target_id' => $tid, 'training_type' => $d['training_type'], 'due_at' => $due, 'note' => mb_substr(Request::str('note'), 0, 250) ?: null, 'created_by' => Auth::id(), 'created_at' => now()];
@@ -67,14 +67,17 @@ final class AssignmentController
         }
         Audit::log('assignments.create', 'assignment', null, 'success', ['type' => $type, 'targets' => count($targets), 'courses' => $courseIds, 'path' => $pathId, 'users' => $total]);
         flash('success', 'تخصیص انجام شد: ' . fa($created) . ' مورد تخصیص برای ' . fa($total) . ' نفر. اعضای جدید گروه/واحد نیز به صورت خودکار این آموزش را دریافت می‌کنند.');
+        if (Targeting::$skipped) flash('warning', fa(Targeting::$skipped) . ' نفر ثبت‌نام نشدند، چون دوره برای گروه یا سطح آن‌ها تعریف نشده است (مخاطبان دوره).');
         redirect('/admin/assignments');
     }
 
     public function reapply(int $id): never
     {
         $a = DB::find('assignments', $id) ?? throw new HttpException(404);
+        Targeting::$skipped = 0;
         $n = Targeting::applyAssignment($a);
         flash('success', 'تخصیص مجدداً برای ' . fa($n) . ' نفر اعمال شد.');
+        if (Targeting::$skipped) flash('warning', fa(Targeting::$skipped) . ' نفر خارج از مخاطبان دوره بودند و ثبت‌نام نشدند.');
         redirect('/admin/assignments');
     }
 
@@ -237,7 +240,10 @@ final class AssignmentController
             Scope::authorizeUser((int)$n['user_id']);
             $st = Request::str('status');
             DB::update('training_needs', ['status' => in_array($st, ['open', 'planned', 'resolved'], true) ? $st : $n['status'], 'priority' => in_array(Request::str('priority'), ['low', 'medium', 'high'], true) ? Request::str('priority') : $n['priority'], 'resolved_course_id' => Request::intOrNull('resolved_course_id'), 'updated_at' => now()], 'id = ?', [$id]);
-            if (Request::intOrNull('resolved_course_id') && Request::bool('assign')) \App\Services\Enrollment::enroll((int)$n['user_id'], Request::int('resolved_course_id'), ['source' => 'assignment', 'training_type' => 'supplementary']);
+            if (Request::intOrNull('resolved_course_id') && Request::bool('assign')) {
+                if (\App\Services\CourseAudience::filterUsers(Request::int('resolved_course_id'), [(int)$n['user_id']])) \App\Services\Enrollment::enroll((int)$n['user_id'], Request::int('resolved_course_id'), ['source' => 'assignment', 'training_type' => 'supplementary']);
+                else flash('warning', 'این دوره برای گروه یا سطح این کاربر تعریف نشده است؛ ثبت‌نام انجام نشد.');
+            }
             flash('success', 'نیاز آموزشی به‌روزرسانی شد.');
         } else {
             $d = Validator::validate(['user_id' => 'required|int', 'title' => 'required|max:200', 'priority' => 'in:low,medium,high'], ['user_id' => 'کاربر', 'title' => 'عنوان']);

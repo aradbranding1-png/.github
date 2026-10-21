@@ -23,13 +23,14 @@ final class LearnController
     /** Courses visible to a learner in the catalog */
     public static function visibleCourseSql(array $u): array
     {
-        // managers / instructors see every published course, whatever its audience
-        if (can('courses.view')) return ["c.status = 'published' AND c.deleted_at IS NULL", []];
+        // root and roles with «دوره‌ها — مشاهده همه» see every published course; everyone else sees the courses
+        // meant for him («مخاطبان دوره» + «سطح») and the ones he is already enrolled in
+        if (\App\Services\CourseAudience::seesAll($u)) return ["c.status = 'published' AND c.deleted_at IS NULL", []];
+        [$aw, $ap] = \App\Services\CourseAudience::sqlForUser($u, 'c');
         return [
-            "c.status = 'published' AND c.deleted_at IS NULL AND (c.publish_at IS NULL OR c.publish_at <= NOW()) AND (c.expire_at IS NULL OR c.expire_at > NOW())
-             AND (c.target_segment IS NULL OR c.target_segment = ? OR EXISTS (SELECT 1 FROM enrollments e2 WHERE e2.course_id = c.id AND e2.user_id = ?))
-             AND (c.group_id IS NULL OR EXISTS (SELECT 1 FROM group_members gm WHERE gm.group_id = c.group_id AND gm.user_id = ?) OR EXISTS (SELECT 1 FROM enrollments e3 WHERE e3.course_id = c.id AND e3.user_id = ?))",
-            [$u['segment'], (int)$u['id'], (int)$u['id'], (int)$u['id']],
+            "c.status = 'published' AND c.deleted_at IS NULL AND (EXISTS (SELECT 1 FROM enrollments e2 WHERE e2.course_id = c.id AND e2.user_id = ?)
+             OR ((c.publish_at IS NULL OR c.publish_at <= NOW()) AND (c.expire_at IS NULL OR c.expire_at > NOW()) AND $aw))",
+            array_merge([(int)$u['id']], $ap),
         ];
     }
 
@@ -81,6 +82,8 @@ final class LearnController
         $enrolled = Enrollment::get((int)$this->me()['id'], $id);
         $isStaff = can('courses.view') || can('lessons.view');
         if ($c['status'] !== 'published' && !$enrolled && !($allowPreview && $isStaff)) throw new HttpException(404);
+        // a course that is not meant for this user (audience / level) is not shown to him at all, unless he is enrolled
+        if (!$enrolled && !($allowPreview && $isStaff) && !\App\Services\CourseAudience::seesAll($this->me()) && !\App\Services\CourseAudience::allows($this->me(), $id)) throw new HttpException(404);
         return [$c, $enrolled, $isStaff];
     }
 
@@ -91,14 +94,17 @@ final class LearnController
         if ($en) $en = Enrollment::recalc($uid, $id);
         $items = Enrollment::items($id);
         $done = Enrollment::completedLessonIds($uid, $id);
+        $contentDone = $en ? Enrollment::contentDoneLessonIds($uid, $id) : [];
+        $lessonTasks = $en ? Enrollment::lessonTasks($uid, $id) : [];
         $prereq = DB::all('SELECT c.id, c.title, e.status FROM course_prerequisites p JOIN courses c ON c.id = p.prerequisite_id LEFT JOIN enrollments e ON e.course_id = c.id AND e.user_id = ? WHERE p.course_id = ?', [$uid, $id]);
         $best = Enrollment::bestAttempts($uid, array_map(fn($x) => (int)$x['id'], $items['exams']));
         $exSt = Enrollment::exerciseStatus($uid, array_map(fn($x) => (int)$x['id'], $items['exercises']));
         $instructor = $c['instructor_id'] ? DB::find('users', (int)$c['instructor_id']) : null;
         $cert = DB::one('SELECT * FROM certificates WHERE user_id = ? AND course_id = ? AND revoked_at IS NULL', [$uid, $id]);
         $stats = DB::one("SELECT COUNT(*) learners, SUM(status = 'completed') completed FROM enrollments WHERE course_id = ?", [$id]);
-        $visibleToSelf = $c['status'] === 'published' && ($isStaff && can('courses.view') || ($c['self_enroll'] && (!$c['target_segment'] || $c['target_segment'] === $this->me()['segment'])));
-        return view('learn/course', compact('c', 'en', 'items', 'done', 'prereq', 'best', 'exSt', 'instructor', 'cert', 'stats', 'isStaff', 'visibleToSelf') + ['title' => $c['title']]);
+        $forMe = \App\Services\CourseAudience::seesAll($this->me()) || \App\Services\CourseAudience::allows($this->me(), $id);
+        $visibleToSelf = $c['status'] === 'published' && $forMe && ($isStaff && can('courses.view') || $c['self_enroll']);
+        return view('learn/course', compact('c', 'en', 'items', 'done', 'prereq', 'best', 'exSt', 'instructor', 'cert', 'stats', 'isStaff', 'visibleToSelf', 'contentDone', 'lessonTasks') + ['title' => $c['title']]);
     }
 
     public function enroll(int $id): never
@@ -106,7 +112,8 @@ final class LearnController
         $u = $this->me();
         $c = DB::one("SELECT * FROM courses WHERE id = ? AND status = 'published' AND deleted_at IS NULL", [$id]);
         $staff = can('courses.view');
-        if (!$c || (!$staff && (!(int)$c['self_enroll'] || ($c['target_segment'] && $c['target_segment'] !== $u['segment'])))) throw new HttpException(403, 'امکان ثبت‌نام در این دوره وجود ندارد.');
+        if (!$c || (!$staff && !(int)$c['self_enroll'])) throw new HttpException(403, 'امکان ثبت‌نام در این دوره وجود ندارد.');
+        if (!\App\Services\CourseAudience::seesAll($u) && !\App\Services\CourseAudience::allows($u, $id)) throw new HttpException(403, 'این دوره برای گروه یا سطح شما تعریف نشده است.');
         Enrollment::enroll((int)$u['id'], $id, ['source' => 'self']);
         flash('success', 'در دوره ثبت‌نام شدید. موفق باشید!');
         redirect('/learn/course/' . $id);
@@ -157,7 +164,14 @@ final class LearnController
         $next = $pos !== false && $pos < count($ids) - 1 ? $items['lessons'][$pos + 1] : null;
         // uploaded/library file wins; otherwise the lesson link (Aparat/YouTube page or direct media URL)
         $remote = !$media && in_array($lesson['content_type'], ['video', 'audio', 'link'], true) ? \App\Services\MediaLink::resolve($lesson) : null;
-        return view('learn/lesson', compact('lesson', 'c', 'en', 'items', 'done', 'lp', 'files', 'media', 'exams', 'exercises', 'prev', 'next', 'preview', 'remote') + ['title' => $lesson['title']]);
+        $contentDone = in_array($id, Enrollment::contentDoneLessonIds($uid, (int)$c['id']), true);
+        $tasks = $en ? (Enrollment::lessonTasks($uid, (int)$c['id'])[$id] ?? ['items' => [], 'blocking' => []]) : ['items' => [], 'blocking' => []];
+        $nextOpen = $next && ($isStaff || ($en && Enrollment::lessonUnlocked($uid, $next, $c, $items['lessons'], $done)));
+        $flag = null;
+        try { $flag = $en ? DB::one("SELECT * FROM lesson_completion_flags WHERE user_id = ? AND lesson_id = ? AND status IN ('open','reset')", [$uid, $id]) : null; } catch (\Throwable) {}
+        // exams / exercises of the lesson open only after the lesson was really seen
+        $taskGate = ($exams || $exercises) && $en && !$isStaff ? Enrollment::taskGate($uid, ['course_id' => (int)$c['id'], 'lesson_id' => $id]) : null;
+        return view('learn/lesson', compact('lesson', 'c', 'en', 'items', 'done', 'lp', 'files', 'media', 'exams', 'exercises', 'prev', 'next', 'preview', 'remote', 'flag', 'contentDone', 'tasks', 'nextOpen', 'taskGate') + ['title' => $lesson['title']]);
     }
 
     /** Activate (pay for) one lesson with minute credit */
@@ -221,12 +235,31 @@ final class LearnController
         [$lesson, $en, $uid] = $this->enrolledLesson($id);
         $pct = max(0, min(100, Request::int('percent')));
         $pos = max(0, Request::int('position'));
-        DB::run('UPDATE lesson_progress SET percent = GREATEST(percent, ?), position_sec = ?, last_viewed_at = NOW() WHERE user_id = ? AND lesson_id = ?', [$pct, $pos, $uid, $id]);
+        $isMedia = in_array($lesson['content_type'], ['video', 'audio'], true);
+        if ($isMedia && isset($_POST['watched'])) {
+            // the player reports how many seconds were really played since its last report (seeking forward is not counted)
+            $dur = max(0, min(36000, Request::int('duration')));
+            if ($dur > 0 && abs($dur - (int)($lesson['media_seconds'] ?? 0)) > 2) {
+                DB::update('lessons', ['media_seconds' => $dur], 'id = ?', [$id]);
+                $lesson['media_seconds'] = $dur;
+            }
+            $len = (int)($lesson['media_seconds'] ?? 0) ?: (int)$lesson['duration_minutes'] * 60;
+            $add = max(0, min(300, Request::int('watched'))); // reports come every ~15 s (later when the tab is in the background)
+            $cap = $len > 0 ? $len : 36000;
+            DB::run('UPDATE lesson_progress SET watched_sec = LEAST(?, watched_sec + ?), position_sec = ?, last_viewed_at = NOW() WHERE user_id = ? AND lesson_id = ?', [$cap, $add, $pos, $uid, $id]);
+            $watched = (int)DB::value('SELECT watched_sec FROM lesson_progress WHERE user_id = ? AND lesson_id = ?', [$uid, $id]);
+            // progress = share of the file really played, not where the play-head was dragged to
+            $pct = $len > 0 ? min(100, (int)floor($watched * 100 / $len)) : $pct;
+            DB::run('UPDATE lesson_progress SET percent = GREATEST(percent, ?) WHERE user_id = ? AND lesson_id = ?', [$pct, $uid, $id]);
+            \App\Services\CompletionAudit::resolveIfWatched($uid, $id, $watched, $len);
+        } else {
+            DB::run('UPDATE lesson_progress SET percent = GREATEST(percent, ?), position_sec = ?, last_viewed_at = NOW() WHERE user_id = ? AND lesson_id = ?', [$pct, $pos, $uid, $id]);
+        }
         $auto = false;
-        if (in_array($lesson['content_type'], ['video', 'audio'], true) && $pct >= (int)setting('video_complete_percent', 90)) {
+        if ($isMedia && $pct >= (int)setting('video_complete_percent', 90)) {
             $auto = $this->markComplete($lesson, $uid);
         }
-        json_out(['ok' => true, 'completed' => $auto]);
+        json_out(['ok' => true, 'completed' => $auto, 'percent' => $pct]);
     }
 
     public function heartbeat(int $id): never
@@ -246,6 +279,7 @@ final class LearnController
                  ON DUPLICATE KEY UPDATE status = 'completed', percent = 100, completed_at = NOW()", [$uid, (int)$lesson['id'], (int)$lesson['course_id']]);
         Activity::track($uid, 'lesson_complete', 'lesson', (int)$lesson['id'], ['course' => (int)$lesson['course_id']]);
         Enrollment::recalc($uid, (int)$lesson['course_id']);
+        \App\Services\CompletionAudit::check($uid, (int)$lesson['id']);
         return true;
     }
 
@@ -254,16 +288,26 @@ final class LearnController
         [$lesson, $en, $uid] = $this->enrolledLesson($id);
         // watch-percentage is enforced for uploaded/library files; Aparat/YouTube embeds cannot
         // report progress, and external direct links are checked in the player
-        if (in_array($lesson['content_type'], ['video', 'audio'], true) && !empty($lesson['media_file_id'])) {
+        if (Enrollment::trackable($lesson)) {
             $lp = DB::one('SELECT percent FROM lesson_progress WHERE user_id = ? AND lesson_id = ?', [$uid, $id]);
             if ((int)($lp['percent'] ?? 0) < (int)setting('video_complete_percent', 90)) {
                 flash('warning', 'برای تکمیل این درس، ابتدا محتوای آن را تا انتها مشاهده کنید.');
                 redirect('/learn/lesson/' . $id);
             }
         }
+        // refuse a completion that would be flagged as suspicious (not watched / read for real)
+        if ($block = \App\Services\CompletionAudit::precheck($lesson, $uid)) {
+            flash('warning', 'این درس هنوز قابل تکمیل نیست. ' . $block['msg']);
+            redirect('/learn/lesson/' . $id);
+        }
         $this->markComplete($lesson, $uid);
         $next = DB::one("SELECT id FROM lessons WHERE course_id = ? AND deleted_at IS NULL AND status = 'published' AND (sort > ? OR (sort = ? AND id > ?)) ORDER BY sort, id LIMIT 1", [(int)$lesson['course_id'], (int)$lesson['sort'], (int)$lesson['sort'], $id]);
         $en = Enrollment::get($uid, (int)$lesson['course_id']);
+        $pending = Enrollment::lessonTasks($uid, (int)$lesson['course_id'])[$id]['blocking'] ?? [];
+        if ($pending) {
+            flash('info', 'محتوای درس را کامل کردید. برای رفتن به درس بعد، حالا ' . Enrollment::tasksText($pending) . ' را انجام دهید.');
+            redirect('/learn/lesson/' . $id . '#lesson-tasks');
+        }
         if ($en && $en['status'] === 'completed') { flash('success', 'تبریک! این دوره را کامل کردید.'); redirect('/learn/course/' . $lesson['course_id']); }
         flash('success', 'درس تکمیل شد.');
         redirect($next ? '/learn/lesson/' . $next['id'] : '/learn/course/' . $lesson['course_id']);
@@ -408,13 +452,15 @@ final class LearnController
     {
         [$x, $en, $uid] = $this->loadExercise($id);
         $subs = DB::all('SELECT s.*, f.uuid AS file_uuid, f.original_name FROM exercise_submissions s LEFT JOIN files f ON f.id = s.file_id WHERE s.exercise_id = ? AND s.user_id = ? ORDER BY s.id DESC', [$id, $uid]);
-        return view('learn/exercise', ['title' => $x['title'], 'x' => $x, 'subs' => $subs, 'en' => $en]);
+        $gate = $en && !can('reviews.view') ? Enrollment::taskGate($uid, $x) : null;
+        return view('learn/exercise', ['title' => $x['title'], 'x' => $x, 'subs' => $subs, 'en' => $en, 'gate' => $gate]);
     }
 
     public function submitExercise(int $id): never
     {
         [$x, $en, $uid] = $this->loadExercise($id);
         if (!$en) throw new HttpException(403);
+        if (!can('reviews.view') && ($gate = Enrollment::taskGate($uid, $x))) { flash('warning', $gate['msg']); redirect('/learn/exercise/' . $id); }
         $last = DB::one('SELECT status FROM exercise_submissions WHERE exercise_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1', [$id, $uid]);
         if ($last && in_array($last['status'], ['submitted', 'accepted'], true)) { flash('warning', $last['status'] === 'accepted' ? 'این تمرین قبلاً پذیرفته شده است.' : 'پاسخ قبلی شما در حال بررسی است.'); redirect('/learn/exercise/' . $id); }
         $text = trim((string)($_POST['text_answer'] ?? ''));
@@ -425,7 +471,7 @@ final class LearnController
             if (in_array('file', $formats, true)) $kinds = array_merge($kinds, ['pdf', 'doc']);
             if (in_array('image', $formats, true)) $kinds[] = 'image';
             if (in_array('video', $formats, true)) $kinds[] = 'video';
-            if (in_array('file', $formats, true)) $kinds[] = 'audio';
+            if (in_array('audio', $formats, true)) $kinds[] = 'audio';
             $row = Upload::store($f, $kinds, ['library' => 0, 'folder' => 'exercise', 'viewable' => 1, 'downloadable' => 1, 'max_mb' => min(512, (int)setting('max_upload_mb', 512))]);
             $fileId = (int)$row['id'];
         }

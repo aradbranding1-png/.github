@@ -28,16 +28,71 @@ final class ReviewController
         return $u;
     }
 
+    /** What the learner sent, so reviewers know what they are about to check */
+    public const KINDS = [
+        'audio' => ['صوتی', 'music'], 'text' => ['متنی', 'file-text'], 'video' => ['ویدیو', 'video'],
+        'doc' => ['سند / PDF', 'file'], 'image' => ['تصویر', 'image'], 'exam' => ['پاسخ تشریحی آزمون', 'clipboard-check'],
+    ];
+
     public function index(): string
     {
-        $tab = Request::str('tab', 'pending');
+        $tab = Request::str('tab', 'pending') === 'done' ? 'done' : 'pending';
+        $kind = Request::str('kind');
+        if (!isset(self::KINDS[$kind])) $kind = '';
         $s1 = $this->scopeSql('s.user_id', 'x.course_id');
         $s2 = $this->scopeSql('a.user_id', 'x.course_id');
+        // learner group: segment (merchant / employee / agent / other) and/or an organisational group (with its sub-groups)
+        $seg = Request::str('seg');
+        if (!isset(\App\Core\Labels::SEGMENT[$seg])) $seg = '';
+        $gid = Request::int('group');
+        $grp = ['sql' => '', 'params' => []];
+        if ($gid) {
+            $gids = \App\Services\Targeting::descendants('groups', $gid);
+            $grp = ['sql' => ' AND u.id IN (SELECT gm.user_id FROM group_members gm WHERE gm.group_id IN (' . DB::in($gids) . '))', 'params' => $gids];
+        }
+        $s1 = ['sql' => $s1['sql'] . $grp['sql'], 'params' => array_merge($s1['params'], $grp['params'])];
+        $s2 = ['sql' => $s2['sql'] . $grp['sql'], 'params' => array_merge($s2['params'], $grp['params'])];
+        // result filter (reviewed tab only): accepted / rejected / needs revision
+        $st = Request::str('st');
+        if ($tab !== 'done' || !in_array($st, ['accepted', 'rejected', 'needs_revision'], true)) $st = '';
         $subWhere = $tab === 'done' ? "s.status <> 'submitted'" : "s.status = 'submitted'";
-        $subs = DB::all("SELECT s.*, x.title, x.max_score, c.title AS course_title, u.first_name, u.last_name, u.avatar_path FROM exercise_submissions s JOIN exercises x ON x.id = s.exercise_id JOIN courses c ON c.id = x.course_id JOIN users u ON u.id = s.user_id WHERE $subWhere" . $s1['sql'] . ' ORDER BY s.id ' . ($tab === 'done' ? 'DESC' : 'ASC') . ' LIMIT 100', $s1['params']);
+        // type of what was sent: the uploaded file's kind, or text when only a written answer was sent
+        $kindSql = "CASE WHEN f.id IS NULL THEN 'text' WHEN f.kind IN ('pdf','doc') THEN 'doc' WHEN f.kind IN ('audio','video','image') THEN f.kind ELSE 'doc' END";
+        $from = "FROM exercise_submissions s JOIN exercises x ON x.id = s.exercise_id JOIN courses c ON c.id = x.course_id JOIN users u ON u.id = s.user_id LEFT JOIN files f ON f.id = s.file_id WHERE $subWhere" . $s1['sql'];
+        $segCounts = array_map('intval', DB::pairs("SELECT u.segment, COUNT(*) $from" . ($kind && $kind !== 'exam' ? " AND $kindSql = ?" : '') . ' GROUP BY u.segment', array_merge($s1['params'], $kind && $kind !== 'exam' ? [$kind] : [])));
+        if ($kind === 'exam') $segCounts = [];
+        if ($kind === '' || $kind === 'exam') {
+            $attSegWhere = $tab === 'done' ? "a.status = 'graded' AND a.graded_by IS NOT NULL" : "a.status = 'pending_review'";
+            foreach (DB::pairs("SELECT u.segment, COUNT(*) FROM exam_attempts a JOIN exams x ON x.id = a.exam_id JOIN users u ON u.id = a.user_id WHERE $attSegWhere" . $s2['sql'] . ' GROUP BY u.segment', $s2['params']) as $sg => $n) {
+                $segCounts[$sg] = ($segCounts[$sg] ?? 0) + (int)$n;
+            }
+        }
+        if ($seg) {
+            $s1 = ['sql' => $s1['sql'] . ' AND u.segment = ?', 'params' => array_merge($s1['params'], [$seg])];
+            $s2 = ['sql' => $s2['sql'] . ' AND u.segment = ?', 'params' => array_merge($s2['params'], [$seg])];
+            $from = "FROM exercise_submissions s JOIN exercises x ON x.id = s.exercise_id JOIN courses c ON c.id = x.course_id JOIN users u ON u.id = s.user_id LEFT JOIN files f ON f.id = s.file_id WHERE $subWhere" . $s1['sql'];
+        }
+        $stCounts = [];
+        if ($tab === 'done') {
+            $stCounts = array_map('intval', DB::pairs("SELECT s.status, COUNT(*) $from" . ($kind && $kind !== 'exam' ? " AND $kindSql = ?" : '') . ' GROUP BY s.status', array_merge($s1['params'], $kind && $kind !== 'exam' ? [$kind] : [])));
+        }
+        if ($st) $from .= ' AND s.status = ?';
+        $s1['params'] = $st ? array_merge($s1['params'], [$st]) : $s1['params'];
+        $counts = array_map('intval', DB::pairs("SELECT $kindSql AS k, COUNT(*) $from GROUP BY k", $s1['params']));
         $attWhere = $tab === 'done' ? "a.status = 'graded' AND a.graded_by IS NOT NULL" : "a.status = 'pending_review'";
-        $atts = DB::all("SELECT a.*, x.title, u.first_name, u.last_name, u.avatar_path FROM exam_attempts a JOIN exams x ON x.id = a.exam_id JOIN users u ON u.id = a.user_id WHERE $attWhere" . $s2['sql'] . ' ORDER BY a.id ' . ($tab === 'done' ? 'DESC' : 'ASC') . ' LIMIT 100', $s2['params']);
-        return view('admin/reviews/index', ['title' => 'بررسی و تصحیح', 'tab' => $tab, 'subs' => $subs, 'atts' => $atts]);
+        $attFrom = "FROM exam_attempts a JOIN exams x ON x.id = a.exam_id JOIN users u ON u.id = a.user_id WHERE $attWhere" . $s2['sql'];
+        $counts['exam'] = $st ? 0 : (int)DB::value("SELECT COUNT(*) $attFrom", $s2['params']);
+        $subs = [];
+        if ($kind !== 'exam') {
+            $subs = DB::all("SELECT s.*, x.title, x.max_score, c.title AS course_title, u.first_name, u.last_name, u.avatar_path, f.original_name, $kindSql AS rkind $from"
+                . ($kind ? " AND $kindSql = ?" : '') . ' ORDER BY ' . ($tab === 'done' ? 'COALESCE(s.reviewed_at, s.created_at) DESC, s.id DESC' : 's.id ASC') . ' LIMIT 200', array_merge($s1['params'], $kind ? [$kind] : []));
+        }
+        $atts = (($kind === '' || $kind === 'exam') && !$st)
+            ? DB::all("SELECT a.*, x.title, u.first_name, u.last_name, u.avatar_path $attFrom ORDER BY " . ($tab === 'done' ? 'COALESCE(a.graded_at, a.submitted_at) DESC, a.id DESC' : 'a.id ASC') . ' LIMIT 200', $s2['params'])
+            : [];
+        return view('admin/reviews/index', ['title' => 'بررسی و تصحیح', 'tab' => $tab, 'kind' => $kind, 'counts' => $counts, 'subs' => $subs, 'atts' => $atts,
+            'st' => $st, 'stCounts' => $stCounts, 'seg' => $seg, 'gid' => $gid, 'segCounts' => $segCounts, 'groups' => DB::pairs('SELECT id, name FROM `groups` ORDER BY sort, name'),
+            'pendingTotal' => $tab === 'pending' ? array_sum($counts) : null]);
     }
 
     private function loadSubmission(int $id): array

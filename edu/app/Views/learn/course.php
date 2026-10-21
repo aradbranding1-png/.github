@@ -14,10 +14,10 @@ $creditBal = $creditOn ? App\Services\Credit::balance((int)auth()['id']) : 0;
         <div class="grow" style="min-width:260px">
             <div class="crumbs" style="color:rgba(255,255,255,.75)"><a style="color:inherit" href="<?= url('/learn/catalog') ?>">کاتالوگ</a> / <?= e($c['category_name'] ?? 'دوره') ?></div>
             <h1><?= e($c['title']) ?></h1>
-            <p class="muted"><?= e($c['summary']) ?></p>
+            <p class="muted text-justify"><?= e($c['summary']) ?></p>
             <div class="flex flex-wrap">
                 <span class="badge badge-<?= $c['training_type'] === 'mandatory' ? 'danger' : 'gray' ?>"><?= e(label('training_type', $c['training_type'])) ?></span>
-                <?php if ($c['target_segment']): ?><span class="badge badge-gray"><?= icon('users') ?> <?= e(label('segment', $c['target_segment'])) ?></span><?php endif; ?>
+                <?php if (App\Services\CourseAudience::groupIds((int)$c['id'])): ?><span class="badge badge-gray"><?= icon('users') ?> <?= e(App\Services\CourseAudience::label((int)$c['id'])) ?></span><?php endif; ?>
                 <span class="badge badge-gray"><?= icon('book-open') ?> <?= fa(count($items['lessons'])) ?> درس</span>
                 <?php if ($items['exams']): ?><span class="badge badge-gray"><?= icon('clipboard-check') ?> <?= fa(count($items['exams'])) ?> آزمون</span><?php endif; ?>
                 <?php if ($c['duration_minutes']): ?><span class="badge badge-gray"><?= icon('clock') ?> <?= fa($c['duration_minutes']) ?> دقیقه</span><?php endif; ?>
@@ -57,64 +57,104 @@ $creditBal = $creditOn ? App\Services\Credit::balance((int)auth()['id']) : 0;
         $nDone = count($done); $nAll = count($items['lessons']);
         $ctIcons = ['video' => 'video', 'audio' => 'music', 'pdf' => 'file-text', 'image' => 'image', 'file' => 'file', 'link' => 'link', 'text' => 'file-text'];
         $currentId = $en ? (int)($en['last_lesson_id'] ?? 0) : 0;
-        $secNo = 0; $rowNo = 0;
+        $fmtMin = fn(int $m) => $m >= 60 ? fa(intdiv($m, 60)) . ' ساعت' . ($m % 60 ? ' و ' . fa($m % 60) . ' دقیقه' : '') : fa($m) . ' دقیقه';
+        // one pass to know each lesson's state, so the "next lesson" can be picked before rendering
+        $rowInfo = []; $nextId = 0; $firstOpenId = 0; $rowNo = 0;
+        foreach ($items['lessons'] as $l) {
+            $id = (int)$l['id']; $rowNo++;
+            $isDone = in_array($id, $done, true);
+            $open = $en && !$locked && App\Services\Enrollment::lessonUnlocked((int)auth()['id'], $l, $c, $items['lessons'], $done);
+            $can = $open || $isStaff || ((int)$l['is_preview'] === 1);
+            $rowInfo[$id] = ['no' => $rowNo, 'done' => $isDone, 'can' => $can];
+            if (!$isDone && $can && !$firstOpenId) $firstOpenId = $id;
+        }
+        if ($en && !$locked) $nextId = ($currentId && isset($rowInfo[$currentId]) && !$rowInfo[$currentId]['done'] && $rowInfo[$currentId]['can']) ? $currentId : $firstOpenId;
+        $next = null; foreach ($items['lessons'] as $l) if ((int)$l['id'] === $nextId) $next = $l;
+        $pct = $nAll ? (int)round($nDone * 100 / $nAll) : 0;
+        $inactiveIds = $creditOn ? array_values(array_filter(array_map(fn($l) => App\Services\Credit::cost($l) > 0 && !in_array((int)$l['id'], $unlockedIds, true) ? (int)$l['id'] : 0, $items['lessons']))) : [];
+        $flat = count($lessonsBySection) === 1 && array_key_first($lessonsBySection) === '';
         ?>
         <div class="card curr">
             <div class="curr-top">
-                <div>
-                    <h3><?= icon('list') ?> سرفصل‌ها و درس‌ها</h3>
-                    <div class="curr-sum">
-                        <span><?= icon('layers') ?> <?= fa(count($lessonsBySection)) ?> بخش</span>
-                        <span><?= icon('book-open') ?> <?= fa($nAll) ?> درس</span>
-                        <?php if ($totalMin): ?><span><?= icon('clock') ?> <?= $totalMin >= 60 ? fa(intdiv($totalMin, 60)) . ' ساعت' . ($totalMin % 60 ? ' و ' . fa($totalMin % 60) . ' دقیقه' : '') : fa($totalMin) . ' دقیقه' ?></span><?php endif; ?>
-                    </div>
+                <h3><?= icon('list') ?> سرفصل‌ها و درس‌ها</h3>
+                <div class="curr-sum">
+                    <span><?= icon('book-open') ?> <?= fa($nAll) ?> درس</span>
+                    <?php if (!$flat): ?><span><?= icon('layers') ?> <?= fa(count($lessonsBySection)) ?> بخش</span><?php endif; ?>
+                    <?php if ($totalMin): ?><span><?= icon('clock') ?> <?= $fmtMin($totalMin) ?></span><?php endif; ?>
                 </div>
                 <?php if ($en && $nAll): ?>
-                    <div class="curr-prog"><div class="small"><b><?= fa($nDone) ?></b> از <?= fa($nAll) ?> درس تکمیل شده</div><?= progress_bar($nAll ? $nDone * 100 / $nAll : 0) ?></div>
+                    <div class="curr-prog">
+                        <div class="cp-bar"><span style="width:<?= $pct ?>%"></span></div>
+                        <div class="cp-txt"><b><?= fa($pct) ?>٪</b> · <?= fa($nDone) ?> از <?= fa($nAll) ?> درس</div>
+                    </div>
                 <?php endif; ?>
             </div>
+
+            <?php if ($next): $nInfo = $rowInfo[(int)$next['id']]; ?>
+                <a class="curr-next" href="<?= url('/learn/lesson/' . $next['id']) ?>">
+                    <span class="cn-play"><?= icon('play') ?></span>
+                    <span class="cn-body">
+                        <span class="cn-label"><?= $nDone || (int)$next['id'] === $currentId ? 'ادامه یادگیری' : 'شروع از اینجا' ?> · درس <?= fa($nInfo['no']) ?></span>
+                        <span class="cn-title"><?= e($next['title']) ?></span>
+                        <span class="cn-meta"><?= e(label('content_type', $next['content_type'])) ?><?= $next['duration_minutes'] ? ' · ' . fa($next['duration_minutes']) . ' دقیقه' : '' ?></span>
+                    </span>
+                    <span class="cn-go"><?= icon('chevron-left') ?></span>
+                </a>
+            <?php elseif ($en && $nAll && $nDone === $nAll): ?>
+                <div class="curr-next is-done"><span class="cn-play"><?= icon('check') ?></span><span class="cn-body"><span class="cn-title">همه درس‌ها را تکمیل کرده‌اید 🎉</span></span></div>
+            <?php endif; ?>
+
+            <?php if ($inactiveIds): ?><div class="curr-note"><?= icon('hourglass') ?><span>درس‌های دارای این علامت هنوز فعال نشده‌اند؛ با اولین ورود فعال می‌شوند و زمانشان از اعتبار شما کسر می‌شود.</span></div><?php endif; ?>
             <?php if (!$items['lessons']): ?><div class="empty"><?= icon('book-open') ?><div>هنوز درسی اضافه نشده است.</div></div><?php endif; ?>
-            <?php foreach ($lessonsBySection as $sec => $ls):
+            <?php $secNo = 0; foreach ($lessonsBySection as $sec => $ls):
                 $secNo++;
                 $secDone = count(array_filter($ls, fn($l) => in_array((int)$l['id'], $done, true)));
-                $secMin = array_sum(array_map(fn($l) => (int)$l['duration_minutes'], $ls)); ?>
-                <details class="curr-sec<?= $secDone === count($ls) && $en ? ' is-done' : '' ?>">
+                $secMin = array_sum(array_map(fn($l) => (int)$l['duration_minutes'], $ls));
+                $hasNext = (bool)array_filter($ls, fn($l) => (int)$l['id'] === $nextId);
+                $secOpen = $flat || $hasNext || (!$nextId && $secNo === 1); ?>
+                <<?= $flat ? 'div' : 'details' ?> class="curr-sec<?= $secDone === count($ls) && $en ? ' is-done' : '' ?><?= $flat ? ' is-flat' : '' ?>"<?= $secOpen && !$flat ? ' open' : '' ?>>
+                    <?php if (!$flat): ?>
                     <summary class="curr-head">
                         <span class="curr-num"><?= $secDone === count($ls) && $en ? icon('check') : fa($secNo) ?></span>
                         <span class="grow"><b><?= e($sec !== '' ? $sec : 'درس‌های دوره') ?></b>
-                            <span class="curr-meta"><?= fa(count($ls)) ?> درس<?= $secMin ? ' · ' . fa($secMin) . ' دقیقه' : '' ?><?php if ($en): ?> · <?= fa($secDone) ?>/<?= fa(count($ls)) ?> تکمیل<?php endif; ?></span></span>
+                            <span class="curr-meta"><?= fa(count($ls)) ?> درس<?= $secMin ? ' · ' . $fmtMin($secMin) : '' ?><?php if ($en): ?> · <?= fa($secDone) ?>/<?= fa(count($ls)) ?> تکمیل<?php endif; ?></span></span>
                         <span class="curr-chev"><?= icon('chevron-down') ?></span>
                     </summary>
-                    <div class="curr-rows">
+                    <?php endif; ?>
+                    <ol class="curr-rows">
                     <?php foreach ($ls as $l):
-                        $rowNo++;
-                        $isDone = in_array((int)$l['id'], $done, true);
-                        $open = $en && !$locked && App\Services\Enrollment::lessonUnlocked((int)auth()['id'], $l, $c, $items['lessons'], $done);
-                        $can = $open || $isStaff || ((int)$l['is_preview'] === 1);
-                        $isCur = $currentId === (int)$l['id'] && !$isDone;
+                        $id = (int)$l['id']; $ri = $rowInfo[$id];
+                        $isDone = $ri['done']; $can = $ri['can'];
+                        $isCur = $id === $nextId;
                         $st = $isDone ? 'done' : ($isCur ? 'current' : ($can ? 'open' : 'locked'));
-                        $ctIcon = $ctIcons[$l['content_type']] ?? 'file'; ?>
+                        $inactive = in_array($id, $inactiveIds, true);
+                        $tasksLeft = !$isDone && in_array($id, $contentDone ?? [], true) && !empty($lessonTasks[$id]['blocking']); ?>
+                        <li>
                         <a class="curr-row is-<?= $st ?>" href="<?= url('/learn/lesson/' . $l['id']) ?>"<?= $can ? '' : ' aria-disabled="true" data-locked="' . e(App\Services\Enrollment::lockReason($l, $c, $items['lessons'], $done, $en ?: null)) . '"' ?>>
-                            <span class="curr-st"><?= icon($isDone ? 'check' : ($isCur ? 'play' : ($can ? $ctIcon : 'lock'))) ?></span>
-                            <span class="grow curr-title">
-                                <span class="curr-idx"><?= fa($rowNo) ?>.</span> <?= e($l['title']) ?>
-                                <?php if ($isCur): ?><span class="badge badge-primary">ادامه یادگیری</span><?php endif; ?>
-                                <?php if ((int)$l['is_preview'] === 1 && !$en): ?><span class="badge badge-info">پیش‌نمایش رایگان</span><?php endif; ?>
+                            <span class="curr-st"><?= $isDone ? icon('check') : ($isCur ? icon('play') : ($can ? fa($ri['no']) : icon('lock'))) ?></span>
+                            <span class="curr-body">
+                                <span class="curr-title"><?= e($l['title']) ?></span>
+                                <span class="curr-meta">
+                                    <span><?= icon($ctIcons[$l['content_type']] ?? 'file') ?> <?= e(label('content_type', $l['content_type'])) ?></span>
+                                    <?php if ($l['duration_minutes']): ?><span><?= fa($l['duration_minutes']) ?> دقیقه</span><?php endif; ?>
+                                    <?php if ($inactive): ?><span class="cm-warn" title="فعال نشده — با اولین ورود، زمان درس از اعتبار شما کسر می‌شود"><?= icon('hourglass') ?></span><?php endif; ?>
+                                    <?php if ($tasksLeft): ?><span class="cm-warn" title="<?= e(App\Services\Enrollment::tasksText($lessonTasks[$id]['blocking'])) ?>"><?= icon('clipboard-check') ?> آزمون/تمرین مانده</span><?php endif; ?>
+                                    <?php if ((int)$l['is_preview'] === 1 && !$en): ?><span class="cm-info">پیش‌نمایش رایگان</span><?php endif; ?>
+                                </span>
                             </span>
-                            <span class="curr-chips">
-                                <span class="chip"><?= icon($ctIcon) ?> <?= e(label('content_type', $l['content_type'])) ?></span>
-                                <?php if ($l['duration_minutes']): ?><span class="chip"><?= icon('clock') ?> <?= fa($l['duration_minutes']) ?> دقیقه</span><?php endif; ?>
-                                <?php if ($creditOn && App\Services\Credit::cost($l) > 0 && !in_array((int)$l['id'], $unlockedIds, true)): ?><span class="chip chip-warn" title="با اولین ورود به درس، زمان آن از اعتبار شما کسر می‌شود"><?= icon('hourglass') ?> فعال نشده</span><?php endif; ?>
-                            </span>
+                            <?php if ($can): ?><span class="curr-go"><?= icon('chevron-left') ?></span><?php endif; ?>
                         </a>
+                        </li>
                     <?php endforeach; ?>
-                    </div>
-                </details>
+                    </ol>
+                </<?= $flat ? 'div' : 'details' ?>>
             <?php endforeach; ?>
         </div>
         <?php if ($c['syllabus']): ?><div class="card"><h3><?= icon('scroll-text') ?> سرفصل تفصیلی</h3><div class="prose"><?= clean_html($c['syllabus']) ?></div></div><?php endif; ?>
     </div>
     <div class="stack">
+        <?php if (can('reports.report') || can('courses.report')): ?><a class="btn btn-primary w-100" href="<?= url('/admin/reports/course/' . $c['id']) ?>"><?= icon('chart-column') ?> گزارش مدیریتی دوره</a><?php endif; ?>
+        <?php if ($isStaff && can('courses.edit')): ?><a class="btn btn-outline w-100" href="<?= url('/admin/courses/' . $c['id']) ?>"><?= icon('settings') ?> مدیریت این دوره</a><?php endif; ?>
         <?php if ($creditOn): ?>
             <div class="card credit-box">
                 <h3><?= icon('clock') ?> اعتبار زمانی</h3>
@@ -131,7 +171,7 @@ $creditBal = $creditOn ? App\Services\Credit::balance((int)auth()['id']) : 0;
                 <a class="small" href="<?= url('/me/credits') ?>"><?= icon('history') ?> تاریخچه اعتبار</a>
             </div>
         <?php endif; ?>
-        <?php if ($instructor): ?>
+        <?php if ($instructor && !App\Services\Scope::hiddenRoot((int)$instructor['id'])): ?>
             <div class="card"><h3><?= icon('user') ?> مدرس</h3><div class="person"><?= avatar_html($instructor, 'md') ?><div><div class="nm"><?= user_name_html($instructor) ?></div><div class="sub"><?= e($instructor['job_title'] ?? '') ?></div></div></div></div>
         <?php endif; ?>
         <?php if ($prereq): ?>
@@ -162,6 +202,5 @@ $creditBal = $creditOn ? App\Services\Credit::balance((int)auth()['id']) : 0;
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-        <?php if ($isStaff && can('courses.edit')): ?><a class="btn btn-outline w-100" href="<?= url('/admin/courses/' . $c['id']) ?>"><?= icon('settings') ?> مدیریت این دوره</a><?php endif; ?>
     </div>
 </div>

@@ -38,7 +38,7 @@ final class CourseController
         if (($q = Request::str('q')) !== '') { $w .= ' AND c.title LIKE ?'; $p[] = "%$q%"; }
         if (($s = Request::str('status')) && in_array($s, ['draft', 'published', 'archived'], true)) { $w .= ' AND c.status = ?'; $p[] = $s; }
         if ($cat = Request::int('category')) { $w .= ' AND c.category_id = ?'; $p[] = $cat; }
-        if (($seg = Request::str('segment')) && isset(\App\Core\Labels::SEGMENT[$seg])) { $w .= ' AND c.target_segment = ?'; $p[] = $seg; }
+        if (($seg = Request::str('segment')) && isset(\App\Core\Labels::SEGMENT[$seg])) { $w .= ' AND EXISTS (SELECT 1 FROM course_audience ca JOIN `groups` g ON g.id = ca.group_id WHERE ca.course_id = c.id AND g.segment = ?)'; $p[] = $seg; }
         $sc = Scope::courseSql('c.id');
         $w .= $sc['sql']; $p = array_merge($p, $sc['params']);
         $page = DB::paginate("SELECT c.*, cat.name AS category_name, cat.color AS category_color, cat.icon AS category_icon, u.first_name, u.last_name,
@@ -51,15 +51,43 @@ final class CourseController
 
     private function formData(?array $c = null): array
     {
+        $tree = self::groupTree();
+        $pos = array_flip(array_map(fn($g) => (int)$g['id'], $tree));
+        $levels = DB::all('SELECT l.id, l.name, l.group_id, l.rank_no, g.name AS group_name FROM levels l JOIN `groups` g ON g.id = l.group_id');
+        usort($levels, fn($x, $y) => [$pos[(int)$x['group_id']] ?? 9999, (int)$x['rank_no'], (int)$x['id']] <=> [$pos[(int)$y['group_id']] ?? 9999, (int)$y['rank_no'], (int)$y['id']]);
         return [
             'c' => $c,
             'cats' => DB::all('SELECT id, name, parent_id FROM categories ORDER BY sort, name'),
-            'groups' => DB::all('SELECT id, name FROM `groups` ORDER BY sort, name'),
-            'levels' => DB::all('SELECT l.id, CONCAT(g.name, \' — \', l.name) AS name FROM levels l JOIN `groups` g ON g.id = l.group_id ORDER BY g.sort, l.rank_no'),
+            'groups' => $tree,
+            'levels' => $levels,
+            'audience' => $c ? \App\Services\CourseAudience::groupIds((int)$c['id']) : [],
+            'courseLevels' => $c ? \App\Services\CourseAudience::levelIds((int)$c['id']) : [],
             'instructors' => DB::all("SELECT DISTINCT u.id, u.first_name, u.last_name FROM users u JOIN user_roles ur ON ur.user_id = u.id JOIN roles r ON r.id = ur.role_id WHERE u.deleted_at IS NULL AND r.is_learner = 0 ORDER BY u.last_name"),
             'allCourses' => DB::all('SELECT id, title FROM courses WHERE deleted_at IS NULL' . ($c ? ' AND id <> ' . (int)$c['id'] : '') . ' ORDER BY title'),
             'prereqs' => $c ? array_map('intval', DB::column('SELECT prerequisite_id FROM course_prerequisites WHERE course_id = ?', [(int)$c['id']])) : [],
         ];
+    }
+
+    /** Groups as a tree (main groups first, sub-groups under their parent) with depth and parent id */
+    private static function groupTree(): array
+    {
+        $all = DB::all('SELECT id, parent_id, name, is_system FROM `groups` ORDER BY is_system DESC, sort, name');
+        $kids = [];
+        foreach ($all as $g) $kids[(int)($g['parent_id'] ?? 0)][] = $g;
+        $ids = array_map(fn($g) => (int)$g['id'], $all);
+        $out = [];
+        $walk = function (int $pid, int $depth) use (&$walk, &$kids, &$out) {
+            foreach ($kids[$pid] ?? [] as $g) { $g['depth'] = $depth; $out[] = $g; if ($depth < 10) $walk((int)$g['id'], $depth + 1); }
+        };
+        $walk(0, 0);
+        // orphans (parent missing) as roots
+        foreach ($all as $g) if ($g['parent_id'] && !in_array((int)$g['parent_id'], $ids, true)) { $g['depth'] = 0; $out[] = $g; $walk((int)$g['id'], 1); }
+        return $out;
+    }
+
+    private function saveAudience(int $id): void
+    {
+        \App\Services\CourseAudience::save($id, Request::ints('audience'), Request::ints('levels'));
     }
 
     public function create(): string
@@ -73,12 +101,10 @@ final class CourseController
             'title' => 'required|max:200', 'summary' => 'max:500', 'code' => 'max:50', 'training_type' => 'required|in:mandatory,optional,supplementary,suggested',
             'pass_score' => 'numeric', 'duration_minutes' => 'int', 'certificate_validity_months' => 'int', 'publish_at' => 'date', 'expire_at' => 'date',
         ], ['title' => 'عنوان', 'summary' => 'خلاصه', 'training_type' => 'نوع آموزش', 'pass_score' => 'نمره قبولی', 'publish_at' => 'تاریخ انتشار', 'expire_at' => 'تاریخ انقضا']);
-        $seg = Request::str('target_segment');
         $row = [
             'title' => $d['title'], 'code' => $d['code'] ?? null, 'summary' => $d['summary'] ?? null,
             'description' => self::richText($_POST['description'] ?? ''), 'syllabus' => self::richText($_POST['syllabus'] ?? ''),
-            'category_id' => Request::intOrNull('category_id'), 'target_segment' => in_array($seg, ['merchant', 'employee', 'agent'], true) ? $seg : null,
-            'group_id' => Request::intOrNull('group_id'), 'level_id' => Request::intOrNull('level_id'), 'instructor_id' => Request::intOrNull('instructor_id'),
+            'category_id' => Request::intOrNull('category_id'), 'instructor_id' => Request::intOrNull('instructor_id'),
             'training_type' => $d['training_type'], 'is_sequential' => Request::bool('is_sequential') ? 1 : 0, 'self_enroll' => Request::bool('self_enroll') ? 1 : 0,
             'duration_minutes' => Request::intOrNull('duration_minutes'), 'pass_score' => max(0, min(100, (float)($d['pass_score'] ?? 80))),
             'has_certificate' => Request::bool('has_certificate') ? 1 : 0, 'certificate_validity_months' => Request::intOrNull('certificate_validity_months'),
@@ -106,6 +132,7 @@ final class CourseController
         $row += ['status' => 'draft', 'created_by' => Auth::id(), 'created_at' => now()];
         $id = DB::insert('courses', $row);
         $this->savePrereqs($id);
+        $this->saveAudience($id);
         Audit::log('courses.create', 'course', $id, 'success', ['title' => $row['title']]);
         flash('success', 'دوره ایجاد شد. اکنون درس‌ها را اضافه کنید.');
         redirect('/admin/courses/' . $id);
@@ -151,6 +178,7 @@ final class CourseController
         DB::update('courses', $row, 'id = ?', [$id]);
         self::syncDuration($id);
         $this->savePrereqs($id);
+        $this->saveAudience($id);
         Enrollment::recalcCourse($id);
         Audit::log('courses.update', 'course', $id);
         flash('success', 'دوره ذخیره شد.');
@@ -166,11 +194,8 @@ final class CourseController
         if ($to === 'published' && !$c['published_at']) $upd['published_at'] = now();
         DB::update('courses', $upd, 'id = ?', [$id]);
         if ($to === 'published' && $c['status'] !== 'published' && Request::bool('notify')) {
-            $w = "status = 'active' AND deleted_at IS NULL";
-            $p = [];
-            if ($c['target_segment']) { $w .= ' AND segment = ?'; $p[] = $c['target_segment']; }
-            if ($c['group_id']) { $w .= ' AND id IN (SELECT user_id FROM group_members WHERE group_id = ?)'; $p[] = (int)$c['group_id']; }
-            $ids = DB::column("SELECT id FROM users WHERE $w", $p);
+            [$aw, $p] = \App\Services\CourseAudience::usersSql($id, 'u');
+            $ids = DB::column("SELECT u.id FROM users u WHERE u.status = 'active' AND u.deleted_at IS NULL AND $aw", $p);
             Notify::send($ids, 'course', 'دوره جدید: ' . $c['title'], (string)$c['summary'], url('/learn/course/' . $id), 'course-new-' . $id);
         }
         Audit::log('courses.publish', 'course', $id, 'success', ['status' => $to]);
@@ -400,7 +425,7 @@ final class CourseController
     private function exerciseRow(): array
     {
         $d = Validator::validate(['title' => 'required|max:200', 'max_score' => 'numeric', 'pass_score' => 'numeric'], ['title' => 'عنوان تمرین']);
-        $formats = array_values(array_intersect(Request::arr('formats'), ['text', 'file', 'image', 'video']));
+        $formats = array_values(array_intersect(Request::arr('formats'), ['text', 'audio', 'file', 'image', 'video']));
         return [
             'title' => $d['title'], 'instructions' => self::richText($_POST['instructions'] ?? ''), 'formats' => implode(',', $formats ?: ['text']),
             'max_score' => (float)($d['max_score'] ?? 100), 'pass_score' => (float)($d['pass_score'] ?? 80), 'is_required' => Request::bool('is_required') ? 1 : 0,
@@ -427,9 +452,21 @@ final class CourseController
         $this->exerciseRedirect($id);
     }
 
+    public function exerciseEdit(int $id): string
+    {
+        $x = DB::one('SELECT * FROM exercises WHERE id = ? AND deleted_at IS NULL', [$id]) ?? throw new HttpException(404);
+        if (!can_edit_exercise($x)) throw new HttpException(403);
+        $c = $this->load((int)$x['course_id']);
+        $lessons = DB::all('SELECT id, title FROM lessons WHERE course_id = ? AND deleted_at IS NULL ORDER BY sort, id', [(int)$c['id']]);
+        $subs = DB::one("SELECT COUNT(*) n, SUM(status = 'submitted') pending, SUM(status = 'accepted') accepted FROM exercise_submissions WHERE exercise_id = ?", [$id]);
+        $fromLesson = Request::int('from_lesson');
+        return view('admin/courses/exercise_edit', ['title' => 'ویرایش تمرین', 'x' => $x, 'c' => $c, 'lessons' => $lessons, 'subs' => $subs, 'fromLesson' => $fromLesson]);
+    }
+
     public function exerciseUpdate(int $id): never
     {
         $x = DB::find('exercises', $id) ?? throw new HttpException(404);
+        if (!can_edit_exercise($x)) throw new HttpException(403);
         $this->load((int)$x['course_id']);
         DB::update('exercises', $this->exerciseRow(), 'id = ?', [$id]);
         Enrollment::recalcCourse((int)$x['course_id']);

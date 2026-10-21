@@ -26,22 +26,25 @@ final class Recommend
             foreach (TraderGrowth::stages() as $st) if ($st['no'] <= $stageNo) $ids[] = (int)$st['id'];
             if ($ids) $stageCourses = array_map('intval', DB::column("SELECT ref_id FROM tg_items WHERE kind = 'course' AND stage_id IN (" . DB::in($ids) . ') AND (track_id IS NULL OR track_id = ?)', array_merge($ids, [(int)($user['tg_track_id'] ?? 0)])));
         }
+        [$aw, $ap] = CourseAudience::sqlForUser($user, 'c');
+        $aud = DB::pairs('SELECT course_id, GROUP_CONCAT(group_id) FROM course_audience GROUP BY course_id');
+        $clv = DB::pairs('SELECT course_id, GROUP_CONCAT(level_id) FROM course_levels GROUP BY course_id');
         $candidates = DB::all(
             "SELECT c.*, cat.name AS category_name, cat.color AS category_color, cat.icon AS category_icon,
                     (SELECT COUNT(*) FROM enrollments x WHERE x.course_id = c.id) AS popularity
                FROM courses c LEFT JOIN categories cat ON cat.id = c.category_id
               WHERE c.status = 'published' AND c.deleted_at IS NULL AND (c.publish_at IS NULL OR c.publish_at <= NOW()) AND (c.expire_at IS NULL OR c.expire_at > NOW())
-                AND (c.target_segment IS NULL OR c.target_segment = ?)
+                AND " . $aw . "
                 AND NOT EXISTS (SELECT 1 FROM enrollments e WHERE e.user_id = ? AND e.course_id = c.id)
               LIMIT 300",
-            [$user['segment'], $uid]
+            array_merge($ap, [$uid])
         );
         foreach ($candidates as &$c) {
             $s = 0; $why = [];
             if (in_array((int)$c['id'], $stageCourses, true)) { $s += 60; $why[] = 'لازمه مرحله فعلی نظام رشد شما'; }
             if ($c['category_id'] && in_array((int)$c['category_id'], $needCats, true)) { $s += 50; $why[] = 'مطابق نیاز آموزشی ثبت‌شده'; }
-            if ($c['group_id'] && in_array((int)$c['group_id'], $groups, true)) { $s += 30; $why[] = 'ویژه گروه شما'; }
-            if ($c['level_id'] && in_array((int)$c['level_id'], $levels, true)) { $s += 25; $why[] = 'متناسب با سطح شما'; }
+            if (array_intersect(array_map('intval', explode(',', (string)($aud[$c['id']] ?? ''))), $groups)) { $s += 30; $why[] = 'ویژه گروه شما'; }
+            if (array_intersect(array_map('intval', explode(',', (string)($clv[$c['id']] ?? ''))), $levels)) { $s += 25; $why[] = 'متناسب با سطح شما'; }
             if ($c['target_segment'] === $user['segment']) { $s += 15; if (!$why) $why[] = 'مخصوص ' . label('segment_one', $user['segment']) . '‌ها'; }
             if ($c['category_id'] && in_array((int)$c['category_id'], $histCats, true)) { $s += 10; $why[] = 'ادامه مسیر یادگیری شما'; }
             if ($c['training_type'] === 'suggested') $s += 5;

@@ -54,7 +54,6 @@ final class InstallController
                     'DB_HOST' => $data['db_host'], 'DB_PORT' => $data['db_port'], 'DB_DATABASE' => $data['db_name'],
                     'DB_USERNAME' => $data['db_user'], 'DB_PASSWORD' => (string)($_POST['db_pass'] ?? ''),
                     'SESSION_NAME' => 'aradedu_sid', 'SESSION_LIFETIME' => '120', 'TRUSTED_PROXIES' => '',
-                    'SSO_CLIENT_ID' => '', 'SSO_CLIENT_SECRET' => '', 'SSO_SHARED_SECRET' => '', 'MY_API_KEY' => '',
                     'UPDATE_PUBLIC_KEY' => '', 'CRON_KEY' => bin2hex(random_bytes(16)),
                 ];
                 if (!Env::write(BASE_PATH . '/.env', $env)) {
