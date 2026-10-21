@@ -175,7 +175,7 @@ final class AuthService
         }
         $this->db->exec('UPDATE users SET password_hash = ?, updated_at = NOW(3) WHERE id = ?', [Password::hash($new), $userId]);
         // Sign out every other device.
-        $this->db->exec('DELETE FROM sessions WHERE user_id = ?', [$userId]);
+        \App\Core\Container::instance()->get(\App\Core\Session\SessionStore::class)->revokeUser((int) $userId);
         return null;
     }
 

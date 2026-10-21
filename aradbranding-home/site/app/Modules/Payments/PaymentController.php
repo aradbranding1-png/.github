@@ -43,10 +43,10 @@ final class PaymentController extends Controller
         ]);
     }
 
-    /** GET /payments/test — simulated gateway page (PAYMENT_TEST_GATEWAY=true only). */
+    /** GET /payments/test — simulated gateway page (never in production, see TestGateway::enabled()). */
     public function testGateway(Request $request): Response
     {
-        if (!Env::get('PAYMENT_TEST_GATEWAY', false)) {
+        if (!\App\Modules\Payments\Gateways\TestGateway::enabled()) {
             throw new HttpException(404);
         }
         $cb = (string) $request->query('cb', '');

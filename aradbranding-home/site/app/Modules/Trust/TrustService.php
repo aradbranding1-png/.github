@@ -195,7 +195,7 @@ final class TrustService
         );
         $c = \App\Core\Container::instance();
         if ($off) {
-            $this->db->exec('DELETE FROM sessions WHERE user_id = ?', [$id]);
+            \App\Core\Container::instance()->get(\App\Core\Session\SessionStore::class)->revokeUser((int) $id);
             $this->db->exec('DELETE f FROM proposal_feed f WHERE f.user_id = ?', [$id]);
             // Personal API keys stop working with the account; they are not revoked, so a lifted suspension restores them.
         }

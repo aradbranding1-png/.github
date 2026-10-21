@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Allow: /p/
+Disallow: /install
+Disallow: /health
+Disallow: /ops/
+Disallow: /api/
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /account
+Disallow: /wallet
+Disallow: /letters
+Disallow: /payments
+Disallow: /proposals
+Disallow: /search
+Disallow: /discover
+Disallow: /__bypass/
+
+Sitemap: https://aradbranding.app/sitemap.xml

@@ -7,7 +7,7 @@ namespace App\Core\Auth;
 use App\Core\Db\Connection;
 use App\Core\Session\Session;
 
-/** Current user for this request. One primary-key read, memoised. */
+/** Current user for this request. One indexed read, memoised per request. */
 final class Auth
 {
     public const STATUS_ACTIVE = 1;
@@ -36,21 +36,28 @@ final class Auth
             $this->loaded = true;
             $id = $this->id();
             if ($id !== null) {
+                // Every lookup here is a primary-key or covering-index read (see migration
+                // 2026_10_17_000001_auth_query_indexes): the two badge counts walk only the
+                // *unread* index entries instead of every thread / announcement.
                 $this->user = $this->db->first(
                     'SELECT u.id, u.public_id, u.handle, u.first_name, u.last_name, u.email, u.phone_cc, u.phone,
                             u.country_id, u.language_id, u.avatar_path, u.status, u.created_at, u.last_active_at, u.business_verified_at,
                             c.code AS country_code, l.code AS language_code,
                             COALESCE(uc.unread_letters, 0) AS unread_letters,
                             COALESCE(uc.unread_notifications, 0) AS unread_notifications,
-                            (SELECT COUNT(*) FROM thread_participants tp WHERE tp.user_id = u.id AND tp.folder = 1 AND tp.thread_type = 1 AND tp.unread_count > 0) AS unread_private,
-                            (SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id ORDER BY r.id LIMIT 1) AS role_name,
-                            (SELECT r.slug FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id ORDER BY r.id LIMIT 1) AS role_slug,
-                            (SELECT p.trade_role FROM user_profiles p WHERE p.user_id = u.id) AS trade_role,
-                            (SELECT COUNT(*) FROM announcements a WHERE a.deleted_at IS NULL AND a.id > COALESCE(uc.last_announcement_id, 0)) AS unread_official
+                            (SELECT COUNT(*) FROM thread_participants tp
+                              WHERE tp.user_id = u.id AND tp.folder = 1 AND tp.thread_type = 1 AND tp.unread_count > 0) AS unread_private,
+                            r.name AS role_name,
+                            r.slug AS role_slug,
+                            p.trade_role,
+                            (SELECT COUNT(*) FROM announcements a
+                              WHERE a.deleted_at IS NULL AND a.id > COALESCE(uc.last_announcement_id, 0)) AS unread_official
                      FROM users u
                      JOIN countries c ON c.id = u.country_id
                      JOIN languages l ON l.id = u.language_id
                      LEFT JOIN user_counters uc ON uc.user_id = u.id
+                     LEFT JOIN user_profiles p ON p.user_id = u.id
+                     LEFT JOIN roles r ON r.id = (SELECT MIN(ur.role_id) FROM user_roles ur WHERE ur.user_id = u.id)
                      WHERE u.id = ? AND u.deleted_at IS NULL',
                     [$id]
                 );

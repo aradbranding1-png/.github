@@ -13,8 +13,8 @@ $schema = [
     'address' => ['@type' => 'PostalAddress', 'addressCountry' => $page['country_code']],
 ];
 if ($page['avatar_path']) { $schema['logo'] = $baseUrl . media($page['avatar_path']); }
-// The site name follows the page's language when the site speaks it (this part is cached publicly, so not the visitor's).
-$brandLang = isset(\App\Core\I18n\I18n::LOCALES[$page['lang_code']]) ? (string) $page['lang_code'] : 'fa';
+// The site name follows the page's language when the site speaks it, otherwise English (cached publicly, so not the visitor's).
+$brandLang = \App\Core\I18n\I18n::uiFor((string) $page['lang_code']);
 ?>
 <!doctype html>
 <html lang="<?= e($page['lang_code']) ?>" dir="<?= e($page['direction']) ?>">

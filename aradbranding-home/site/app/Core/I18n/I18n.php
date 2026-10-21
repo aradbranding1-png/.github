@@ -211,6 +211,31 @@ final class I18n
         self::$track = false;
     }
 
+    /**
+     * Run $fn with another interface locale, then restore the visitor's one (miss tracking included).
+     * Used by public business pages, whose buttons follow the page's language, not the visitor's.
+     * @template T
+     * @param callable(): T $fn
+     * @return T
+     */
+    public static function with(string $locale, callable $fn): mixed
+    {
+        $prev = [self::$locale, self::$track];
+        self::$locale = isset(self::LOCALES[$locale]) ? $locale : self::SOURCE;
+        self::$track = $prev[1] && self::$locale === $prev[0];
+        try {
+            return $fn();
+        } finally {
+            [self::$locale, self::$track] = $prev;
+        }
+    }
+
+    /** Interface locale for content written in $lang: itself when the site speaks it, otherwise English. */
+    public static function uiFor(string $lang): string
+    {
+        return isset(self::LOCALES[$lang]) ? $lang : 'en';
+    }
+
     public static function isSource(): bool
     {
         return self::$locale === self::SOURCE;

@@ -68,9 +68,29 @@ $container->singleton(Connection::class, static fn (Container $c) => new Connect
     $c->get(Logger::class)
 ));
 
-$container->singleton(Cache::class, static fn () => new Cache(
-    new FileStore(BASE_PATH . '/storage/cache'),
-    (string) $config->get('cache.prefix', 'sadt')
+$container->singleton(Cache::class, static function (Container $c) use ($config): Cache {
+    $store = null;
+    if ($config->get('cache.driver', 'file') === 'redis') {
+        try {
+            $store = new \App\Core\Cache\RedisStore(
+                \App\Core\Redis\RedisFactory::connect((int) $config->get('cache.redis_db', 1)),
+                \App\Core\Redis\RedisFactory::prefix() . 'c:'
+            );
+        } catch (\Throwable $e) {
+            // Keep the site up on the file cache; the health check reports the problem.
+            $c->get(Logger::class)->error('Redis cache unavailable, falling back to file cache', ['error' => $e->getMessage()]);
+        }
+    }
+    return new Cache(
+        $store ?? new FileStore(BASE_PATH . '/storage/cache'),
+        (string) $config->get('cache.prefix', 'sadt')
+    );
+});
+
+$container->singleton(\App\Core\Session\SessionStore::class, static fn (Container $c) => new \App\Core\Session\SessionStore(
+    $c->get(Connection::class),
+    $c->get(Logger::class),
+    (int) $config->get('security.session_lifetime', 1_209_600)
 ));
 
 $container->singleton(RateLimiter::class, static fn (Container $c) => new RateLimiter(

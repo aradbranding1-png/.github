@@ -1,0 +1,10 @@
+/.env
+/vendor/
+/storage/cache/*
+/storage/logs/*
+/storage/private/*
+/storage/framework/*
+/storage/installed.lock
+/storage/install.key
+/backups/*
+!.gitkeep

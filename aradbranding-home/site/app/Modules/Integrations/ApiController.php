@@ -135,7 +135,7 @@ final class ApiController extends Controller
         $password = self::tempPassword();
         $db = $this->c->get(Connection::class);
         $db->exec('UPDATE users SET password_hash = ?, failed_logins = 0, locked_until = NULL, updated_at = NOW(3) WHERE id = ?', [Password::hash($password), $user['id']]);
-        $db->exec('DELETE FROM sessions WHERE user_id = ?', [$user['id']]);
+        $this->c->get(\App\Core\Session\SessionStore::class)->revokeUser((int) $user['id']);
         $this->log($request, $client, 'users.credentials', 200, ['user' => $this->userOut($user, $cc, $national)], null, (int) $user['id']);
         $this->c->get(Audit::class)->log('api.credentials', null, 'user', (int) $user['id'], 'success', $request, ['client' => $client['name']]);
         return Response::json(['user' => $this->userOut($user, $cc, $national), 'credentials' => $this->credentialsOut($user, $cc, $national, $password)],

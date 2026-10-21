@@ -16,7 +16,7 @@ $countryName = $page['lang_code'] === 'fa' ? $page['country_fa'] : $page['countr
     <?php if ($page['company_name'] && $page['company_name'] !== $page['title']): ?><p class="pub-title"><?= e($page['title']) ?></p><?php endif; ?>
     <div class="pub-meta">
       <span class="chip"><span class="flag" aria-hidden="true"><?= flag($page['country_code']) ?></span><?= e($countryName) ?></span>
-      <?php if ($isOwner): ?><a class="chip chip-gold" href="/pages" lang="fa"><?= e($labels['edit']) ?></a><?php endif; ?>
+      <?php if ($isOwner): ?><a class="chip chip-gold" href="/pages"><?= e($labels['edit']) ?></a><?php endif; ?>
     </div>
     <?php if ($viewer && !$isOwner): ?>
       <div class="form-actions pub-cta" <?= \App\Core\I18n\I18n::langAttrs() ?>>

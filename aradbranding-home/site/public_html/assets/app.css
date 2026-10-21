@@ -1134,3 +1134,32 @@ html:not([lang="fa"]) input[type=file] { max-width: 100%; min-width: 0; }
 .verified-seal svg { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 3px 6px var(--petrol-glow, rgba(0, 0, 0, .3))); }
 .verified-seal .vs-bg { fill: var(--seal, var(--gold-2)); }
 .verified-seal .vs-tick { fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- System update page (compact: everything above the fold) ---------- */
+.su-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.su-title { margin: 0; font-size: 22px; }
+.su-version bdi { font-weight: 800; direction: ltr; }
+.su-panel { padding: 16px 18px; margin-bottom: 12px; }
+.su-form { display: grid; gap: 12px; }
+.su-row { display: grid; gap: 10px; align-items: start; }
+@media (min-width: 900px) {
+  .su-row { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto; }
+  .su-export .su-row { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto; align-items: center; }
+}
+.su-row .field { gap: 4px; }
+.su-go { min-height: 52px; padding: 0 26px; }
+.su-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.su-drop { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 14px; cursor: pointer; border: 2px dashed var(--line-strong); border-radius: 11px; background: var(--bg); transition: border-color .15s ease, background .15s ease; }
+.su-drop:hover, .field:has(.su-file:focus-visible) .su-drop { border-color: var(--gold); background: var(--gold-soft); }
+.su-drop-icon { font-size: 24px; color: var(--gold); line-height: 1; flex: none; }
+.su-drop-body { display: grid; min-width: 0; line-height: 1.5; }
+.su-drop-text { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.su-drop-hint { font-size: 12px; }
+.field.has-error .su-drop { border-color: var(--danger); }
+.su-field-pass .input { min-height: 52px; }
+.su-options { display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: center; padding: 10px 14px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); font-size: 14px; }
+.su-options .check input { margin-top: 0; }
+.su-options .check { align-items: center; }
+.su-note { margin: 0; font-size: 12.5px; line-height: 1.8; }
+.su-export-text { display: grid; gap: 2px; font-size: 14px; }
+.su-export-text .muted { font-size: 12.5px; }

@@ -150,6 +150,7 @@ return static function (Router $r): void {
         $r->post('/admin/letters/{uid:[0-9a-z]{26}}/delete', [\App\Modules\Admin\OfficialLetterController::class, 'destroy'], ['can:letters.official']);
         $r->get('/admin/system-update', [\App\Modules\Admin\SystemUpdateController::class, 'show'], ['can:updates.manage']);
         $r->post('/admin/system-update', [\App\Modules\Admin\SystemUpdateController::class, 'upload'], ['can:updates.manage']);
+        $r->post('/admin/system-update/export', [\App\Modules\Admin\SystemUpdateController::class, 'export'], ['can:updates.manage']);
         $r->get('/updates', [\App\Modules\Admin\ReleaseNotesController::class, 'index']);
         $r->post('/updates', [\App\Modules\Admin\ReleaseNotesController::class, 'store'], ['can:updates.manage']);
         $r->post('/updates/{id:\d+}/toggle', [\App\Modules\Admin\ReleaseNotesController::class, 'toggle'], ['can:updates.manage']);

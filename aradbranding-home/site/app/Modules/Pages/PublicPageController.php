@@ -66,7 +66,9 @@ final class PublicPageController extends Controller
             }
         }
 
-        $html = $this->c->get(View::class)->render('public/page', [
+        // Buttons and menus follow the page's language (e.g. an English page shows English buttons even for a
+        // Persian-speaking visitor); a language the interface does not speak falls back to English.
+        $html = \App\Core\I18n\I18n::with(\App\Core\I18n\I18n::uiFor((string) $model['lang_code']), fn () => $this->c->get(View::class)->render('public/page', [
             'page' => $model,
             'full' => $full,
             'unlock' => $unlock,
@@ -82,7 +84,7 @@ final class PublicPageController extends Controller
             'baseUrl' => rtrim((string) \App\Core\Env::get('APP_URL', ''), '/'),
             'flashes' => Session::flashes(),
             'buyEnabled' => (bool) $this->c->get(\App\Core\Settings\Settings::class)->get('payments.purchase_enabled', false),
-        ], 'layouts/public');
+        ], 'layouts/public'));
 
         $response = Response::html($html);
         if ($viewer === null && session_status() !== PHP_SESSION_ACTIVE) {
