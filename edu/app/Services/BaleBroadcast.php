@@ -98,7 +98,7 @@ final class BaleBroadcast
         DB::update('bale_messages', [
             'status' => $ok ? 'sent' : 'failed', 'attempts' => (int)$m['attempts'] + 1,
             'recipients' => $ok ? (int)($r['json']['recipients'] ?? 0) : $m['recipients'],
-            'error' => $ok ? null : mb_substr($r['error'] ?: ('HTTP ' . $r['status'] . ' ' . ($r['json']['error'] ?? '')), 0, 500),
+            'error' => $ok ? null : mb_substr(self::errorText($r, '/api/edu/bale/broadcast'), 0, 500),
             'sent_at' => $ok ? now() : $m['sent_at'],
         ], 'id = ?', [$id]);
         if (!$ok) Logger::warning('bale broadcast ' . $m['ref'] . ' failed: ' . ($r['error'] ?: $r['status']));
@@ -109,7 +109,20 @@ final class BaleBroadcast
     public static function recipients(string $segment = 'merchant'): array
     {
         $r = self::request('GET', '/api/edu/bale/recipients?segment=' . urlencode($segment));
-        return !empty($r['json']['ok']) ? ['ok' => true, 'count' => (int)($r['json']['count'] ?? 0)] : ['ok' => false, 'error' => $r['error'] ?: ('HTTP ' . $r['status'] . ' ' . ($r['json']['error'] ?? ''))];
+        return !empty($r['json']['ok']) ? ['ok' => true, 'count' => (int)($r['json']['count'] ?? 0)] : ['ok' => false, 'error' => self::errorText($r, '/api/edu/bale/recipients')];
+    }
+
+    /** Human-readable reason a call to «my» failed (see docs/BALE-API.md) */
+    private static function errorText(array $r, string $path): string
+    {
+        if ($r['error'] !== '') return $r['error'];
+        $msg = isset($r['json']['error']) ? ' — ' . $r['json']['error'] : '';
+        return match (true) {
+            $r['status'] === 404 => 'HTTP 404: مسیر ' . $path . ' روی ' . self::base() . ' پیدا نشد. این سرویس باید در سامانه my پیاده‌سازی شود (مشخصات: docs/BALE-API.md) یا آدرس پایه API اشتباه است.' . $msg,
+            in_array($r['status'], [401, 403], true) => 'HTTP ' . $r['status'] . ': توکن API توسط my پذیرفته نشد.' . $msg,
+            $r['status'] >= 200 && $r['status'] < 300 && $r['json'] === null => 'HTTP ' . $r['status'] . ': پاسخ my در قالب JSON نیست.',
+            default => 'HTTP ' . $r['status'] . $msg,
+        };
     }
 
     /** @return array{status:int,json:?array,error:string} */
