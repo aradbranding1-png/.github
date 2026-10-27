@@ -66,7 +66,7 @@ $phases = ['upcoming' => ['پیش رو', 'info'], 'live' => ['در حال برگ
             <?php elseif ($e['join_url']): ?><div class="small ltr faint"><?= e($e['join_url']) ?></div><?php endif; ?>
         </div>
         <div class="eva-foot">
-            <?php if (can('events.edit')): ?>
+            <?php if (can('events.toggle')): ?>
                 <form method="post" action="<?= url('/admin/event/' . $e['id'] . '/toggle') ?>"<?= $on ? ' data-confirm="«' . e($e['title']) . '» متوقف شود؟ دیگر در پیشخوان و فهرست مخاطبان نمایش داده نمی‌شود."' : '' ?>><?= csrf_field() ?>
                     <input type="hidden" name="to" value="<?= $on ? 'inactive' : 'active' ?>">
                     <?php if ($on): ?><button class="btn btn-sm eva-stop"><?= icon('circle-pause') ?> توقف</button>

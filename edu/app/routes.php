@@ -212,7 +212,7 @@ return function (Router $r): void {
     $r->get('/admin/event/{id}/edit', [Admin\EventController::class, 'edit'], ['perm' => 'events.edit']);
     $r->post('/admin/event/{id}', [Admin\EventController::class, 'update'], ['perm' => 'events.edit']);
     $r->post('/admin/event/{id}/link', [Admin\EventController::class, 'link'], ['perm' => 'events.edit']);
-    $r->post('/admin/event/{id}/toggle', [Admin\EventController::class, 'toggle'], ['perm' => 'events.edit']);
+    $r->post('/admin/event/{id}/toggle', [Admin\EventController::class, 'toggle'], ['perm' => 'events.toggle']);
     $r->post('/admin/event/{id}/delete', [Admin\EventController::class, 'destroy'], ['perm' => 'events.delete']);
     $r->get('/admin/event/{id}/registrations', [Admin\EventController::class, 'registrations'], ['perm' => 'events.report']);
     $r->post('/admin/event/{id}/registrations/{rid}/cancel', [Admin\EventController::class, 'cancelRegistration'], ['perm' => 'events.edit']);

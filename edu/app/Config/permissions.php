@@ -21,6 +21,7 @@ return [
         'run' => 'اجرا',
         'restore' => 'بازیابی',
         'download' => 'دانلود',
+        'toggle' => 'توقف / فعال‌سازی',
     ],
 
     'sections' => [
@@ -63,7 +64,7 @@ return [
         'evaluations'   => ['label' => 'ارزیابی عملی', 'section' => 'assessment', 'actions' => ['view', 'create', 'delete']],
         'certificates'  => ['label' => 'گواهی‌ها', 'section' => 'assessment', 'actions' => ['view', 'create', 'delete', 'export']],
 
-        'events'        => ['label' => 'جلسات آنلاین (وبینار، کارگاه، میتینگ)', 'section' => 'sessions', 'actions' => ['view', 'create', 'edit', 'delete', 'report']],
+        'events'        => ['label' => 'جلسات آنلاین (وبینار، کارگاه، میتینگ)', 'section' => 'sessions', 'actions' => ['view', 'toggle', 'create', 'edit', 'delete', 'report']],
 
         'assignments'   => ['label' => 'تخصیص آموزش', 'section' => 'growth', 'actions' => ['view', 'assign', 'delete']],
         'rules'         => ['label' => 'قوانین تخصیص خودکار', 'section' => 'growth', 'actions' => ['view', 'create', 'edit', 'delete', 'run']],
