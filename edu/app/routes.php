@@ -36,6 +36,8 @@ return function (Router $r): void {
     $r->get('/avatar/{id}', [FileController::class, 'avatar']);
     $r->get('/file/{uuid}', [FileController::class, 'serve']);
     $r->get('/file/{uuid}/play', [FileController::class, 'play']);
+    // signed public link to an event / course cover (for the Bale bot, which cannot log in)
+    $r->get('/cover/{uuid}/{file}', [FileController::class, 'cover'], ['auth' => false]);
 
     // ------------------------------------------------------------ learner panel
     $r->get('/', [DashboardController::class, 'home']);

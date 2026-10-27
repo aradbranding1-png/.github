@@ -368,6 +368,24 @@ function file_url(mixed $fileId, bool $download = false): string
     return url('/file/' . $cache[$fileId], $download ? ['dl' => 1] : []);
 }
 
+/** Signature of a public cover link (see cover_url) */
+function cover_sig(string $uuid): string
+{
+    return substr(hash_hmac('sha256', 'cover|' . $uuid, (string)env('APP_KEY', '')), 0, 32);
+}
+
+/**
+ * Public, signed JPEG link to an event / course cover image — for services that cannot log in (Bale bot).
+ * Only images used as an event image/banner or a course cover are served through it.
+ */
+function cover_url(mixed $fileId): string
+{
+    $fileId = (int)$fileId;
+    if ($fileId <= 0 || (string)env('APP_KEY', '') === '') return '';
+    $uuid = (string)App\Core\DB::value("SELECT uuid FROM files WHERE id = ? AND kind = 'image' AND deleted_at IS NULL", [$fileId]);
+    return $uuid === '' ? '' : url('/cover/' . $uuid . '/' . cover_sig($uuid) . '.jpg');
+}
+
 /** Number of words in a text (Persian/English; ZWNJ joins parts of one word) */
 function word_count(?string $s): int
 {

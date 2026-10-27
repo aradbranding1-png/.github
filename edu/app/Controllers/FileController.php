@@ -39,6 +39,50 @@ final class FileController
             'canDownload' => (int)$f['downloadable'] === 1 || can('library.download') || $staff], 'layouts/bare');
     }
 
+    /** Signed public cover (event image / banner, course cover) as a JPEG of at most 1280px — used for Bale photos */
+    public function cover(string $uuid, string $file): void
+    {
+        if (!preg_match('/^[0-9a-f\-]{36}$/', $uuid) || !preg_match('/^([0-9a-f]{32})\.jpg$/', $file, $m) || !hash_equals(cover_sig($uuid), $m[1])) throw new HttpException(404);
+        $f = DB::one("SELECT * FROM files WHERE uuid = ? AND kind = 'image' AND deleted_at IS NULL", [$uuid]) ?? throw new HttpException(404);
+        $fid = (int)$f['id'];
+        $used = DB::value('SELECT 1 FROM events WHERE (image_file_id = ? OR banner_file_id = ?) AND deleted_at IS NULL LIMIT 1', [$fid, $fid])
+             || DB::value('SELECT 1 FROM courses WHERE image_file_id = ? AND deleted_at IS NULL LIMIT 1', [$fid]);
+        if (!$used) throw new HttpException(404);
+        $src = Upload::path($f);
+        if (!is_file($src)) throw new HttpException(404);
+        $out = self::jpegCopy($src, $uuid, 1280);
+        if (!$out) {
+            if (!in_array($f['mime'], ['image/jpeg', 'image/png'], true)) throw new HttpException(404);
+            $out = $src;
+        }
+        if (self::cacheHeaders('"' . $uuid . '-cover-' . filesize($out) . '"', (int)filemtime($out))) return;
+        self::stream($out, $out === $src ? (string)$f['mime'] : 'image/jpeg', 'cover.jpg', false);
+    }
+
+    /** JPEG copy no wider than $w (white behind transparency), cached in storage/cache/covers */
+    private static function jpegCopy(string $src, string $uuid, int $w): ?string
+    {
+        $dir = STORAGE_PATH . '/cache/covers';
+        $out = $dir . '/' . preg_replace('/[^0-9a-f-]/', '', $uuid) . '-' . $w . '.jpg';
+        if (is_file($out) && filemtime($out) >= filemtime($src)) return $out;
+        if (!function_exists('imagecreatefromstring') || !function_exists('imagejpeg') || filesize($src) > 25 * 1048576) return null;
+        $data = @file_get_contents($src);
+        $img = $data !== false ? @imagecreatefromstring($data) : false;
+        if (!$img) return null;
+        $ow = imagesx($img); $oh = imagesy($img);
+        if ($ow <= $w) { $nw = $ow; $nh = $oh; } else { $nw = $w; $nh = (int)round($oh * $w / $ow); }
+        $dst = imagecreatetruecolor($nw, $nh);
+        imagefill($dst, 0, 0, imagecolorallocate($dst, 255, 255, 255));
+        imagecopyresampled($dst, $img, 0, 0, 0, 0, $nw, $nh, $ow, $oh);
+        if (!is_dir($dir)) @mkdir($dir, 0750, true);
+        $tmp = $out . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        $ok = @imagejpeg($dst, $tmp, 85);
+        imagedestroy($img); imagedestroy($dst);
+        if (!$ok) { @unlink($tmp); return null; }
+        @rename($tmp, $out);
+        return is_file($out) ? $out : null;
+    }
+
     public function serve(string $uuid): void
     {
         if (!preg_match('/^[0-9a-f\-]{36}$/', $uuid)) throw new HttpException(404);

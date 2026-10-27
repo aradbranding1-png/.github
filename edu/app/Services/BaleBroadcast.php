@@ -152,6 +152,18 @@ final class BaleBroadcast
         return match ($m['ref_type']) { 'event' => url('/learn/event/' . $m['ref_id']), 'course' => url('/learn/course/' . $m['ref_id']), default => null };
     }
 
+    /** Public link to the cover of the announced webinar / meeting (card image, else story banner) or course, or null */
+    public static function photoFor(array $m): ?string
+    {
+        $fid = match ($m['ref_type']) {
+            'event' => DB::value('SELECT COALESCE(image_file_id, banner_file_id) FROM events WHERE id = ?', [(int)$m['ref_id']]),
+            'course' => DB::value('SELECT image_file_id FROM courses WHERE id = ?', [(int)$m['ref_id']]),
+            default => null,
+        };
+        $u = $fid ? cover_url($fid) : '';
+        return $u !== '' ? $u : null;
+    }
+
     /** Send one stored message through the «my» API */
     public static function deliver(int $id, ?string $link = null): bool
     {
@@ -159,6 +171,7 @@ final class BaleBroadcast
         if (!$m) return false;
         $body = ['ref' => $m['ref'], 'segment' => $m['segment'], 'text' => $m['text']];
         if ($link) $body['button'] = ['text' => $m['ref_type'] === 'course' ? 'مشاهده دوره' : 'مشاهده و ثبت‌نام', 'url' => $link];
+        if ($photo = self::photoFor($m)) $body['photo'] = $photo; // «my» sends it with sendPhoto, the text as its caption (docs/BALE-PHOTO-API.md)
         $r = self::request('POST', '/api/edu/bale/broadcast', $body);
         $ok = !empty($r['json']['ok']);
         DB::update('bale_messages', [
