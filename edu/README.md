@@ -21,7 +21,6 @@ LMS کامل برای **تاجران، کارمندان و نمایندگان** 
 | `docs/ARCHITECTURE.md` | معماری، ماژول‌ها، دیتابیس، جریان‌های آموزشی |
 | `docs/API.md` | REST API نسخه ۱ |
 | `docs/ARAD-CONTACT.md` | اتصال آراد کانتکت (ساخت حساب و شارژ خدمات) |
-| `docs/BALE-API.md` | سرویسی که my برای ارسال خبر به ربات بله باید داشته باشد |
 | `docs/UPDATE-BACKUP.md` | بروزرسانی، Migration، پشتیبان‌گیری و بازیابی |
 | `docs/SECURITY.md` | معماری امنیتی و گزارش Security Check |
 | `docs/TROUBLESHOOTING.md` | رفع اشکال |

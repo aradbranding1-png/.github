@@ -123,6 +123,7 @@ final class IntegrationController
 
     public function bale(): string
     {
+        \App\Services\BaleBroadcast::refreshOpen(8);
         $page = DB::paginate('SELECT * FROM bale_messages ORDER BY id DESC', [], 30);
         $upcoming = \App\Services\BaleBroadcast::pending(false, 30);
         $stats = DB::one("SELECT COUNT(*) n, COALESCE(SUM(status = 'sent'), 0) sent, COALESCE(SUM(status = 'failed'), 0) failed, COALESCE(SUM(recipients), 0) people FROM bale_messages") ?: [];
@@ -131,7 +132,7 @@ final class IntegrationController
 
     public function saveBale(): never
     {
-        $url = rtrim(trim(Request::str('api_url')), '/');
+        $url = \App\Services\BaleBroadcast::cleanBase(Request::str('api_url'));
         if ($url !== '' && (!filter_var($url, FILTER_VALIDATE_URL) || !str_starts_with($url, 'https://'))) { flash('danger', 'آدرس API باید با https:// شروع شود.'); redirect('/admin/integrations/bale'); }
         $set = [
             'bale_enabled' => Request::bool('enabled') ? '1' : '0',
@@ -139,6 +140,7 @@ final class IntegrationController
             'bale_delay_min' => (string)max(0, min(1440, Request::int('delay_min', 60))),
             'bale_events' => Request::bool('events') ? '1' : '0',
             'bale_courses' => Request::bool('courses') ? '1' : '0',
+            'bale_segment' => Request::str('segment') === 'all' ? 'all' : 'merchant',
         ];
         $tok = trim((string)($_POST['api_token'] ?? ''));
         if ($tok !== '') $set['bale_api_token'] = $tok;
@@ -154,7 +156,21 @@ final class IntegrationController
     public function baleTest(): never
     {
         $r = \App\Services\BaleBroadcast::recipients('merchant');
-        $r['ok'] ? flash('success', 'اتصال برقرار است. تاجران متصل به ربات بله: ' . fa($r['count']) . ' نفر.') : flash('danger', 'اتصال برقرار نشد: ' . $r['error']);
+        $a = $r['ok'] ? \App\Services\BaleBroadcast::recipients('all') : null;
+        $r['ok'] ? flash('success', 'اتصال برقرار است. تاجران متصل به ربات بله: ' . fa($r['count']) . ' نفر' . ($a && $a['ok'] ? ' — همه کاربران متصل: ' . fa($a['count']) . ' نفر.' : '.')) : flash('danger', 'اتصال برقرار نشد: ' . $r['error']);
+        redirect('/admin/integrations/bale');
+    }
+
+    /** Hand-written message to merchants or to every connected user */
+    public function baleSend(): never
+    {
+        $text = trim((string)($_POST['text'] ?? ''));
+        $seg = Request::str('segment') === 'all' ? 'all' : 'merchant';
+        if ($text === '' || mb_strlen($text) > 4096) { flash('danger', 'متن پیام الزامی است و حداکثر ۴۰۹۶ کاراکتر می‌تواند باشد.'); redirect('/admin/integrations/bale'); }
+        if (!\App\Services\BaleBroadcast::configured()) { flash('danger', 'ابتدا آدرس و توکن API را وارد کنید.'); redirect('/admin/integrations/bale'); }
+        [$ok, $id] = \App\Services\BaleBroadcast::sendManual($text, $seg);
+        Audit::log('bale.manual', 'settings', null, $ok ? 'success' : 'fail', ['id' => $id, 'segment' => $seg]);
+        $ok ? flash('success', 'پیام برای ' . \App\Services\BaleBroadcast::SEGMENTS[$seg] . ' در صف ارسال قرار گرفت.') : flash('danger', 'ارسال ناموفق بود؛ جزئیات خطا در سابقه ارسال‌ها آمده است.');
         redirect('/admin/integrations/bale');
     }
 
@@ -162,7 +178,32 @@ final class IntegrationController
     public function baleAction(): never
     {
         $act = Request::str('act'); $ref = Request::str('ref');
-        if (!preg_match('/^(event|course)-(\d+)$/', $ref, $m)) throw new HttpException(400);
+        if ($act === 'stop') {
+            [$ok, $why] = \App\Services\BaleBroadcast::cancel(Request::int('id'));
+            Audit::log('bale.stop', 'settings', null, $ok ? 'success' : 'fail', ['id' => Request::int('id'), 'why' => $why]);
+            $ok ? flash('success', 'ارسال متوقف شد؛ به باقی‌ماندگان پیام نمی‌رسد.') : flash('danger', 'توقف انجام نشد: ' . $why);
+            redirect('/admin/integrations/bale');
+        }
+        if ($act === 'resend') {
+            // «my» ignores a repeated ref, so a message nobody received is sent again under a new ref
+            $old = DB::one('SELECT * FROM bale_messages WHERE id = ?', [Request::int('id')]) ?? throw new HttpException(404);
+            if ($old['status'] !== 'sent' || (int)$old['finished'] !== 1 || (int)($old['sent_count'] ?? 0) > 0) { flash('danger', 'ارسال مجدد فقط برای پیامی ممکن است که تحویلش تمام شده و برای هیچ‌کس نرسیده باشد.'); redirect('/admin/integrations/bale'); }
+            if (!\App\Services\BaleBroadcast::configured()) { flash('danger', 'ابتدا آدرس و توکن API را وارد کنید.'); redirect('/admin/integrations/bale'); }
+            $base = preg_replace('/-r\d+$/', '', (string)$old['ref']);
+            $n = 1 + (int)DB::value('SELECT COUNT(*) FROM bale_messages WHERE ref LIKE ?', [$base . '-r%']);
+            $nid = DB::insert('bale_messages', ['ref' => $base . '-r' . $n, 'ref_type' => $old['ref_type'], 'ref_id' => $old['ref_id'], 'title' => $old['title'], 'segment' => $old['segment'], 'text' => $old['text'], 'status' => 'sending', 'created_by' => \App\Core\Auth::id(), 'created_at' => now()]);
+            $ok = \App\Services\BaleBroadcast::deliver($nid, \App\Services\BaleBroadcast::linkFor(DB::one('SELECT * FROM bale_messages WHERE id = ?', [$nid]) ?? []));
+            Audit::log('bale.resend', 'settings', null, $ok ? 'success' : 'fail', ['from' => (int)$old['id'], 'ref' => $base . '-r' . $n]);
+            $ok ? flash('success', 'پیام دوباره در صف ارسال قرار گرفت. وضعیت تحویل را چند دقیقه بعد در همین فهرست ببینید.') : flash('danger', 'ارسال ناموفق بود؛ جزئیات خطا در فهرست آمده است.');
+            redirect('/admin/integrations/bale');
+        }
+        if (!preg_match('/^(event|course)-(\d+)$/', $ref, $m)) {
+            // manual messages can only be retried
+            $man = $act === 'retry' && str_starts_with($ref, 'manual-') ? DB::one("SELECT * FROM bale_messages WHERE ref = ? AND status <> 'sent'", [$ref]) : null;
+            if (!$man) throw new HttpException(400);
+            \App\Services\BaleBroadcast::deliver((int)$man['id'], null) ? flash('success', 'پیام ارسال شد.') : flash('danger', 'ارسال ناموفق بود.');
+            redirect('/admin/integrations/bale');
+        }
         $row = DB::one('SELECT * FROM bale_messages WHERE ref = ?', [$ref]);
         if ($act === 'skip' && !$row) {
             DB::insert('bale_messages', ['ref' => $ref, 'ref_type' => $m[1], 'ref_id' => (int)$m[2], 'title' => mb_substr(Request::str('title'), 0, 250), 'status' => 'skipped', 'created_by' => \App\Core\Auth::id(), 'created_at' => now()]);
@@ -172,8 +213,10 @@ final class IntegrationController
             if (!$row) {
                 $src = $m[1] === 'event' ? DB::one('SELECT * FROM events WHERE id = ? AND deleted_at IS NULL', [(int)$m[2]]) : DB::one('SELECT * FROM courses WHERE id = ? AND deleted_at IS NULL', [(int)$m[2]]);
                 if (!$src) throw new HttpException(404);
+                $seg = \App\Services\BaleBroadcast::itemSegment($m[1], $src);
+                if ($seg === null) { flash('danger', 'این مورد برای کارمندان/نمایندگان یا گروه دیگری است و برای تاجران ارسال نمی‌شود.'); redirect('/admin/integrations/bale'); }
                 $text = $m[1] === 'event' ? \App\Services\BaleBroadcast::eventText($src) : \App\Services\BaleBroadcast::courseText($src);
-                $id = DB::insert('bale_messages', ['ref' => $ref, 'ref_type' => $m[1], 'ref_id' => (int)$m[2], 'title' => mb_substr(Request::str('title') ?: $src['title'], 0, 250), 'text' => $text, 'status' => 'sending', 'created_by' => \App\Core\Auth::id(), 'created_at' => now()]);
+                $id = DB::insert('bale_messages', ['ref' => $ref, 'ref_type' => $m[1], 'ref_id' => (int)$m[2], 'title' => mb_substr(Request::str('title') ?: $src['title'], 0, 250), 'segment' => $seg, 'text' => $text, 'status' => 'sending', 'created_by' => \App\Core\Auth::id(), 'created_at' => now()]);
             } else $id = (int)$row['id'];
             $ok = \App\Services\BaleBroadcast::deliver($id, url($m[1] === 'event' ? '/learn/event/' . $m[2] : '/learn/course/' . $m[2]));
             $ok ? flash('success', 'پیام به ربات بله ارسال شد.') : flash('danger', 'ارسال ناموفق بود؛ جزئیات خطا در فهرست پایین آمده است.');

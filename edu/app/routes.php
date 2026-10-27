@@ -344,6 +344,7 @@ return function (Router $r): void {
     $r->get('/admin/integrations/bale', [Admin\IntegrationController::class, 'bale'], ['perm' => 'settings.view']);
     $r->post('/admin/integrations/bale', [Admin\IntegrationController::class, 'saveBale'], ['perm' => 'settings.edit']);
     $r->post('/admin/integrations/bale/test', [Admin\IntegrationController::class, 'baleTest'], ['perm' => 'settings.edit']);
+    $r->post('/admin/integrations/bale/send', [Admin\IntegrationController::class, 'baleSend'], ['perm' => 'settings.edit']);
     $r->post('/admin/integrations/bale/action', [Admin\IntegrationController::class, 'baleAction'], ['perm' => 'settings.edit']);
     $r->get('/admin/integrations/arad-contact', [Admin\IntegrationController::class, 'aradContact'], ['perm' => 'settings.view']);
     $r->post('/admin/integrations/arad-contact', [Admin\IntegrationController::class, 'saveAradContact'], ['perm' => 'settings.edit']);

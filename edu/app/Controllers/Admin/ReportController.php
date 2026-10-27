@@ -109,10 +109,10 @@ final class ReportController
         $ca = Scope::courseAudienceSql('c'); $sc = ['sql' => $sc['sql'] . $ca['sql'], 'params' => array_merge($sc['params'], $ca['params'])];
         $su = Scope::userSql('e.user_id');
         $rows = DB::all("SELECT c.id, c.title, c.status, c.training_type, COUNT(e.id) n, SUM(e.status = 'completed') done, SUM(e.status IN ('in_progress','needs_retake')) active,
-                                SUM(e.status = 'not_started') ns, SUM(e.status IN ('expired','failed')) bad, AVG(e.progress_pct) prog, AVG(e.score) score
-                           FROM courses c LEFT JOIN enrollments e ON e.course_id = c.id" . ($su['sql'] ? ' ' . $su['sql'] : '') . "
+                                SUM(e.status = 'not_started') ns, SUM(e.status IN ('expired','failed')) bad, SUM(e.status NOT IN ('completed','in_progress','needs_retake','not_started','expired','failed')) other, AVG(e.progress_pct) prog, AVG(e.score) score
+                           FROM courses c LEFT JOIN enrollments e ON e.course_id = c.id AND e.user_id IN (SELECT ud.id FROM users ud WHERE ud.deleted_at IS NULL)" . ($su['sql'] ? ' ' . $su['sql'] : '') . "
                           WHERE c.deleted_at IS NULL" . $sc['sql'] . ' GROUP BY c.id, c.title, c.status, c.training_type ORDER BY n DESC', array_merge($su['params'], $sc['params']));
-        if ($this->exporting()) Xlsx::download('courses-report', ['دوره', 'وضعیت', 'نوع', 'فراگیر', 'تکمیل', 'در جریان', 'شروع‌نشده', 'منقضی/مردود', 'میانگین پیشرفت', 'میانگین نمره'], array_map(fn($r) => [$r['title'], label('status', $r['status']), label('training_type', $r['training_type']), (int)$r['n'], (int)$r['done'], (int)$r['active'], (int)$r['ns'], (int)$r['bad'], round((float)$r['prog'], 1), $r['score'] !== null ? round((float)$r['score'], 1) : ''], $rows), 'دوره‌ها');
+        if ($this->exporting()) Xlsx::download('courses-report', ['دوره', 'وضعیت', 'نوع', 'فراگیر', 'تکمیل', 'در جریان', 'شروع‌نشده', 'منقضی/مردود', 'قفل‌شده/سایر', 'میانگین پیشرفت', 'میانگین نمره'], array_map(fn($r) => [$r['title'], label('status', $r['status']), label('training_type', $r['training_type']), (int)$r['n'], (int)$r['done'], (int)$r['active'], (int)$r['ns'], (int)$r['bad'], (int)$r['other'], round((float)$r['prog'], 1), $r['score'] !== null ? round((float)$r['score'], 1) : ''], $rows), 'دوره‌ها');
         return view('admin/reports/courses', ['title' => 'گزارش دوره‌ها', 'rows' => $rows]);
     }
 
