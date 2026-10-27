@@ -82,6 +82,21 @@ final class BaleBroadcast
         return $open;
     }
 
+    /**
+     * When an event is announced: `bale_delay_min` after it was published, but never after the session has started —
+     * if the delay would end within 30 minutes of the start, it goes out 30 minutes before the start (at least 10 minutes after publishing).
+     */
+    public static function eventDueAt(array $e): string
+    {
+        $pub = strtotime((string)($e['published_at'] ?: $e['created_at']));
+        $due = $pub + self::delayMin() * 60;
+        if (!empty($e['starts_at'])) {
+            $cap = strtotime((string)$e['starts_at']) - 1800;
+            if ($cap < $due) $due = max($cap, $pub + min(self::delayMin(), 10) * 60);
+        }
+        return date('Y-m-d H:i:s', $due);
+    }
+
     /** Items that are due or will be due soon and have no message yet: [['ref','type','id','title','due_at','row'], …] */
     public static function pending(bool $onlyDue = true, int $limit = 50): array
     {
@@ -90,11 +105,18 @@ final class BaleBroadcast
         $cut = date('Y-m-d H:i:s', time() - self::delayMin() * 60);
         $out = [];
         if (setting('bale_events', '1') === '1') {
+            // counted from the (last) publish time; items published before the bot was turned on are only offered for manual sending
             $types = "'" . implode("','", self::EVENT_TYPES) . "'";
-            foreach (DB::all("SELECT e.* FROM events e WHERE e.type IN ($types) AND " . EventService::liveSql() . " AND e.created_at >= ?" . ($onlyDue ? ' AND e.created_at <= ?' : '') . "
-                                AND NOT EXISTS (SELECT 1 FROM bale_messages b WHERE b.ref = CONCAT('event-', e.id)) ORDER BY e.created_at LIMIT $limit", $onlyDue ? [$since, $cut] : [$since]) as $e)
-                { if (self::itemSegment('event', $e) === null) continue;
-                $out[] = ['ref' => 'event-' . $e['id'], 'type' => 'event', 'id' => (int)$e['id'], 'title' => EventService::TYPES[$e['type']]['label'] . ': ' . $e['title'], 'due_at' => date('Y-m-d H:i:s', strtotime($e['created_at']) + self::delayMin() * 60), 'row' => $e]; }
+            $pub = 'COALESCE(e.published_at, e.created_at)';
+            foreach (DB::all("SELECT e.* FROM events e WHERE e.type IN ($types) AND " . EventService::liveSql() . ($onlyDue ? " AND $pub >= ?" : '') . "
+                                AND NOT EXISTS (SELECT 1 FROM bale_messages b WHERE b.ref = CONCAT('event-', e.id)) ORDER BY $pub LIMIT 200", $onlyDue ? [$since] : []) as $e) {
+                if (self::itemSegment('event', $e) === null) continue;
+                $due = self::eventDueAt($e);
+                $manual = (string)($e['published_at'] ?: $e['created_at']) < $since;
+                if ($onlyDue && ($manual || strtotime($due) > time())) continue;
+                $out[] = ['ref' => 'event-' . $e['id'], 'type' => 'event', 'id' => (int)$e['id'], 'title' => EventService::TYPES[$e['type']]['label'] . ': ' . $e['title'], 'due_at' => $due, 'manual' => $manual, 'row' => $e];
+                if (count($out) >= $limit) break;
+            }
         }
         if (setting('bale_courses', '1') === '1') {
             foreach (DB::all("SELECT c.* FROM courses c WHERE c.deleted_at IS NULL AND c.status = 'published' AND COALESCE(c.published_at, c.created_at) >= ?" . ($onlyDue ? ' AND COALESCE(c.published_at, c.created_at) <= ?' : '') . "

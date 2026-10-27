@@ -5,8 +5,6 @@ $oldSegs = old('segments', null);
 if (is_array($oldSegs)) $segs = $oldSegs;
 $dateVal = old('date', $e && $e['starts_at'] ? App\Core\Jalali::input($e['starts_at']) : '');
 $timeVal = old('time', $e && $e['starts_at'] ? date('H:i', strtotime($e['starts_at'])) : ($type === 'meeting' ? '10:00' : '18:00'));
-$dur = (int)($e['duration_minutes'] ?? 60);
-$durHours = old('duration_hours', rtrim(rtrim(number_format($dur / 60, 2, '.', ''), '0'), '.'));
 $copying = !$isEdit && $e;
 ?>
 <div class="page-head"><div><div class="crumbs"><a href="<?= url('/admin/events/' . $type) ?>"><?= e($t['plural']) ?></a></div><h1><?= $isEdit ? 'ویرایش ' . e($t['label']) : ($copying ? 'کپی ' . e($t['label']) : e($t['label']) . ' جدید') ?></h1></div></div>
@@ -27,11 +25,8 @@ $copying = !$isEdit && $e;
                 <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
                     <div class="field"><label>تاریخ (شمسی) <span class="req">*</span></label><input type="text" class="ltr" name="date" value="<?= e($dateVal) ?>" placeholder="1405/07/10" required></div>
                     <div class="field"><label>ساعت شروع <span class="req">*</span></label><input type="text" class="ltr" name="time" value="<?= e($timeVal) ?>" placeholder="18:00" required></div>
-                    <?php if ($type === 'webinar'): ?>
-                        <div class="field"><label>مدت (ساعت) <span class="req">*</span></label><input type="text" inputmode="decimal" class="ltr" name="duration_hours" value="<?= e($durHours) ?>" placeholder="1"><div class="hint">همین مقدار از اعتبار وبینار کسر می‌شود؛ مثلاً ۱ یا ۱.۵</div></div>
-                    <?php else: ?>
-                        <div class="field"><label>مدت (دقیقه)</label><input type="number" name="duration_minutes" value="<?= e($v('duration_minutes', 60)) ?>"></div>
-                    <?php endif; ?>
+                    <div class="field"><label>مدت (دقیقه) <span class="req">*</span></label><div class="input-unit"><input type="number" class="ltr" name="duration_minutes" min="1" max="1440" step="1" required value="<?= e($v('duration_minutes', 60)) ?>" placeholder="45"><span>دقیقه</span></div>
+                        <div class="hint"><?= $type === 'webinar' ? 'همین مقدار (به دقیقه) از اعتبار وبینار ثبت‌نام‌کننده کسر می‌شود؛ مثلاً ۴۵ یا ۹۰.' : 'مثلاً ۴۵ یا ۹۰.' ?></div></div>
                 </div>
             </div>
         </div>
@@ -43,7 +38,7 @@ $copying = !$isEdit && $e;
                     <div class="hint">هیچ یا هر سه = همه. مثلاً فقط «تاجران» یا «کارمندان + تاجران».</div>
                 </div>
                 <div class="field"><label>محدود به گروه خاص (اختیاری)</label><select name="group_id"><option value="">—</option><?php foreach ($groups as $k => $n): ?><option value="<?= (int)$k ?>"<?= selected($k, $v('group_id')) ?>><?= e($n) ?></option><?php endforeach; ?></select></div>
-                <div class="field"><label>وضعیت</label><select name="status"><option value="active"<?= selected('active', $v('status', 'active')) ?>>فعال (نمایش به فراگیران)</option><option value="inactive"<?= selected('inactive', $v('status')) ?>>غیرفعال</option></select></div>
+                <div class="field"><label>وضعیت</label><select name="status"><option value="active"<?= selected('active', $v('status', 'active')) ?>>فعال (نمایش به مخاطبان)</option><option value="inactive"<?= selected('inactive', $v('status')) ?>>متوقف (نمایش داده نمی‌شود)</option></select></div>
             </div>
             <div class="card">
                 <h3><?= icon('image') ?> تصویر کارت</h3>

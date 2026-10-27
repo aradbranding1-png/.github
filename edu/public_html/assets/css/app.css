@@ -1922,3 +1922,48 @@ a.cs:hover{background:var(--surface)}
 .upd-panel .upd-act-form .act-pass{flex:0 0 11rem;width:11rem;min-width:0;max-width:11rem;height:2.4rem;min-height:0;padding:.3rem .7rem;font-size:.85rem;border-radius:10px}
 .upd-panel .upd-act-form .btn-lg{padding:.5rem 1.1rem;font-size:.9rem}
 @media (max-width:900px){.upd-panel .upd-act-form .act-pass{flex:1 1 100%;width:auto;max-width:none}}
+
+/* admin: webinars / workshops / meetings list */
+.eva-stats .stat{color:inherit;text-decoration:none;transition:transform .15s,box-shadow .15s}
+.eva-stats .stat:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.eva-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;padding:.75rem}
+.eva-search{flex:1 1 220px;display:flex;align-items:center;gap:.4rem;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:0 .7rem;color:var(--muted)}
+.eva-search input{border:0!important;background:none!important;box-shadow:none!important;padding:.55rem 0;flex:1;min-width:0}
+.eva-list{display:grid;gap:1rem}
+.eva{display:grid;grid-template-columns:220px minmax(0,1fr);grid-template-areas:"thumb body" "foot foot";gap:1rem 1.25rem;padding:1rem;transition:box-shadow .15s,border-color .15s}
+.eva:hover{box-shadow:var(--shadow)}
+.eva-thumb{grid-area:thumb;position:relative;aspect-ratio:16/10;border-radius:14px;overflow:hidden;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--t),color-mix(in srgb,var(--t) 45%,#0f172a))}
+.eva-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.eva-thumb>.ic,.eva-thumb>svg{width:42px;height:42px}
+.eva-off,.eva-live{position:absolute;top:.5rem;right:.5rem;display:inline-flex;align-items:center;gap:.3rem;font-size:.72rem;font-weight:700;padding:.2rem .55rem;border-radius:999px;color:#fff;background:rgba(15,23,42,.78);backdrop-filter:blur(4px)}
+.eva-live{background:var(--danger)}
+.eva.is-off{border-style:dashed}
+.eva.is-off .eva-thumb{filter:grayscale(.9);opacity:.75}
+.eva.is-off .eva-title{color:var(--text-2)}
+.eva-body{grid-area:body;display:flex;flex-direction:column;gap:.65rem;min-width:0}
+.eva-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.6rem;flex-wrap:wrap}
+.eva-title{margin:0;font-size:1.05rem;line-height:1.6;min-width:0;overflow-wrap:anywhere}
+.eva-badges{display:flex;gap:.35rem;flex-wrap:wrap;flex:none}
+.eva-meta{display:flex;flex-wrap:wrap;gap:.35rem}
+.eva-meta .chip svg{width:13px;height:13px}
+.eva-nums{display:flex;flex-wrap:wrap;gap:.5rem}
+.eva-nums>div{display:flex;align-items:baseline;gap:.35rem;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:.3rem .7rem}
+.eva-nums b{font-size:1rem}.eva-nums span{font-size:.75rem;color:var(--muted)}
+.eva-link{display:flex;align-items:center;gap:.4rem;max-width:640px}
+.eva-link-ic{color:var(--muted);display:inline-flex}
+.eva-link input{flex:1;min-width:0;padding:.4rem .65rem;font-size:.85rem}
+.eva-foot{grid-area:foot;display:flex;align-items:center;flex-wrap:wrap;gap:.35rem;border-top:1px solid var(--border);padding-top:.75rem}
+.eva-foot form{display:inline-flex;margin:0}
+.eva-stop{background:var(--warning-soft);color:var(--warning-ink);border:1px solid color-mix(in srgb,var(--warning) 35%,transparent)}
+.eva-stop:hover{background:var(--warning);color:#1f1300}
+.eva-del{color:var(--danger)}
+@media (max-width:760px){
+  .eva{grid-template-columns:1fr;grid-template-areas:"thumb" "body" "foot";padding:.8rem}
+  .eva-thumb{aspect-ratio:16/6}
+  .eva-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:.6rem}
+  .eva-stats .stat{padding:.7rem;gap:.55rem}.eva-stats .stat .bubble{width:38px;height:38px;flex:none}.eva-stats .stat .v{font-size:1.25rem}.eva-stats .stat .l{font-size:.75rem}
+  .eva-foot .grow{display:none}
+  .eva-foot>form:first-child{flex:1 1 100%}.eva-foot>form:first-child .btn{width:100%;justify-content:center}
+  .eva-filters .seg{flex:1 1 100%;justify-content:space-between}.eva-filters .seg a{flex:1;text-align:center}
+  .eva-filters>.btn{flex:1 1 100%}
+}

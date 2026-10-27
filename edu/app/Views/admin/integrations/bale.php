@@ -39,7 +39,7 @@ $since = (string)setting('bale_since', '');
         </div>
         <div class="card small muted" style="line-height:2">
             <b><?= icon('info') ?> قوانین ارسال</b><br>
-            • وبینار و میتینگ: <b data-delay-mirror><?= fa(BB::delayMin()) ?></b> دقیقه بعد از ساخت، اگر هنوز منتشرشده و تمام‌نشده باشد.<br>
+            • وبینار و میتینگ: <b data-delay-mirror><?= fa(BB::delayMin()) ?></b> دقیقه بعد از انتشار (یا فعال‌سازی دوباره)، اگر هنوز منتشرشده و تمام‌نشده باشد؛ اگر این زمان به نیم ساعت مانده به شروع نرسد، نیم ساعت قبل از شروع ارسال می‌شود.<br>
             • دوره: <b data-delay-mirror><?= fa(BB::delayMin()) ?></b> دقیقه بعد از انتشار، اگر مخاطب آن «همه» یا «تاجران» (یا زیرگروه آن) باشد؛ دوره‌های فقط کارمندان/نمایندگان ارسال نمی‌شوند.<br>
             • گیرندگان: تاجرانِ متصل به ربات در همان لحظه، طبق فهرست my.<br>
             • هر خبر فقط یک بار ارسال می‌شود. بررسی هر ۱۵ دقیقه با Cron انجام می‌شود.
@@ -62,7 +62,7 @@ $since = (string)setting('bale_since', '');
     <?php foreach ($upcoming as $it): $due = strtotime($it['due_at']) <= time(); ?>
         <div class="crow">
             <span class="crow-ic" style="--tc:<?= $it['type'] === 'event' ? 'var(--primary)' : 'var(--success)' ?>"><?= icon($it['type'] === 'event' ? 'calendar' : 'graduation-cap') ?></span>
-            <span class="crow-main"><?php $lk = $adminLink($it['type'], $it['id']); ?><?= $lk ? '<a class="crow-title" href="' . $lk . '" title="باز کردن در پنل مدیریت">' . e($it['title']) . '</a>' : '<span class="crow-title">' . e($it['title']) . '</span>' ?><span class="crow-meta"><span><?= icon('clock') ?> <?= $due ? 'در اجرای بعدی Cron' : 'زمان ارسال: ' . jdatetime($it['due_at']) ?></span></span></span>
+            <span class="crow-main"><?php $lk = $adminLink($it['type'], $it['id']); ?><?= $lk ? '<a class="crow-title" href="' . $lk . '" title="باز کردن در پنل مدیریت">' . e($it['title']) . '</a>' : '<span class="crow-title">' . e($it['title']) . '</span>' ?><span class="crow-meta"><span><?= icon('clock') ?> <?= !empty($it['manual']) ? 'قبل از فعال‌سازی ربات منتشر شده؛ فقط با «ارسال الان» فرستاده می‌شود' : ($due ? 'در اجرای بعدی Cron' : 'زمان ارسال: ' . jdatetime($it['due_at'])) ?></span><?php if ($it['type'] === 'event' && !empty($it['row']['starts_at'])): ?><span><?= icon('calendar') ?> برگزاری: <?= jdatetime($it['row']['starts_at']) ?></span><?php endif; ?></span></span>
             <span class="crow-side"><span class="crow-acts">
                 <form method="post" action="<?= url('/admin/integrations/bale/action') ?>"><?= csrf_field() ?><input type="hidden" name="ref" value="<?= e($it['ref']) ?>"><input type="hidden" name="title" value="<?= e($it['title']) ?>"><input type="hidden" name="act" value="send"><button class="btn btn-sm btn-outline"<?= $configured ? '' : ' disabled' ?>><?= icon('send') ?> ارسال الان</button></form>
                 <form method="post" action="<?= url('/admin/integrations/bale/action') ?>" data-confirm="این مورد هرگز به بله ارسال نشود؟"><?= csrf_field() ?><input type="hidden" name="ref" value="<?= e($it['ref']) ?>"><input type="hidden" name="title" value="<?= e($it['title']) ?>"><input type="hidden" name="act" value="skip"><button class="btn btn-sm btn-ghost" style="color:var(--danger)"><?= icon('x') ?> ارسال نشود</button></form>

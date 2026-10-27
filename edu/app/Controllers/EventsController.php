@@ -33,7 +33,7 @@ final class EventsController
         [$w, $p] = EventService::visibleSql($u);
         $rows = DB::all("SELECT e.*, r.id AS reg_id, r.joined_at FROM events e
                            LEFT JOIN event_registrations r ON r.event_id = e.id AND r.user_id = ? AND r.status = 'registered'
-                          WHERE e.type = ? AND $w ORDER BY e.starts_at IS NULL, e.starts_at ASC LIMIT 300", array_merge([(int)$u['id'], $type], $p));
+                          WHERE e.type = ? AND e.status = 'active' AND $w ORDER BY e.starts_at IS NULL, e.starts_at ASC LIMIT 300", array_merge([(int)$u['id'], $type], $p));
         $upcoming = []; $past = [];
         foreach ($rows as $r) {
             if (EventService::phase($r) === 'ended') $past[] = $r; else $upcoming[] = $r;

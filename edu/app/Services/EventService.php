@@ -224,11 +224,11 @@ final class EventService
     {
         $uid = (int)$u['id'];
         $rows = DB::all("SELECT e.*, 1 AS registered FROM event_registrations r JOIN events e ON e.id = r.event_id
-                          WHERE r.user_id = ? AND r.status = 'registered' AND e.type IN ('webinar','workshop') AND e.deleted_at IS NULL
+                          WHERE r.user_id = ? AND r.status = 'registered' AND e.type IN ('webinar','workshop') AND e.deleted_at IS NULL AND e.status = 'active'
                             AND e.starts_at >= ? ORDER BY e.starts_at LIMIT $limit", [$uid, date('Y-m-d H:i:s', time() - 10800)]);
         if (Credit::meetingActive($u)) {
             [$w, $p] = self::visibleSql($u);
-            $rows = array_merge($rows, DB::all("SELECT e.*, 1 AS registered FROM events e WHERE e.type = 'meeting' AND $w AND e.starts_at >= ? ORDER BY e.starts_at LIMIT $limit", array_merge($p, [date('Y-m-d H:i:s', time() - 10800)])));
+            $rows = array_merge($rows, DB::all("SELECT e.*, 1 AS registered FROM events e WHERE e.type = 'meeting' AND e.status = 'active' AND $w AND e.starts_at >= ? ORDER BY e.starts_at LIMIT $limit", array_merge($p, [date('Y-m-d H:i:s', time() - 10800)])));
         }
         usort($rows, fn($a, $b) => strcmp((string)$a['starts_at'], (string)$b['starts_at']));
         return array_slice($rows, 0, $limit);

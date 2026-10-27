@@ -28,6 +28,8 @@ final class EventController
         $q = Request::str('q');
         $w = 'e.type = ? AND e.deleted_at IS NULL'; $p = [$type];
         if ($q !== '') { $w .= ' AND e.title LIKE ?'; $p[] = "%$q%"; }
+        $status = Request::str('status');
+        if (in_array($status, ['active', 'inactive'], true)) { $w .= ' AND e.status = ?'; $p[] = $status; } else $status = '';
         $when = Request::str('when', 'upcoming');
         $now = date('Y-m-d H:i:s');
         if ($when === 'upcoming') { $w .= ' AND (e.starts_at IS NULL OR e.starts_at >= ?)'; $p[] = date('Y-m-d H:i:s', time() - 6 * 3600); }
@@ -37,7 +39,11 @@ final class EventController
                                      (SELECT COUNT(*) FROM event_registrations r WHERE r.event_id = e.id AND r.joined_at IS NOT NULL) joined
                                 FROM events e LEFT JOIN `groups` g ON g.id = e.group_id WHERE $w
                                ORDER BY " . ($when === 'past' ? 'e.starts_at DESC' : 'e.starts_at IS NULL, e.starts_at ASC'), $p, 20);
-        return view('admin/events/index', ['title' => 'مدیریت ' . $t['plural'], 'type' => $type, 't' => $t, 'page' => $page, 'q' => $q, 'when' => $when]);
+        $now = date('Y-m-d H:i:s');
+        $counts = DB::one("SELECT COALESCE(SUM(status = 'active' AND starts_at >= ?), 0) upcoming, COALESCE(SUM(status = 'active' AND starts_at < ? AND DATE_ADD(starts_at, INTERVAL duration_minutes MINUTE) >= ?), 0) live,
+                                  COALESCE(SUM(status = 'inactive' AND (starts_at IS NULL OR DATE_ADD(starts_at, INTERVAL duration_minutes MINUTE) >= ?)), 0) stopped, COUNT(*) total
+                             FROM events WHERE type = ? AND deleted_at IS NULL", [$now, $now, $now, $now, $type]) ?: [];
+        return view('admin/events/index', ['title' => 'مدیریت ' . $t['plural'], 'type' => $type, 't' => $t, 'page' => $page, 'q' => $q, 'when' => $when, 'status' => $status, 'counts' => $counts]);
     }
 
     public function create(string $type): string
@@ -52,6 +58,7 @@ final class EventController
     {
         EventService::type($type);
         $row = $this->row($type, null) + ['type' => $type, 'created_by' => Auth::id(), 'created_at' => now()];
+        if ($row['status'] === 'active') $row['published_at'] = now();
         $id = DB::insert('events', $row);
         Audit::log('events.create', 'event', $id, 'success', ['type' => $type]);
         if (\App\Services\TraderGrowth::eventTypeUsed($type)) \App\Services\TraderGrowth::markAllDirty();
@@ -70,7 +77,9 @@ final class EventController
     public function update(int $id): never
     {
         $e = $this->load($id);
-        DB::update('events', $this->row($e['type'], $e) + ['updated_at' => now()], 'id = ?', [$id]);
+        $row = $this->row($e['type'], $e) + ['updated_at' => now()];
+        if ($row['status'] === 'active' && $e['status'] !== 'active') $row['published_at'] = now();
+        DB::update('events', $row, 'id = ?', [$id]);
         Audit::log('events.update', 'event', $id);
         if (\App\Services\TraderGrowth::eventTypeUsed($e['type'])) \App\Services\TraderGrowth::markAllDirty();
         $sent = EventService::announce($id); // e.g. just published
@@ -87,6 +96,21 @@ final class EventController
         DB::update('events', ['join_url' => $url ?: null, 'updated_at' => now()], 'id = ?', [$id]);
         Audit::log('events.link', 'event', $id);
         flash('success', 'لینک «' . $e['title'] . '» به‌روزرسانی شد.');
+        back();
+    }
+
+    /** Stop (hide from learners' dashboard and lists) or activate (show again) */
+    public function toggle(int $id): never
+    {
+        $e = $this->load($id);
+        $on = Request::str('to') === 'active';
+        if ($on === ($e['status'] === 'active')) back();
+        DB::update('events', ['status' => $on ? 'active' : 'inactive', 'updated_at' => now()] + ($on ? ['published_at' => now()] : []), 'id = ?', [$id]);
+        Audit::log($on ? 'events.activate' : 'events.stop', 'event', $id);
+        $sent = $on ? EventService::announce($id) : 0;
+        flash('success', $on
+            ? '«' . $e['title'] . '» فعال شد و دوباره به مخاطبان نمایش داده می‌شود.' . ($sent ? ' اعلان برای ' . fa($sent) . ' کاربر ارسال شد.' : '')
+            : '«' . $e['title'] . '» متوقف شد و دیگر در پیشخوان و فهرست مخاطبان نمایش داده نمی‌شود.');
         back();
     }
 
@@ -146,9 +170,8 @@ final class EventController
         if (!preg_match('/^(\d{1,2}):(\d{2})$/', $time, $tm) || (int)$tm[1] > 23 || (int)$tm[2] > 59) { keep_old($_POST); flash('danger', 'ساعت شروع را به شکل ۱۸:۰۰ وارد کنید.'); back(); }
         $date = Jalali::parse((string)$d['date']);
         if (!$date) { keep_old($_POST); flash('danger', 'تاریخ برگزاری را به شکل ۱۴۰۵/۰۷/۱۰ وارد کنید.'); back(); }
-        $hours = (float)str_replace(['٫', '/'], '.', normalize_input(Request::str('duration_hours')));
-        $minutes = $type === 'webinar' ? (int)round($hours * 60) : max(0, Request::int('duration_minutes', 60));
-        if ($minutes <= 0) { keep_old($_POST); flash('danger', 'مدت زمان را وارد کنید.'); back(); }
+        $minutes = (int)normalize_input(Request::str('duration_minutes'));
+        if ($minutes <= 0 || $minutes > 1440) { keep_old($_POST); flash('danger', 'مدت زمان را به دقیقه وارد کنید (۱ تا ۱۴۴۰ دقیقه).'); back(); }
         $segs = array_values(array_intersect(Request::arr('segments'), ['merchant', 'agent', 'employee']));
         $row = [
             'title' => $d['title'], 'summary' => ($d['summary'] ?? '') !== '' ? $d['summary'] : null,
