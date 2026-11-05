@@ -30,6 +30,9 @@ return static function (Router $r): void {
         $r->post('/login', [AuthController::class, 'login'], ['csrf', 'throttle:login']);
         $r->get('/register', [AuthController::class, 'showRegister']);
         $r->post('/register', [AuthController::class, 'register'], ['csrf', 'throttle:register']);
+        // Sign-up with Google: the account details Google does not give (mobile, country, language) in one short step.
+        $r->get('/register/google', [AuthController::class, 'showGoogleRegister']);
+        $r->post('/register/google', [AuthController::class, 'googleRegister'], ['csrf', 'throttle:register']);
     });
 
     // Google sign-in (guests) and "connect Google" (signed-in members) share one start and one callback.

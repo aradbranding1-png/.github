@@ -138,7 +138,7 @@ body.is-launching .auth-card { transform: translateY(-4px) scale(.99); opacity: 
 .auth-card .prefix-input .input { border-radius: 0 14px 14px 0; }
 .auth-card p.switch { text-align: center; margin-top: 18px; color: #AFC1D4; font-size: 13.5px; }
 .auth-card p.switch a { color: #FFD978; font-weight: 800; }
-.auth-card a:not(.auth-outline):not(.btn) { color: #25C7FF; }
+.auth-card a:not(.auth-outline):not(.btn):not(.auth-google) { color: #25C7FF; }
 .auth-card .ss-trigger { width: 100%; min-height: 50px; border-radius: 14px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .18); color: #fff; padding: 0 14px; }
 .auth-card .ss-panel { background: rgba(4, 17, 31, .98); border: 1px solid rgba(243, 198, 91, .28); color: #fff; }
 .auth-card .ss-panel[hidden] { display: none !important; }
@@ -274,3 +274,8 @@ body.is-launching .auth-card { transform: translateY(-4px) scale(.99); opacity: 
 .auth-card a.auth-google:hover { box-shadow: 0 8px 22px -8px rgba(255, 255, 255, .45); transform: translateY(-1px); }
 .auth-card a.auth-google:focus-visible { outline: 3px solid #25C7FF; outline-offset: 2px; }
 .auth-hint { margin: 10px 0 0; color: #AFC1D4; font-size: 12.5px; line-height: 1.8; text-align: center; }
+/* Sign-up with Google: the verified Google address the account is made with (read-only). */
+.auth-card .google-id { display: flex; align-items: center; gap: 10px; margin: 6px 0 18px; padding: 12px 14px; border-radius: 14px;
+  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14); font-weight: 600; overflow-wrap: anywhere; }
+.auth-card .google-id svg { width: 20px; height: 20px; flex: none; }
+.auth-card .auth-google + .auth-sep { margin-top: 18px; }

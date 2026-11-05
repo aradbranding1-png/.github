@@ -156,17 +156,57 @@ final class AuthService
                 "SELECT {$cols} FROM users WHERE deleted_at IS NULL AND google_sub IS NULL AND (google_email = ? OR email = ?) LIMIT 2",
                 [$email, $email]
             );
+            if ($rows === [] && str_ends_with($email, '@gmail.com')) {
+                // An account opened with the same Gmail written differently (Ali.Reza@gmail.com, alireza+shop@googlemail.com).
+                $rows = $this->db->select(
+                    "SELECT {$cols} FROM users WHERE deleted_at IS NULL AND google_sub IS NULL
+                        AND (email LIKE '%@gmail.com' OR email LIKE '%@googlemail.com')
+                        AND CONCAT(REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(email, '@', 1), '+', 1), '.', ''), '@gmail.com') = ? LIMIT 2",
+                    [$email]
+                );
+            }
+            if ($rows === []) {
+                // No account yet: the controller opens the short sign-up step (AuthController::showGoogleRegister).
+                $this->log(null, $email, $ip, 'google_new');
+                return ['ok' => false, 'unknown' => true, 'error' => ''];
+            }
             if (count($rows) !== 1) {
                 $this->log(null, $email, $ip, 'google_unknown');
-                return ['ok' => false, 'error' => count($rows) === 0
-                    ? t('این حساب گوگل (:email) به هیچ حسابی در سامانه وصل نیست. یک بار با ایمیل/موبایل و رمز عبور وارد شوید و در «حساب کاربری › امنیت» جیمیل خود را ثبت کنید.', ['email' => $email])
-                    : t('این جیمیل در بیش از یک حساب ثبت شده است. برای ورود با گوگل با پشتیبانی آراد برندینگ تماس بگیرید.')];
+                return ['ok' => false, 'error' => t('این جیمیل در بیش از یک حساب ثبت شده است. برای ورود با گوگل با پشتیبانی آراد برندینگ تماس بگیرید.')];
             }
             $row = $rows[0];
             $this->db->exec('UPDATE users SET google_sub = ?, google_email = ?, google_linked_at = NOW(3), updated_at = NOW(3) WHERE id = ? AND google_sub IS NULL',
                 [$sub, $email, (int) $row['id']]);
         }
         return $this->finish($row, $email, $ip, 'google');
+    }
+
+    /**
+     * New account from a verified Google sign-in. The address is Google's (already verified), the password a random
+     * one the member never needs: they sign in with Google, and can set a password in Account › Security.
+     * @param array<string, mixed> $d validated: first_name, last_name, country_id, language_id, phone_cc, phone
+     * @throws ValidationFailed
+     */
+    public function registerGoogle(array $d, string $sub, string $email, ?array $avatar): int
+    {
+        if ($this->db->scalar('SELECT 1 FROM users WHERE google_sub = ? AND deleted_at IS NULL', [$sub]) !== null) {
+            throw new ValidationFailed(['google' => t('با این حساب گوگل قبلاً حساب ساخته شده است. با «ورود با گوگل» وارد شوید.')]);
+        }
+        $d['email'] = $email;
+        $d['password'] = bin2hex(random_bytes(24));
+        try {
+            $userId = $this->register($d, $avatar);
+        } catch (ValidationFailed $e) {
+            if (isset($e->errors['email'])) {
+                throw new ValidationFailed(['google' => t('با جیمیل :email قبلاً حساب ساخته شده است. با «ورود با گوگل» وارد شوید.', ['email' => $email])]);
+            }
+            throw $e;
+        }
+        $this->db->exec(
+            'UPDATE users SET google_sub = ?, google_email = ?, google_linked_at = NOW(3), email_verified_at = NOW(3), updated_at = NOW(3) WHERE id = ?',
+            [$sub, $email, $userId]
+        );
+        return $userId;
     }
 
     /** Binds a verified Google account to a signed-in member. Returns an error message, or null on success. */

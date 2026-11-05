@@ -11,11 +11,18 @@ use App\Core\Http\Response;
 use App\Core\Session\Session;
 use App\Core\Support\Str;
 
-/** "Sign in with Google" for guests, and "connect Google" from Account › Security for signed-in members. */
+/**
+ * "Sign in with Google" for guests, and "connect Google" from Account › Security for signed-in members.
+ * A guest whose Google account belongs to nobody yet signs up with it: /register/google.
+ */
 final class GoogleController extends Controller
 {
     /** How long after a Google sign-in a new password may be set without the current one. */
     public const RESET_WINDOW = 900;
+    /** Session key of a verified Google identity that has no account yet (AuthController::showGoogleRegister). */
+    public const SIGNUP = '_google_signup';
+    /** How long that identity may be used to finish signing up. */
+    public const SIGNUP_WINDOW = 1800;
 
     public function start(Request $request): Response
     {
@@ -76,6 +83,11 @@ final class GoogleController extends Controller
         }
 
         $result = $service->attemptGoogle($identity['sub'], $identity['email'], $request->ip());
+        if (!$result['ok'] && !empty($result['unknown'])) {
+            // First visit with this Google account: create the member's account in one short step.
+            Session::put(self::SIGNUP, $identity + ['next' => (string) $flow['next'], 'remember' => (bool) $flow['remember'], 'at' => time()]);
+            return $this->redirect('/register/google');
+        }
         if (!$result['ok']) {
             return $this->redirect('/login', $result['error'], 'error');
         }

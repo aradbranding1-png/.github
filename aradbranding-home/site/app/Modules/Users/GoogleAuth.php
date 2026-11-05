@@ -57,7 +57,7 @@ final class GoogleAuth
             'client_id' => $this->clientId(),
             'redirect_uri' => self::redirectUri(),
             'response_type' => 'code',
-            'scope' => 'openid email',
+            'scope' => 'openid email profile',
             'state' => $state,
             'code_challenge' => self::b64url(hash('sha256', $verifier, true)),
             'code_challenge_method' => 'S256',
@@ -69,7 +69,10 @@ final class GoogleAuth
         return self::AUTH_URL . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
     }
 
-    /** @return array{sub: string, email: string}|null null when Google refuses the code or the account is unusable */
+    /**
+     * @return array{sub: string, email: string, given_name: string, family_name: string, name: string}|null
+     *         null when Google refuses the code or the account is unusable. The names are empty if Google gave none.
+     */
     public function exchange(string $code, string $verifier): ?array
     {
         $ch = curl_init(self::TOKEN_URL);
@@ -103,7 +106,11 @@ final class GoogleAuth
             || !is_string($claims['sub'] ?? null) || !is_string($claims['email'] ?? null)) {
             return null;
         }
-        return ['sub' => $claims['sub'], 'email' => self::canonical($claims['email'])];
+        $text = static fn (string $k): string => is_string($claims[$k] ?? null) ? mb_substr(trim($claims[$k]), 0, 100) : '';
+        return [
+            'sub' => $claims['sub'], 'email' => self::canonical($claims['email']),
+            'given_name' => $text('given_name'), 'family_name' => $text('family_name'), 'name' => $text('name'),
+        ];
     }
 
     /** Gmail ignores dots and "+tags" and treats googlemail.com as gmail.com: ali.reza+x@GMail.com → alireza@gmail.com */
