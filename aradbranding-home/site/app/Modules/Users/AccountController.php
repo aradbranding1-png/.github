@@ -35,6 +35,9 @@ final class AccountController extends Controller
             'categories' => $this->c->get(\App\Modules\Reference\ReferenceData::class)->categories(),
             'interests' => array_map('intval', array_column($db->select('SELECT category_id FROM user_interests WHERE user_id = ?', [$user['id']]), 'category_id')),
             'input' => $status === 422 ? array_diff_key($request->all(), array_flip(['_token', 'password', 'password_confirmation', 'current_password'])) : [],
+            'google' => $db->first('SELECT google_email, google_sub IS NOT NULL AS linked, google_linked_at FROM users WHERE id = ?', [$user['id']]) ?? [],
+            'googleEnabled' => $this->c->get(GoogleAuth::class)->enabled(),
+            'googleReset' => self::googleReset(),
         ], 'layouts/app', $status);
     }
 
@@ -122,14 +125,23 @@ final class AccountController extends Controller
     public function updatePassword(Request $request): Response
     {
         $user = $this->user($request);
+        // Right after a Google sign-in (forgotten password) the current password is not asked for.
+        $reset = self::googleReset();
         [$d, $errors] = Validator::make($request->all(), [
-            'current_password' => ['required'],
+            'current_password' => $reset ? [] : ['required'],
             'password' => ['required', 'min:8', 'max:128'],
             'password_confirmation' => ['required', 'same:password'],
         ], ['current_password' => t('رمز عبور فعلی'), 'password' => t('رمز عبور جدید'), 'password_confirmation' => t('تکرار رمز عبور')]);
 
         if ($errors === []) {
-            $error = $this->c->get(AuthService::class)->changePassword($user['id'], $d['current_password'], $d['password']);
+            $service = $this->c->get(AuthService::class);
+            if ($reset) {
+                $service->setPassword($user['id'], $d['password']);
+                Session::forget('_google_at');
+                $error = null;
+            } else {
+                $error = $service->changePassword($user['id'], $d['current_password'], $d['password']);
+            }
             if ($error === null) {
                 Session::regenerate();
                 return $this->redirect('/account?tab=security', t('رمز عبور تغییر کرد. سایر دستگاه‌ها از حساب خارج شدند.'));
@@ -137,6 +149,42 @@ final class AccountController extends Controller
             $errors['current_password'] = $error;
         }
         return $this->show($request, $errors, 'security', 422);
+    }
+
+    /** Saves the Gmail address that may sign in to this account with Google (bound at its first Google sign-in). */
+    public function updateGoogle(Request $request): Response
+    {
+        $user = $this->user($request);
+        $db = $this->c->get(Connection::class);
+        if ((int) $db->scalar('SELECT google_sub IS NOT NULL FROM users WHERE id = ?', [$user['id']]) === 1) {
+            return $this->show($request, ['google_email' => t('یک حساب گوگل به این حساب وصل است. برای تغییر جیمیل، ابتدا آن را جدا کنید.')], 'security', 422);
+        }
+        $raw = trim(Str::latinDigits((string) $request->input('google_email', '')));
+        if ($raw === '') {
+            $db->exec('UPDATE users SET google_email = NULL, updated_at = NOW(3) WHERE id = ?', [$user['id']]);
+            return $this->redirect('/account?tab=security', t('جیمیل ورود با گوگل حذف شد.'));
+        }
+        if (filter_var($raw, FILTER_VALIDATE_EMAIL) === false || mb_strlen($raw) > 190) {
+            return $this->show($request, ['google_email' => t('آدرس جیمیل معتبر نیست.')], 'security', 422);
+        }
+        $email = GoogleAuth::canonical($raw);
+        if ($db->scalar('SELECT 1 FROM users WHERE google_email = ? AND google_sub IS NOT NULL AND id <> ? AND deleted_at IS NULL LIMIT 1', [$email, $user['id']]) !== null) {
+            return $this->show($request, ['google_email' => t('این جیمیل به حساب دیگری در سامانه وصل است.')], 'security', 422);
+        }
+        $db->exec('UPDATE users SET google_email = ?, updated_at = NOW(3) WHERE id = ?', [$email, $user['id']]);
+        return $this->redirect('/account?tab=security', t('جیمیل ثبت شد. از این پس با «ورود با گوگل» و همین جیمیل وارد شوید؛ اولین ورود، حساب گوگل را به حساب شما وصل می‌کند.'));
+    }
+
+    public function unlinkGoogle(Request $request): Response
+    {
+        $user = $this->user($request);
+        $this->c->get(Connection::class)->exec('UPDATE users SET google_sub = NULL, google_email = NULL, google_linked_at = NULL, updated_at = NOW(3) WHERE id = ?', [$user['id']]);
+        return $this->redirect('/account?tab=security', t('حساب گوگل جدا شد. ورود فقط با ایمیل/موبایل و رمز عبور ممکن است.'));
+    }
+
+    private static function googleReset(): bool
+    {
+        return time() - (int) Session::get('_google_at', 0) < GoogleController::RESET_WINDOW;
     }
 
     public function updateInterests(Request $request): Response

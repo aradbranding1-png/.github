@@ -27,6 +27,7 @@ final class AuthController extends Controller
             'old' => ['email' => ''],
             'next' => Str::safeNext($request->query('next')),
             'error' => null,
+            'googleEnabled' => $this->c->get(GoogleAuth::class)->enabled(),
         ], 'layouts/guest');
     }
 
@@ -46,6 +47,7 @@ final class AuthController extends Controller
                 'old' => ['email' => $email],
                 'next' => $next,
                 'error' => $result['error'],
+                'googleEnabled' => $this->c->get(GoogleAuth::class)->enabled(),
             ], 'layouts/guest', 422);
         }
 

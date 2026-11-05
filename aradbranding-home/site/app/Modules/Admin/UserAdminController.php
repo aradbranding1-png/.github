@@ -98,10 +98,10 @@ final class UserAdminController extends AdminController
             'ledger' => $this->c->get(WalletService::class)->history($id, null, 15)['rows'],
             'pages' => $db->select('SELECT p.id, p.title, p.status, l.code FROM pages p JOIN languages l ON l.id = p.language_id WHERE p.user_id = ? AND p.deleted_at IS NULL', [$id]),
             'proposalCount' => (int) $db->scalar('SELECT COUNT(*) FROM proposals WHERE user_id = ? AND deleted_at IS NULL', [$id]),
-            'roles' => $db->select('SELECT r.id, r.slug, r.name, (ur.user_id IS NOT NULL) AS assigned FROM roles r LEFT JOIN user_roles ur ON ur.role_id = r.id AND ur.user_id = ? ORDER BY r.id', [$id]),
+            'roles' => RolesController::describe($db->select('SELECT r.id, r.slug, r.name, (ur.user_id IS NOT NULL) AS assigned FROM roles r LEFT JOIN user_roles ur ON ur.role_id = r.id AND ur.user_id = ? ORDER BY r.id', [$id]), $db),
             'assigned' => array_map('intval', array_column($db->select('SELECT country_id FROM staff_assignments WHERE user_id = ?', [$id]), 'country_id')),
             'countries' => $this->c->get(ReferenceData::class)->countries(),
-            'logins' => $db->select('SELECT result, created_at FROM login_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 5', [$id]),
+            'logins' => $db->select('SELECT result, created_at FROM login_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', [$id]),
             'reportCount' => (int) $db->scalar('SELECT COUNT(*) FROM abuse_reports WHERE target_user_id = ?', [$id]),
             'errors' => $errors,
         ], 'layouts/app', $httpStatus);

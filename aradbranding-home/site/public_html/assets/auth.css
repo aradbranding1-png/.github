@@ -266,3 +266,11 @@ body.is-launching .auth-card { transform: translateY(-4px) scale(.99); opacity: 
 [dir="ltr"] .auth-field input[dir="ltr"] { text-align: left; }
 [dir="ltr"] .auth-brand { order: 0; }
 @media (max-width: 640px) { [dir="ltr"] .auth-back { white-space: nowrap; } [dir="ltr"] .auth-brand .th-brand-name { font-size: 14px; } }
+
+/* Sign in with Google (1.19.19) */
+.auth-card a.auth-google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 50px; border-radius: 16px; color: #1f1f1f; font-weight: 700; font-size: 15px;
+  background: #fff; border: 1px solid #dadce0; transition: box-shadow .2s, transform .2s var(--th-ease); }
+.auth-card a.auth-google svg { width: 20px; height: 20px; flex: none; }
+.auth-card a.auth-google:hover { box-shadow: 0 8px 22px -8px rgba(255, 255, 255, .45); transform: translateY(-1px); }
+.auth-card a.auth-google:focus-visible { outline: 3px solid #25C7FF; outline-offset: 2px; }
+.auth-hint { margin: 10px 0 0; color: #AFC1D4; font-size: 12.5px; line-height: 1.8; text-align: center; }

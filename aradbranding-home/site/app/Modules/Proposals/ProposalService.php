@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Proposals;
 
+use App\Core\Cache\Cache;
 use App\Core\Db\Connection;
 use App\Core\Events\Outbox;
 use App\Core\Security\ContactGuard;
@@ -22,7 +23,7 @@ use App\Modules\Wallet\WalletService;
  */
 final class ProposalService
 {
-    public const DRAFT = 0, PUBLISHED = 2, HIDDEN = 3, REJECTED = 4, EXPIRED = 5;
+    public const DRAFT = 0, PENDING = 1, PUBLISHED = 2, HIDDEN = 3, REJECTED = 4, EXPIRED = 5;
 
     public const TYPES = [
         1 => 'درخواست خرید', 2 => 'عرضه و فروش', 3 => 'مشارکت', 4 => 'سرمایه‌گذاری', 5 => 'خدمات', 6 => 'نمایندگی',
@@ -31,7 +32,7 @@ final class ProposalService
         1 => 'Buying request', 2 => 'Selling offer', 3 => 'Partnership', 4 => 'Investment', 5 => 'Services', 6 => 'Agency',
     ];
     public const STATUS_LABELS = [
-        self::DRAFT => 'پیش‌نویس', self::PUBLISHED => 'منتشرشده', self::HIDDEN => 'مخفی', self::REJECTED => 'ردشده', self::EXPIRED => 'منقضی',
+        self::DRAFT => 'پیش‌نویس', self::PENDING => 'در انتظار بررسی', self::PUBLISHED => 'منتشرشده', self::HIDDEN => 'مخفی', self::REJECTED => 'ردشده', self::EXPIRED => 'منقضی',
     ];
 
     /** Text fields that are checked for contact details (proposals are free to read). */
@@ -46,7 +47,15 @@ final class ProposalService
         private Outbox $outbox,
         private \App\Modules\Letters\LetterService $letters,
         private \App\Modules\Trust\TrustService $trust,
+        private Cache $cache,
     ) {
+    }
+
+    /** Discover shows cached feed cards; drop them whenever the feed changes. */
+    private function forgetDiscover(): void
+    {
+        $this->cache->forget('discover:new_proposals:10');
+        $this->cache->forget('discover:popular:10');
     }
 
     public function publishFee(): int
@@ -98,7 +107,12 @@ final class ProposalService
                 $d['target_markets'], $d['terms'], json_encode($d['tags'], JSON_UNESCAPED_UNICODE), $cover, $thumb,
                 json_encode($gallery), $p['id']]
         );
-        if ((int) $p['status'] === self::PUBLISHED) {
+        // An edit of a live or rejected proposal goes back to the moderators; it leaves the feed until approved.
+        if (in_array((int) $p['status'], [self::PUBLISHED, self::REJECTED], true)) {
+            $this->db->exec(
+                'UPDATE proposals SET status = ?, reject_reason = NULL WHERE id = ?',
+                [self::PENDING, $p['id']]
+            );
             $this->syncFeed((int) $p['id']);
         }
     }
@@ -109,6 +123,12 @@ final class ProposalService
      */
     public function publish(array $p): void
     {
+        if ((int) $p['status'] === self::PENDING) {
+            throw new ValidationFailed(['proposal' => t('این پیشنهاد در انتظار بررسی است و پس از تأیید منتشر می‌شود.')]);
+        }
+        if ((int) $p['status'] === self::REJECTED) {
+            throw new ValidationFailed(['proposal' => t('این پیشنهاد رد شده است. آن را ویرایش کنید تا دوباره برای بررسی ارسال شود.')]);
+        }
         $this->trust->assertCanAct(['status' => $this->db->scalar('SELECT status FROM users WHERE id = ?', [$p['user_id']])], 'proposal');
         $days = max(1, (int) $this->settings->get('proposal.lifetime_days', 90));
         $apply = function () use ($p, $days): void {
@@ -138,6 +158,7 @@ final class ProposalService
             $this->db->exec('UPDATE proposals SET status = ?, updated_at = NOW(3) WHERE id = ?', [self::DRAFT, $p['id']]);
             $this->db->exec('DELETE FROM proposal_feed WHERE proposal_id = ?', [$p['id']]);
         });
+        $this->forgetDiscover();
     }
 
     public function delete(array $p): void
@@ -146,6 +167,7 @@ final class ProposalService
             $this->db->exec('UPDATE proposals SET status = ?, deleted_at = NOW(3), updated_at = NOW(3) WHERE id = ?', [self::HIDDEN, $p['id']]);
             $this->db->exec('DELETE FROM proposal_feed WHERE proposal_id = ?', [$p['id']]);
         });
+        $this->forgetDiscover();
     }
 
     /** Cron: expire in batches and drop from the feed. */
@@ -163,15 +185,17 @@ final class ProposalService
             $this->db->exec("UPDATE proposals SET status = " . self::EXPIRED . " WHERE id IN ({$marks})", $ids);
             $this->db->exec("DELETE FROM proposal_feed WHERE proposal_id IN ({$marks})", $ids);
         });
+        $this->forgetDiscover();
         return count($ids);
     }
 
     /** Rebuild one feed card from the source row. */
     public function syncFeed(int $id): void
     {
+        $this->forgetDiscover();
         $r = $this->db->first(
             'SELECT p.id, p.public_id, p.user_id, p.type, p.category_id, p.country_id, p.language_id, p.title, p.tags,
-                    p.thumb_path, p.published_at, p.status, p.deleted_at,
+                    p.thumb_path, p.published_at, p.status, p.deleted_at, p.fee_paid,
                     u.first_name, u.last_name, u.handle, u.avatar_path, u.business_verified_at,
                     c.code AS country_code, up.company_name
              FROM proposals p
@@ -181,7 +205,9 @@ final class ProposalService
              WHERE p.id = ?',
             [$id]
         );
-        if ($r === null || (int) $r['status'] !== self::PUBLISHED || $r['deleted_at'] !== null) {
+        // With the publishing fee on, only proposals whose owner paid are shown in the feed and in Discover.
+        $unpaid = $r !== null && (int) $r['fee_paid'] === 0 && $this->publishFee() > 0;
+        if ($r === null || (int) $r['status'] !== self::PUBLISHED || $r['deleted_at'] !== null || $unpaid) {
             $this->db->exec('DELETE FROM proposal_feed WHERE proposal_id = ?', [$id]);
             return;
         }

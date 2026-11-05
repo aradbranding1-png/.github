@@ -46,6 +46,11 @@ final class SettingsController extends Controller
             'dailyDigest' => (bool) $settings->get('notifications.daily_digest', true),
             'autoBackup' => (bool) $settings->get('backup.auto_daily', false),
             'retention' => (int) $settings->get('backup.retention_days', 7),
+            'googleOn' => (bool) $settings->get('google.enabled', false),
+            'googleClientId' => $this->c->get(\App\Modules\Users\GoogleAuth::class)->clientId(),
+            'googleHasSecret' => $this->c->get(\App\Modules\Users\GoogleAuth::class)->hasSecret(),
+            'googleFromEnv' => $this->c->get(\App\Modules\Users\GoogleAuth::class)->fromEnv(),
+            'googleRedirect' => \App\Modules\Users\GoogleAuth::redirectUri(),
             'old' => $status === 422 ? $request->all() : [],
             'errors' => $errors,
         ], 'layouts/app', $status);
@@ -190,5 +195,39 @@ final class SettingsController extends Controller
             'unlock_charge' => (bool) $request->input('unlock_charge'),
         ]);
         return $this->redirect('/admin/settings', 'تنظیمات ذخیره شد و از همین لحظه اعمال می‌شود.');
+    }
+
+    /** Google sign-in credentials (Google Cloud Console › OAuth client ID › Web application). */
+    public function updateGoogle(Request $request): Response
+    {
+        $actor = $this->user($request)['id'];
+        $settings = $this->c->get(Settings::class);
+        $google = $this->c->get(\App\Modules\Users\GoogleAuth::class);
+        $enabled = (bool) $request->input('google_enabled');
+        $errors = [];
+        if (!$google->fromEnv()) {
+            $id = trim((string) $request->input('google_client_id', ''));
+            $secret = trim((string) $request->input('google_client_secret', ''));
+            if ($id !== '' && !preg_match('/^[0-9]+-[0-9a-z]+\.apps\.googleusercontent\.com$/', $id)) {
+                $errors['google_client_id'] = 'Client ID معتبر نیست (باید به .apps.googleusercontent.com ختم شود).';
+            }
+            if ($enabled && $id === '') {
+                $errors['google_client_id'] = 'برای فعال‌سازی، Client ID لازم است.';
+            }
+            if ($enabled && $secret === '' && !$google->hasSecret()) {
+                $errors['google_client_secret'] = 'برای فعال‌سازی، Client Secret لازم است.';
+            }
+            if ($errors !== []) {
+                return $this->show($request, $errors, 422);
+            }
+            $settings->set('google.client_id', $id, $actor);
+            if ($secret !== '') {
+                // Blank keeps the saved secret; it is never sent back to the browser.
+                $settings->set('google.client_secret', $secret, $actor);
+            }
+        }
+        $settings->set('google.enabled', $enabled, $actor);
+        $this->c->get(Audit::class)->log('settings.google', $actor, 'settings', null, 'success', $request, ['enabled' => $enabled]);
+        return $this->redirect('/admin/settings#google', $enabled ? 'ورود با گوگل فعال شد.' : 'تنظیمات ورود با گوگل ذخیره شد (غیرفعال).');
     }
 }

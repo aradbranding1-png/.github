@@ -10,6 +10,9 @@ $f = fn (string $name, string $label, array $extra = []) => $this->partial('part
 ?>
 <form class="stack" method="post" action="<?= e($action) ?>" enctype="multipart/form-data" novalidate>
   <?= csrf_field() ?>
+  <?php if ($editing && (int) $p['status'] === ProposalService::REJECTED && !empty($p['reject_reason'])): ?><div class="alert alert-error" role="alert"><?= te('این پیشنهاد رد شد. دلیل:') ?> <?= e($p['reject_reason']) ?><br><?= te('پس از اصلاح و ذخیره، دوباره برای بررسی ارسال می‌شود.') ?></div>
+  <?php elseif ($editing && (int) $p['status'] === ProposalService::PUBLISHED): ?><div class="alert" role="status"><?= te('با ذخیره تغییرات، پیشنهاد تا تأیید دوباره مدیران از فید خارج می‌شود.') ?></div>
+  <?php elseif ($editing && (int) $p['status'] === ProposalService::PENDING): ?><div class="alert" role="status"><?= te('این پیشنهاد در انتظار بررسی است.') ?></div><?php endif; ?>
   <?php if (isset($errors['images'])): ?><div class="alert alert-error" role="alert"><?= e($errors['images']) ?></div><?php endif; ?>
 
   <section class="panel form">

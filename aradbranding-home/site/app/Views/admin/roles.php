@@ -4,7 +4,7 @@
   <h2>نقش‌ها</h2>
   <ul class="list">
     <?php foreach ($roles as $r): ?>
-      <li class="list-row"><div class="grow"><a class="title" href="/admin/roles/<?= e($r['id']) ?>"><?= e($r['name']) ?></a><div class="meta"><span class="ltr"><?= e($r['slug']) ?></span><span><?= fa_int((int) $r['users']) ?> کاربر</span></div></div>
+      <li class="list-row"><div class="grow"><a class="title" href="/admin/roles/<?= e($r['id']) ?>" title="<?= e($r['tip']) ?>"><?= e($r['label']) ?></a><div class="meta"><span class="ltr"><?= e($r['slug']) ?></span><span><?= fa_int((int) $r['users']) ?> کاربر</span></div></div>
         <?php if ($r['slug'] === 'super_admin'): ?><span class="chip chip-gold">کامل و قفل</span><?php endif; ?></li>
     <?php endforeach; ?>
   </ul>

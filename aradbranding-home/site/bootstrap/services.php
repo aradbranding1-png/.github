@@ -38,6 +38,7 @@ return static function (Container $c): void {
         $c->get(ImageUploader::class)
     ));
     $c->singleton(Settings::class, static fn (Container $c) => new Settings($c->get(Connection::class), $c->get(Cache::class)));
+    $c->singleton(\App\Modules\Users\GoogleAuth::class, static fn (Container $c) => new \App\Modules\Users\GoogleAuth($c->get(Settings::class)));
     $c->singleton(Idempotency::class, static fn (Container $c) => new Idempotency($c->get(Connection::class)));
     $c->singleton(Pricing::class, static fn (Container $c) => new Pricing($c->get(Connection::class), $c->get(Cache::class)));
     $c->singleton(WalletService::class, static fn (Container $c) => new WalletService(
@@ -67,7 +68,8 @@ return static function (Container $c): void {
         $c->get(Settings::class),
         $c->get(Outbox::class),
         $c->get(\App\Modules\Letters\LetterService::class),
-        $c->get(\App\Modules\Trust\TrustService::class)
+        $c->get(\App\Modules\Trust\TrustService::class),
+        $c->get(Cache::class)
     ));
     $c->singleton(FeedService::class, static fn (Container $c) => new FeedService($c->get(Connection::class), $c->get(Settings::class)));
     $c->singleton(\App\Modules\Notifications\NotificationService::class, static fn (Container $c) => new \App\Modules\Notifications\NotificationService($c->get(Connection::class)));

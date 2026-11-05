@@ -136,6 +136,67 @@ final class AuthService
             return ['ok' => false, 'error' => $generic];
         }
 
+        $rehash = Password::needsRehash((string) $row['password_hash']) ? Password::hash($password) : null;
+        return $this->finish($row, $email, $ip, 'success', $rehash);
+    }
+
+    /**
+     * Sign-in with a verified Google account: the bound Google id first, otherwise the one account whose profile
+     * Gmail (or primary e-mail) is this address and which has no other Google account bound — that id is bound now.
+     * A password lock does not apply: Google already proved who this is (this is the "forgot my password" path).
+     *
+     * @return array{ok: bool, user_id?: int, error?: string}
+     */
+    public function attemptGoogle(string $sub, string $email, string $ip): array
+    {
+        $cols = 'id, status, suspended_until, suspended_until <= NOW(3) AS suspension_over, status_reason';
+        $row = $this->db->first("SELECT {$cols} FROM users WHERE google_sub = ? AND deleted_at IS NULL", [$sub]);
+        if ($row === null) {
+            $rows = $this->db->select(
+                "SELECT {$cols} FROM users WHERE deleted_at IS NULL AND google_sub IS NULL AND (google_email = ? OR email = ?) LIMIT 2",
+                [$email, $email]
+            );
+            if (count($rows) !== 1) {
+                $this->log(null, $email, $ip, 'google_unknown');
+                return ['ok' => false, 'error' => count($rows) === 0
+                    ? t('این حساب گوگل (:email) به هیچ حسابی در سامانه وصل نیست. یک بار با ایمیل/موبایل و رمز عبور وارد شوید و در «حساب کاربری › امنیت» جیمیل خود را ثبت کنید.', ['email' => $email])
+                    : t('این جیمیل در بیش از یک حساب ثبت شده است. برای ورود با گوگل با پشتیبانی آراد برندینگ تماس بگیرید.')];
+            }
+            $row = $rows[0];
+            $this->db->exec('UPDATE users SET google_sub = ?, google_email = ?, google_linked_at = NOW(3), updated_at = NOW(3) WHERE id = ? AND google_sub IS NULL',
+                [$sub, $email, (int) $row['id']]);
+        }
+        return $this->finish($row, $email, $ip, 'google');
+    }
+
+    /** Binds a verified Google account to a signed-in member. Returns an error message, or null on success. */
+    public function linkGoogle(int $userId, string $sub, string $email): ?string
+    {
+        $owner = $this->db->scalar('SELECT id FROM users WHERE google_sub = ? AND deleted_at IS NULL', [$sub]);
+        if ($owner !== null && (int) $owner !== $userId) {
+            return t('این حساب گوگل به حساب دیگری در سامانه وصل است.');
+        }
+        $this->db->exec('UPDATE users SET google_sub = ?, google_email = ?, google_linked_at = NOW(3), updated_at = NOW(3) WHERE id = ?',
+            [$sub, $email, $userId]);
+        return null;
+    }
+
+    /** New password without the current one (right after a Google sign-in). Signs out every other device. */
+    public function setPassword(int $userId, string $new): void
+    {
+        $this->db->exec('UPDATE users SET password_hash = ?, failed_logins = 0, locked_until = NULL, updated_at = NOW(3) WHERE id = ?', [Password::hash($new), $userId]);
+        \App\Core\Container::instance()->get(\App\Core\Session\SessionStore::class)->revokeUser($userId);
+    }
+
+    /**
+     * Account status checks shared by every sign-in method, then the success bookkeeping.
+     *
+     * @param array<string, mixed> $row id, status, suspended_until, suspension_over, status_reason
+     * @return array{ok: bool, user_id?: int, error?: string}
+     */
+    private function finish(array $row, string $email, string $ip, string $result, ?string $rehash = null): array
+    {
+        $userId = (int) $row['id'];
         // A timed suspension lifts itself at the first sign-in after it ends.
         if ((int) $row['status'] === Auth::STATUS_SUSPENDED && (int) ($row['suspension_over'] ?? 0) === 1) {
             $this->db->exec('UPDATE users SET status = ?, suspended_until = NULL, status_reason = NULL, updated_at = NOW(3) WHERE id = ? AND status = ?',
@@ -156,14 +217,13 @@ final class AuthService
             return ['ok' => false, 'error' => $msg . ($why !== '' ? ' ' . t('دلیل: :reason.', ['reason' => $why]) : '') . ' ' . t('برای پیگیری با پشتیبانی آراد برندینگ تماس بگیرید.')];
         }
 
-        $rehash = Password::needsRehash((string) $row['password_hash']) ? Password::hash($password) : null;
         $this->db->exec(
             'UPDATE users SET failed_logins = 0, locked_until = NULL, last_active_at = NOW(3),
                     password_hash = COALESCE(?, password_hash)
              WHERE id = ?',
             [$rehash, $userId]
         );
-        $this->log($userId, $email, $ip, 'success');
+        $this->log($userId, $email, $ip, $result);
         return ['ok' => true, 'user_id' => $userId];
     }
 

@@ -24,10 +24,11 @@ use App\Modules\Proposals\ProposalService;
               <span class="chip<?= $status === ProposalService::PUBLISHED ? ' chip-ok' : '' ?>"><?= te(ProposalService::STATUS_LABELS[$status] ?? '') ?></span>
               <span><?= te(':n بازدید', ['n' => fa_int((int) $r['view_count'])]) ?></span>
             </div>
+            <?php if ($status === ProposalService::REJECTED && !empty($r['reject_reason'])): ?><p class="list-note"><?= te('دلیل رد:') ?> <?= e($r['reject_reason']) ?></p><?php endif; ?>
           </div>
-          <?php if ($status === ProposalService::PUBLISHED): ?>
+          <?php if ($status === ProposalService::PUBLISHED && !empty($r['in_feed'])): ?>
             <form class="inline-form" method="post" action="/proposals/<?= e($r['uid']) ?>/unpublish"><?= csrf_field() ?><button class="btn btn-quiet btn-sm" type="submit"><?= te('خارج از فید') ?></button></form>
-          <?php else: ?>
+          <?php elseif (!in_array($status, [ProposalService::PENDING, ProposalService::REJECTED], true)): ?>
             <form class="inline-form" method="post" action="/proposals/<?= e($r['uid']) ?>/publish"><?= csrf_field() ?><button class="btn btn-ghost btn-sm" type="submit"><?= te('انتشار') ?></button></form>
           <?php endif; ?>
           <a class="btn btn-quiet btn-sm" href="/proposals/<?= e($r['uid']) ?>/edit"><?= te('ویرایش') ?></a>

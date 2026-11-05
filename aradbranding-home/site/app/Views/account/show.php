@@ -1,5 +1,5 @@
 <?php
-/** @var array $input @var array $user @var array $profile @var array $countries @var array $languages @var array $errors @var string $tab */
+/** @var array $google @var bool $googleEnabled @var bool $googleReset @var array $input @var array $user @var array $profile @var array $countries @var array $languages @var array $errors @var string $tab */
 $tabs = ['profile' => t('پروفایل'), 'interests' => t('علاقه‌مندی‌ها'), 'security' => t('امنیت')];
 $countries = localized_rows($countries ?? []);
 $languages = localized_rows($languages ?? []);
@@ -100,9 +100,35 @@ $avatarUrl = media($user['avatar_path'] ?? null);
 </form>
 
 <?php else: ?>
+<?php $g = $google ?? []; $gLinked = !empty($g['linked']); ?>
+<section class="panel form" id="google">
+  <div>
+    <h2><?= te('ورود با گوگل') ?></h2>
+    <p class="muted"><?= te('جیمیل حساب گوگل خود را ثبت کنید تا با دکمه «ورود با گوگل» وارد شوید. اگر رمز عبور را فراموش کنید، با همین جیمیل وارد می‌شوید و رمز تازه می‌گذارید.') ?></p>
+  </div>
+  <?php if (empty($googleEnabled)): ?><p class="hint muted"><?= te('ورود با گوگل هنوز توسط مدیر سامانه فعال نشده است؛ می‌توانید جیمیل را از الان ثبت کنید.') ?></p><?php endif; ?>
+  <?php if ($gLinked): ?>
+    <div class="alert alert-success" role="status"><?= te('وصل به حساب گوگل :email', ['email' => (string) $g['google_email']]) ?></div>
+    <form method="post" action="/account/google/unlink"><?= csrf_field() ?><div class="form-actions"><button class="btn btn-quiet" type="submit"><?= te('جدا کردن حساب گوگل') ?></button></div></form>
+  <?php else: ?>
+    <form method="post" action="/account/google" novalidate>
+      <?= csrf_field() ?>
+      <?= $this->partial('partials/field', ['name' => 'google_email', 'label' => t('جیمیل (آدرس حساب گوگل)'), 'type' => 'email', 'old' => ['google_email' => $input['google_email'] ?? ($g['google_email'] ?? '')], 'errors' => $errors, 'hint' => !empty($g['google_email']) ? t('ثبت شده؛ با اولین ورود با گوگل وصل می‌شود.') : t('مثلاً name@gmail.com'), 'attrs' => ['autocomplete' => 'email', 'dir' => 'ltr', 'placeholder' => 'name@gmail.com']]) ?>
+      <div class="form-actions">
+        <button class="btn" type="submit"><?= te('ذخیره جیمیل') ?></button>
+        <?php if (!empty($googleEnabled)): ?><a class="btn btn-quiet" href="/auth/google"><?= te('همین حالا با گوگل وصل کن') ?></a><?php endif; ?>
+      </div>
+    </form>
+  <?php endif; ?>
+</section>
+
 <form class="panel form" method="post" action="/account/password" novalidate>
   <?= csrf_field() ?>
+  <?php if (!empty($googleReset)): ?>
+  <div class="alert alert-success" role="status"><?= te('با گوگل وارد شده‌اید؛ برای گذاشتن رمز تازه، رمز فعلی لازم نیست.') ?></div>
+  <?php else: ?>
   <?= $this->partial('partials/field', ['name' => 'current_password', 'label' => t('رمز عبور فعلی'), 'type' => 'password', 'old' => [], 'errors' => $errors, 'attrs' => ['autocomplete' => 'current-password', 'dir' => 'ltr']]) ?>
+  <?php endif; ?>
   <div class="row row-2">
     <?= $this->partial('partials/field', ['name' => 'password', 'label' => t('رمز عبور جدید'), 'type' => 'password', 'old' => [], 'errors' => $errors, 'hint' => t('حداقل ۸ نویسه'), 'attrs' => ['autocomplete' => 'new-password', 'dir' => 'ltr']]) ?>
     <?= $this->partial('partials/field', ['name' => 'password_confirmation', 'label' => t('تکرار رمز عبور جدید'), 'type' => 'password', 'old' => [], 'errors' => $errors, 'attrs' => ['autocomplete' => 'new-password', 'dir' => 'ltr']]) ?>

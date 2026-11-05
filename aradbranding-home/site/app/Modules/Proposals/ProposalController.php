@@ -116,7 +116,8 @@ final class ProposalController extends Controller
     {
         $user = $this->user($request);
         $rows = $this->c->get(Connection::class)->select(
-            'SELECT public_id, title, type, status, thumb_path, view_count, send_count, published_at, expires_at, updated_at
+            'SELECT public_id, title, type, status, thumb_path, view_count, send_count, published_at, expires_at, updated_at, reject_reason,
+                    EXISTS (SELECT 1 FROM proposal_feed f WHERE f.proposal_id = proposals.id) AS in_feed
              FROM proposals WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 100',
             [$user['id']]
         );

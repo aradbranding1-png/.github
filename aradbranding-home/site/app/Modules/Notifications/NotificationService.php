@@ -14,6 +14,7 @@ final class NotificationService
         'letter' => ':name برای شما نامه فرستاد.',
         'reply' => ':name به نامه شما پاسخ داد.',
         'proposal' => ':name یک پیشنهاد تجاری برای شما فرستاد.',
+        'proposal_rejected' => 'پیشنهاد تجاری شما رد شد. دلیل: :subject. آن را ویرایش کنید تا دوباره بررسی شود.',
         'connection' => 'ارتباط تجاری شما با :name ثبت شد. شبکه شما در حال رشد است!',
         'public_letter' => 'نامه عمومی جدید از :name: «:subject»',
         'campaign_done' => 'نامه عمومی «:subject» به :n تاجر رسید.',

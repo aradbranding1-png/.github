@@ -15,6 +15,7 @@ $canAct = $tab === 'pages' ? isset($perms['pages.approve']) : isset($perms['prop
   <button class="btn btn-sm" type="submit">نمایش</button>
 </form>
 <section class="panel">
+  <?php if ($tab === 'proposals' && !empty($pendingCount)): ?><p class="list-note"><a href="/admin/content?status=1"><?= e(fa_int($pendingCount)) ?> پیشنهاد در انتظار بررسی است</a></p><?php endif; ?>
   <?php if ($rows === []): ?><div class="empty"><p>موردی پیدا نشد.</p></div><?php else: ?>
     <ul class="list">
       <?php foreach ($rows as $r): $st = (int) $r['status']; ?>
@@ -24,13 +25,27 @@ $canAct = $tab === 'pages' ? isset($perms['pages.approve']) : isset($perms['prop
             <a class="title" href="<?= $tab === 'proposals' ? '/proposals/' . e($r['uid']) : ($r['handle'] ? '/p/' . e($r['handle']) . '/' . e($r['lang']) : '#') ?>" target="_blank" rel="noopener"><?= e($r['title']) ?></a>
             <div class="meta"><a href="/admin/users/<?= e($r['user_id']) ?>"><?= e($r['first_name'] . ' ' . $r['last_name']) ?></a><span><?= e(fa_date($r['created_at'])) ?></span></div>
             <p class="list-note"><?= e(\App\Core\Support\Str::excerpt((string) ($r['summary'] ?? $r['teaser'] ?? ''), 140)) ?></p>
+            <?php if (!empty($r['reject_reason'])): ?><p class="list-note">دلیل رد: <?= e($r['reject_reason']) ?></p><?php endif; ?>
           </div>
           <span class="chip<?= $st === 2 ? ' chip-ok' : '' ?>"><?= e($labels[$st] ?? '') ?></span>
           <?php if ($canAct): ?>
             <form class="inline-form" method="post" action="/admin/content/<?= $tab === 'pages' ? 'pages' : 'proposals' ?>/<?= e($r['id']) ?>">
               <?= csrf_field() ?>
-              <?php if ($st === 2): ?><button class="btn btn-quiet btn-sm" name="action" value="hide">مخفی</button><button class="btn btn-danger btn-sm" name="action" value="reject">رد</button>
-              <?php else: ?><button class="btn btn-ghost btn-sm" name="action" value="restore">انتشار مجدد</button><?php endif; ?>
+              <?php if ($tab === 'pages'): ?>
+                <?php if ($st === 2): ?><button class="btn btn-quiet btn-sm" name="action" value="hide">مخفی</button><button class="btn btn-danger btn-sm" name="action" value="reject">رد</button>
+                <?php else: ?><button class="btn btn-ghost btn-sm" name="action" value="restore"><?= $st === 0 ? 'انتشار' : 'انتشار مجدد' ?></button><?php endif; ?>
+              <?php else: ?>
+                <?php if ($st === 2): ?><button class="btn btn-quiet btn-sm" name="action" value="hide">مخفی</button>
+                <?php elseif ($st === 1): ?><button class="btn btn-ghost btn-sm" name="action" value="restore">تأیید و انتشار</button>
+                <?php else: ?><button class="btn btn-ghost btn-sm" name="action" value="restore"><?= $st === 0 ? 'انتشار' : 'انتشار مجدد' ?></button><?php endif; ?>
+                <?php if (in_array($st, [0, 1, 2], true)): ?>
+                  <details class="reject-box">
+                    <summary class="btn btn-danger btn-sm">رد</summary>
+                    <textarea class="input" name="reason" rows="3" maxlength="500" placeholder="دلیل رد را بنویسید؛ صاحب پیشنهاد آن را می‌بیند و اصلاح می‌کند." required></textarea>
+                    <button class="btn btn-danger btn-sm" name="action" value="reject">ثبت رد</button>
+                  </details>
+                <?php endif; ?>
+              <?php endif; ?>
               <?php if ($tab === 'pages'): ?><button class="btn btn-danger btn-sm" name="action" value="delete" data-confirm="این صفحه برای همیشه حذف شود؟ قوانین نمایش مربوط به آن هم حذف می‌شوند.">حذف</button><?php endif; ?>
             </form>
           <?php endif; ?>

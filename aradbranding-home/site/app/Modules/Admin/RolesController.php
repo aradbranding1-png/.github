@@ -23,6 +23,51 @@ final class RolesController extends AdminController
         'reports.view' => 'گزارش‌ها', 'reports.export' => 'خروجی Excel', 'audit.view' => 'رویدادهای امنیتی',
         'settings.manage' => 'تنظیمات', 'roles.manage' => 'نقش‌ها', 'backup.manage' => 'پشتیبان‌گیری', 'updates.manage' => 'بروزرسانی و تازه‌ها',
     ];
+    /** Built-in roles: slug => [Persian name, what the role is for]. Custom roles keep the name they were given. */
+    public const ROLE_INFO = [
+        'super_admin' => ['مدیر کل', 'همه بخش‌های سامانه، بدون هیچ محدودیتی.'],
+        'admin' => ['مدیر', 'مدیریت کاربران، صفحه‌ها، پیشنهادها و نامه‌ها در همه کشورها.'],
+        'operations_manager' => ['مدیر عملیات', 'کاربران، صفحه‌ها و پیشنهادهای دپارتمان خود را مدیریت می‌کند.'],
+        'finance_manager' => ['مدیر مالی', 'کیف پول، Stars، پرداخت‌ها و بازپرداخت‌ها.'],
+        'support_manager' => ['مدیر پشتیبانی', 'کاربران تیم خود را می‌بیند و برای پشتیبانی ویرایش می‌کند.'],
+        'content_manager' => ['مدیر محتوا', 'بررسی و تأیید صفحه‌های تجاری و پیشنهادها.'],
+        'moderation_manager' => ['مدیر نظارت', 'تأیید یا رد صفحه‌ها، پیشنهادها و نامه‌های تیم خود.'],
+        'analyst' => ['تحلیلگر', 'فقط گزارش‌ها و خروجی Excel؛ چیزی را تغییر نمی‌دهد.'],
+        'customer' => ['کاربر عادی', 'فقط از امکانات حساب خودش استفاده می‌کند؛ به بخش مدیریت دسترسی ندارد.'],
+        'verified_customer' => ['کاربر تأییدشده', 'کاربر عادی با نشان تأیید کسب‌وکار؛ به بخش مدیریت دسترسی ندارد.'],
+        'restricted_customer' => ['کاربر محدودشده', 'کاربری که امکان ارسال و انتشار از او گرفته شده است.'],
+    ];
+
+    /**
+     * Adds `label` (Persian name) and `tip` (what the role can do, for a hover hint) to role rows that carry id, slug, name.
+     * @param list<array<string, mixed>> $roles
+     * @return list<array<string, mixed>>
+     */
+    public static function describe(array $roles, Connection $db): array
+    {
+        $grants = [];
+        foreach ($db->select('SELECT rp.role_id, p.code, rp.scope FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id ORDER BY p.module, p.code') as $g) {
+            $grants[(int) $g['role_id']][] = (self::PERMISSION_LABELS[$g['code']] ?? $g['code']) . ' (' . (self::SCOPES[$g['scope']] ?? $g['scope']) . ')';
+        }
+        foreach ($roles as &$r) {
+            [$label, $about] = self::ROLE_INFO[$r['slug']] ?? [$r['name'], ''];
+            $list = $grants[(int) $r['id']] ?? [];
+            $tip = $label . ($about !== '' ? ' — ' . $about : '');
+            if ($r['slug'] === 'super_admin') {
+                $tip .= "\nدسترسی‌ها: همه";
+            } elseif ($list !== []) {
+                $tip .= "\nدسترسی‌ها:\n• " . implode("\n• ", $list);
+            } else {
+                $tip .= "\nدسترسی به بخش مدیریت ندارد.";
+            }
+            $r['about'] = $about;
+            $r['perm_count'] = $r['slug'] === 'super_admin' ? -1 : count($list);
+            $r['label'] = $label;
+            $r['tip'] = $tip;
+        }
+        return $roles;
+    }
+
     public const SCOPES = ['own' => 'خودش', 'team' => 'تیم (کشورهای تخصیص‌یافته)', 'department' => 'دپارتمان', 'all' => 'همه'];
 
     public function index(Request $request): Response
@@ -30,7 +75,7 @@ final class RolesController extends AdminController
         $db = $this->c->get(Connection::class);
         return $this->view($request, 'admin/roles', [
             'title' => 'نقش‌ها و دسترسی‌ها',
-            'roles' => $db->select('SELECT r.id, r.slug, r.name, r.is_system, (SELECT COUNT(*) FROM user_roles ur WHERE ur.role_id = r.id) AS users FROM roles r ORDER BY r.id'),
+            'roles' => self::describe($db->select('SELECT r.id, r.slug, r.name, r.is_system, (SELECT COUNT(*) FROM user_roles ur WHERE ur.role_id = r.id) AS users FROM roles r ORDER BY r.id'), $db),
             'edit' => null,
         ]);
     }
@@ -47,7 +92,7 @@ final class RolesController extends AdminController
             [$role['id']]
         ), 'scope', 'code');
         return $this->view($request, 'admin/role', [
-            'title' => 'نقش: ' . $role['name'],
+            'title' => 'نقش: ' . (self::ROLE_INFO[$role['slug']][0] ?? $role['name']),
             'role' => $role,
             'permissions' => array_column($db->select('SELECT code FROM permissions ORDER BY module, code'), 'code'),
             'granted' => $granted,

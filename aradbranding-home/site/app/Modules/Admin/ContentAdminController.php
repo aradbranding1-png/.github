@@ -58,7 +58,7 @@ final class ContentAdminController extends AdminController
                 $bind[] = $before;
             }
             $rows = $db->select(
-                'SELECT p.id, p.public_id, p.title, p.summary, p.status, p.thumb_path, p.created_at, u.first_name, u.last_name, u.handle, u.id AS user_id
+                'SELECT p.id, p.public_id, p.title, p.summary, p.status, p.reject_reason, p.thumb_path, p.created_at, u.first_name, u.last_name, u.handle, u.id AS user_id
                  FROM proposals p JOIN users u ON u.id = p.user_id
                  WHERE ' . implode(' AND ', $where) . ' ORDER BY p.id DESC LIMIT 31',
                 $bind
@@ -78,6 +78,7 @@ final class ContentAdminController extends AdminController
             'rows' => $rows,
             'next' => $next,
             'status' => is_string($status) ? $status : '',
+            'pendingCount' => $tab === 'proposals' ? (int) $db->scalar('SELECT COUNT(*) FROM proposals WHERE status = 1 AND deleted_at IS NULL') : 0,
         ]);
     }
 
@@ -116,7 +117,7 @@ final class ContentAdminController extends AdminController
             throw new HttpException(403);
         }
         $db = $this->c->get(Connection::class);
-        $p = $db->first('SELECT id, status FROM proposals WHERE id = ? AND deleted_at IS NULL', [(int) $request->param('id')]);
+        $p = $db->first('SELECT id, user_id, status FROM proposals WHERE id = ? AND deleted_at IS NULL', [(int) $request->param('id')]);
         if ($p === null) {
             throw new HttpException(404);
         }
@@ -126,9 +127,37 @@ final class ContentAdminController extends AdminController
             'restore' => ProposalService::PUBLISHED,
             default => throw new HttpException(400),
         };
-        $db->exec('UPDATE proposals SET status = ?, updated_at = NOW(3) WHERE id = ?', [$to, $p['id']]);
-        $this->c->get(ProposalService::class)->syncFeed((int) $p['id']);
-        $this->c->get(Audit::class)->log('proposals.moderate', (int) $this->user($request)['id'], 'proposal', (int) $p['id'], 'success', $request, ['status' => $to]);
+        $reason = null;
+        if ($to === ProposalService::REJECTED) {
+            $reason = trim((string) $request->input('reason', ''));
+            if ($reason === '') {
+                return $this->redirect('/admin/content', 'برای رد پیشنهاد، دلیل را بنویسید تا صاحب آن بتواند اصلاح کند.', 'error');
+            }
+            $reason = mb_substr($reason, 0, 500);
+        }
+        $service = $this->c->get(ProposalService::class);
+        $db->transaction(function () use ($db, $service, $p, $to): void {
+            if ($to === ProposalService::PUBLISHED) {
+                // A draft was never published: it has no published_at, which the feed row requires.
+                $days = max(1, (int) $this->c->get(\App\Core\Settings\Settings::class)->get('proposal.lifetime_days', 90));
+                $db->exec(
+                    'UPDATE proposals SET status = ?, reject_reason = NULL, published_at = COALESCE(published_at, NOW(3)),
+                            expires_at = IF(expires_at IS NULL OR expires_at < NOW(3), NOW(3) + INTERVAL ? DAY, expires_at),
+                            updated_at = NOW(3) WHERE id = ?',
+                    [$to, $days, $p['id']]
+                );
+            } else {
+                $db->exec('UPDATE proposals SET status = ?, reject_reason = ?, updated_at = NOW(3) WHERE id = ?', [$to, $reason, $p['id']]);
+            }
+            $service->syncFeed((int) $p['id']);
+        });
+        if ($reason !== null) {
+            $uid = strtolower(Ulid::toString($db->scalar('SELECT public_id FROM proposals WHERE id = ?', [$p['id']])));
+            $this->c->get(\App\Modules\Notifications\NotificationService::class)->notify(
+                [(int) $p['user_id']], 'proposal_rejected', (int) $this->user($request)['id'], '/proposals/' . $uid . '/edit', ['subject' => $reason]
+            );
+        }
+        $this->c->get(Audit::class)->log('proposals.moderate', (int) $this->user($request)['id'], 'proposal', (int) $p['id'], 'success', $request, ['status' => $to, 'reason' => $reason]);
         return $this->redirect('/admin/content', 'وضعیت پیشنهاد تغییر کرد.');
     }
 }

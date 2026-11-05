@@ -32,6 +32,12 @@ return static function (Router $r): void {
         $r->post('/register', [AuthController::class, 'register'], ['csrf', 'throttle:register']);
     });
 
+    // Google sign-in (guests) and "connect Google" (signed-in members) share one start and one callback.
+    $r->group('', ['session'], static function (Router $r): void {
+        $r->get('/auth/google', [\App\Modules\Users\GoogleController::class, 'start']);
+        $r->get('/auth/google/callback', [\App\Modules\Users\GoogleController::class, 'callback'], ['throttle:login']);
+    });
+
     // Signed-in users
     $r->group('', ['session', 'auth', 'csrf'], static function (Router $r): void {
         $r->post('/logout', [AuthController::class, 'logout']);
@@ -41,6 +47,8 @@ return static function (Router $r): void {
         $r->get('/account', [AccountController::class, 'show']);
         $r->post('/account', [AccountController::class, 'updateProfile']);
         $r->post('/account/password', [AccountController::class, 'updatePassword'], ['throttle:login']);
+        $r->post('/account/google', [AccountController::class, 'updateGoogle']);
+        $r->post('/account/google/unlink', [AccountController::class, 'unlinkGoogle']);
 
         $r->get('/pages', [PageController::class, 'index']);
         $r->get('/pages/new', [PageController::class, 'create']);
@@ -155,6 +163,7 @@ return static function (Router $r): void {
         $r->post('/updates', [\App\Modules\Admin\ReleaseNotesController::class, 'store'], ['can:updates.manage']);
         $r->post('/updates/{id:\d+}/toggle', [\App\Modules\Admin\ReleaseNotesController::class, 'toggle'], ['can:updates.manage']);
         $r->post('/admin/settings', [SettingsController::class, 'update'], ['can:settings.manage']);
+        $r->post('/admin/settings/google', [SettingsController::class, 'updateGoogle'], ['can:settings.manage']);
         $r->get('/admin/languages', [\App\Modules\Admin\LanguagesController::class, 'index'], ['can:i18n.manage']);
         $r->post('/admin/languages/settings', [\App\Modules\Admin\LanguagesController::class, 'settings'], ['can:i18n.manage']);
         $r->post('/admin/languages/translate', [\App\Modules\Admin\LanguagesController::class, 'save'], ['can:i18n.manage']);

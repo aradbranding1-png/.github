@@ -111,5 +111,24 @@ $cls = static fn (string $k): string => isset($errors[$k]) ? ' has-error' : '';
   <div class="form-actions sticky-actions"><button class="btn" type="submit">ذخیره تنظیمات</button></div>
 </form>
 
+<form class="panel form" method="post" action="/admin/settings/google" id="google" novalidate>
+  <?= csrf_field() ?>
+  <div><h2>ورود با گوگل</h2><p class="muted">کاربران جیمیل خود را در «حساب کاربری › امنیت» ثبت می‌کنند و با دکمه «ورود با گوگل» وارد می‌شوند (و اگر رمز را فراموش کنند، با همین راه وارد می‌شوند و رمز تازه می‌گذارند).</p></div>
+  <ol class="muted">
+    <li>در <span dir="ltr">console.cloud.google.com › APIs &amp; Services › Credentials</span> یک «OAuth client ID» از نوع «Web application» بسازید.</li>
+    <li>در «Authorized redirect URIs» این آدرس را وارد کنید: <code dir="ltr"><?= e($googleRedirect) ?></code></li>
+    <li>در «OAuth consent screen» نام سامانه را بنویسید و وضعیت را «In production» کنید.</li>
+    <li>Client ID و Client Secret را اینجا وارد و «فعال» را روشن کنید.</li>
+  </ol>
+  <?php if (!empty($googleFromEnv)): ?>
+    <p class="hint">Client ID و Secret از فایل <code>.env</code> (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) خوانده می‌شوند: <code dir="ltr"><?= e($googleClientId) ?></code></p>
+  <?php else: ?>
+    <div class="field<?= $cls('google_client_id') ?>"><label for="google_client_id">Client ID</label><input class="input" id="google_client_id" name="google_client_id" dir="ltr" autocomplete="off" spellcheck="false" value="<?= e($googleClientId ?? '') ?>" placeholder="1234567890-abc….apps.googleusercontent.com"><?= $err('google_client_id') ?></div>
+    <div class="field<?= $cls('google_client_secret') ?>"><label for="google_client_secret">Client Secret</label><input class="input" id="google_client_secret" name="google_client_secret" type="password" dir="ltr" autocomplete="new-password" placeholder="<?= !empty($googleHasSecret) ? '•••••••• (ذخیره شده؛ برای تغییر، مقدار تازه بنویسید)' : 'GOCSPX-…' ?>"><?= $err('google_client_secret') ?></div>
+  <?php endif; ?>
+  <label class="switch"><input type="checkbox" name="google_enabled" value="1" role="switch"<?= !empty($googleOn) ? ' checked' : '' ?>><span class="switch-track" aria-hidden="true"></span><span>فعال‌سازی «ورود با گوگل» در صفحه ورود</span></label>
+  <div class="form-actions"><button class="btn" type="submit">ذخیره ورود با گوگل</button></div>
+</form>
+
   </div>
 </div>
