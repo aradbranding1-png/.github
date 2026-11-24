@@ -33,6 +33,7 @@ return static function (Router $r): void {
         $ac = \App\Modules\Integrations\AradContactController::class;
         $r->post('/users/lookup', [$ac, 'lookup']);
         $r->post('/users', [$ac, 'createUser']);
+        $r->post('/users/transfer', [$ac, 'transfer']);
         $r->get('/stars/rate', [$ac, 'rate']);
         $r->post('/stars/credit', [$ac, 'credit']);
     });

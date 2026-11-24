@@ -50,11 +50,7 @@ $steps = [
         <b>خروجی آخرین نسخه روی هاست (ZIP)</b>
         <span class="muted">بعد از دانلود از هاست پاک می‌شود. بدون media، backups، storage، vendor و .env.</span>
       </div>
-      <div class="field su-field-pass<?= isset($errors['export_password']) || isset($errors['export']) ? ' has-error' : '' ?>">
-        <input class="input" id="f-export-password" type="password" name="password" placeholder="رمز عبور شما" aria-label="رمز عبور شما" autocomplete="current-password" dir="ltr" required>
-        <?php if (isset($errors['export_password'])): ?><div class="error"><?= e($errors['export_password']) ?></div><?php endif; ?>
-        <?php if (isset($errors['export'])): ?><div class="error"><?= e($errors['export']) ?></div><?php endif; ?>
-      </div>
+      <?php if (isset($errors['export'])): ?><div class="field has-error"><div class="error"><?= e($errors['export']) ?></div></div><?php endif; ?>
       <button class="btn btn-ghost su-go" type="submit">ساخت و دانلود ZIP</button>
     </div>
   </form>

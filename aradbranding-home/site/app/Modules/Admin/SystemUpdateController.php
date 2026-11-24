@@ -78,15 +78,13 @@ final class SystemUpdateController extends Controller
         return $this->redirect('/admin/system-update', $result['message'], $result['ok'] ? 'success' : 'error');
     }
 
-    /** Builds a ZIP of the current code, streams it, and deletes it from the host as soon as the transfer ends. */
+    /**
+     * Builds a ZIP of the current code, streams it, and deletes it from the host as soon as the transfer ends.
+     * No password (1.19.28): the route needs updates.manage and a CSRF token, and every download is audited.
+     */
     public function export(Request $request): Response
     {
         $admin = $this->user($request);
-        $hash = (string) $this->c->get(Connection::class)->scalar('SELECT password_hash FROM users WHERE id = ?', [$admin['id']]);
-        if (!Password::verify((string) $request->input('password', ''), $hash)) {
-            $this->c->get(Audit::class)->log('system.export', $admin['id'], null, null, 'denied', $request, ['reason' => 'password']);
-            return $this->show($request, ['export_password' => 'رمز عبور درست نیست.'], 422);
-        }
         $dir = BASE_PATH . '/storage/framework';
         $tmp = $dir . '/export-' . bin2hex(random_bytes(8)) . '.zip';
         $manager = $this->c->get(UpdateManager::class);

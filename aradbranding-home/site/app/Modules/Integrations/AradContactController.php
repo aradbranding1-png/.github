@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Integrations;
 
+use App\Core\Auth\Password;
 use App\Core\Db\Connection;
 use App\Core\Env;
 use App\Core\Http\Controller;
@@ -138,6 +139,132 @@ final class AradContactController extends Controller
             $out['replayed'] = true;
             return self::json($out);
         });
+    }
+
+    /**
+     * POST users/transfer — the contract unit handed a customer's account to someone else (spouse, partner). The SAME
+     * account stays: name, mobile (= username) and password become the new person's; wallet, Stars, charge history,
+     * pages and the external_ids of earlier charges are untouched, so later instalments of the same orders land here.
+     * The previous person is shut out: all sessions and personal API keys are revoked and Google sign-in is unlinked.
+     * Once per transfer_id: a repeat gets the first answer back.
+     */
+    public function transfer(Request $request): Response
+    {
+        $client = $this->client($request, 'users.transfer');
+        if ($client instanceof Response) {
+            return $client;
+        }
+        $transferId = trim((string) $request->input('transfer_id', ''));
+        $userIdIn = $request->input('user_id');
+        $oldNational = self::iranMobile((string) $request->input('old_phone', ''));
+        $fullName = trim(preg_replace('/\s+/u', ' ', (string) $request->input('new_full_name', '')) ?? '');
+        $newNational = self::iranMobile((string) $request->input('new_phone', ''));
+        $password = (string) $request->input('password', '');
+        $reason = trim((string) $request->input('reason', ''));
+        $errors = [];
+        if (!self::validExternalId($transferId)) {
+            $errors['transfer_id'] = 'transfer_id is required (1–120 chars: letters, digits, - _ . :).';
+        }
+        if ($userIdIn !== null && $userIdIn !== '' && (!self::isInt($userIdIn) || (int) $userIdIn < 1)) {
+            $errors['user_id'] = 'user_id must be a positive integer.';
+        }
+        if (($userIdIn === null || $userIdIn === '') && $oldNational === null) {
+            $errors['old_phone'] = 'user_id or old_phone (an Iranian mobile number) is required.';
+        }
+        if (mb_strlen($fullName) < 2 || mb_strlen($fullName) > 150) {
+            $errors['new_full_name'] = 'new_full_name is required (2–150 characters).';
+        }
+        if ($newNational === null) {
+            $errors['new_phone'] = 'new_phone must be an Iranian mobile number, e.g. 09351234567.';
+        }
+        if (strlen($password) < 8 || strlen($password) > 128 || preg_match('/\s/', $password)) {
+            $errors['password'] = 'password must be 8–128 characters without spaces.';
+        }
+        if (mb_strlen($reason) > 500) {
+            $errors['reason'] = 'reason is at most 500 characters.';
+        }
+        if ($errors !== []) {
+            return $this->transferFail($request, $client, 422, 'اطلاعات انتقال نامعتبر است.', ['errors' => $errors]);
+        }
+
+        return $this->once('transfer', $transferId, function () use ($request, $client, $transferId, $userIdIn, $oldNational, $fullName, $newNational, $password, $reason): Response {
+            $db = $this->c->get(Connection::class);
+            $cols = 'id, first_name, last_name, email, phone_cc, phone, google_email, google_sub';
+            // user_id first (the id users/lookup or users returned), then the previous owner's mobile.
+            $user = self::isInt($userIdIn) ? $db->first("SELECT {$cols} FROM users WHERE id = ? AND deleted_at IS NULL", [(int) $userIdIn]) : null;
+            if ($user === null && $oldNational !== null) {
+                $user = $db->first("SELECT {$cols} FROM users WHERE phone_cc = '98' AND phone = ? AND deleted_at IS NULL", [$oldNational]);
+            }
+            if ($user === null) {
+                return $this->transferFail($request, $client, 404, 'کاربر پیدا نشد');
+            }
+            $userId = (int) $user['id'];
+            // The new mobile already has its own account: never merge two accounts automatically.
+            $other = $db->first("SELECT id, phone FROM users WHERE phone_cc = '98' AND phone = ? AND id <> ? AND deleted_at IS NULL", [$newNational, $userId]);
+            if ($other !== null) {
+                return $this->transferFail($request, $client, 409, 'موبایل جدید در سامانه توسعه تجارت حساب دیگری دارد (شناسه ' . (int) $other['id'] . '). ادغام خودکار انجام نمی‌شود.',
+                    ['existing_username' => '0' . $other['phone'], 'existing_user_id' => (string) $other['id']]);
+            }
+
+            [$first, $last] = array_pad(explode(' ', $fullName, 2), 2, '');
+            // A placeholder address made from the mobile, like accounts Arad Contact creates: the previous person's
+            // e-mail must not stay on an account that is no longer theirs.
+            $host = parse_url((string) Env::get('APP_URL', 'https://aradbranding.app'), PHP_URL_HOST) ?: 'aradbranding.app';
+            $email = 'm98' . $newNational . '@customers.' . $host;
+            if ($db->scalar('SELECT 1 FROM users WHERE email = ? AND id <> ?', [$email, $userId]) !== null) {
+                $email = 'm98' . $newNational . '.' . $userId . '@customers.' . $host;
+            }
+            try {
+                $db->transaction(function (Connection $db) use ($userId, $first, $last, $email, $newNational, $password): void {
+                    $db->exec(
+                        "UPDATE users SET first_name = ?, last_name = ?, search_name = ?, email = ?, email_verified_at = NULL,
+                                phone_cc = '98', phone = ?, phone_verified_at = NULL, password_hash = ?, failed_logins = 0, locked_until = NULL,
+                                google_sub = NULL, google_email = NULL, google_linked_at = NULL, updated_at = NOW(3)
+                          WHERE id = ?",
+                        [mb_substr($first, 0, 100), mb_substr($last, 0, 100), Str::normalize($first . ' ' . $last), $email, $newNational,
+                            Password::hash($password), $userId]
+                    );
+                    // Personal API keys were the previous person's.
+                    $db->exec('UPDATE api_keys SET revoked_at = NOW(3) WHERE user_id = ? AND revoked_at IS NULL', [$userId]);
+                });
+            } catch (\PDOException $e) {
+                if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                    return $this->transferFail($request, $client, 409, 'موبایل جدید در سامانه توسعه تجارت حساب دیگری دارد. ادغام خودکار انجام نمی‌شود.',
+                        ['existing_username' => '0' . $newNational]);
+                }
+                throw $e;
+            }
+            $this->c->get(\App\Core\Session\SessionStore::class)->revokeUser($userId);
+
+            $out = [
+                'ok' => true,
+                'user_id' => (string) $userId,
+                'username' => '0' . $newNational,
+                'login_url' => rtrim((string) Env::get('APP_URL', 'https://aradbranding.app'), '/') . '/login',
+                'transfer_id' => $transferId,
+            ];
+            $this->remember($client, 'transfer', $transferId, $userId, null, $out, null);
+            // Before and after, for the record (never the password).
+            $trail = [
+                'client' => $client['name'], 'transfer_id' => $transferId, 'reason' => $reason,
+                'from' => ['name' => trim($user['first_name'] . ' ' . $user['last_name']), 'phone' => '+' . $user['phone_cc'] . $user['phone'],
+                    'email' => $user['email'], 'google_email' => $user['google_email']],
+                'to' => ['name' => $fullName, 'phone' => '+98' . $newNational, 'email' => $email],
+            ];
+            $this->log($request, $client, 'ac.users.transfer', 200, $out + ['from_phone' => '0' . $user['phone']], $transferId, $userId);
+            $this->c->get(Audit::class)->log('api.ac_transfer', null, 'user', $userId, 'success', $request, $trail);
+            return self::json($out);
+        }, static function (array $ref): Response {
+            return self::json((json_decode((string) $ref['response'], true) ?: []) + ['replayed' => true]);
+        });
+    }
+
+    /** Transfer errors in the shape Arad Contact reads: {"ok": false, "message": …}. */
+    private function transferFail(Request $request, array $client, int $status, string $message, array $extra = []): Response
+    {
+        $out = ['ok' => false, 'message' => $message] + $extra;
+        $this->log($request, $client, 'ac.users.transfer', $status, $out, null);
+        return self::json($out, $status);
     }
 
     /** GET stars/rate → {"toman_per_star": 1000} */

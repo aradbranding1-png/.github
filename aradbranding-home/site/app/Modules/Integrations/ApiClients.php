@@ -17,6 +17,7 @@ final class ApiClients
         'users.read' => 'استعلام حساب و موجودی با شماره موبایل',
         'users.credentials' => 'صدور رمز ورود تازه برای مشتری',
         'users.create' => 'ساخت حساب برای مشتری با شماره موبایل و شناسه خارجی',
+        'users.transfer' => 'انتقال حساب مشتری به فرد دیگر (نام، موبایل و رمز تازه)',
     ];
 
     public function __construct(private Connection $db)
