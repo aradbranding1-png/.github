@@ -25,10 +25,6 @@ $steps = [
         </label>
         <?php if (isset($errors['package'])): ?><div class="error"><?= e($errors['package']) ?></div><?php endif; ?>
       </div>
-      <div class="field su-field-pass<?= isset($errors['password']) ? ' has-error' : '' ?>">
-        <input class="input" id="f-password" type="password" name="password" placeholder="رمز عبور شما (برای تأیید)" aria-label="رمز عبور شما" autocomplete="current-password" dir="ltr" required>
-        <?php if (isset($errors['password'])): ?><div class="error"><?= e($errors['password']) ?></div><?php endif; ?>
-      </div>
       <button class="btn su-go" type="submit" data-su-submit>شروع بروزرسانی</button>
     </div>
     <div class="su-options">

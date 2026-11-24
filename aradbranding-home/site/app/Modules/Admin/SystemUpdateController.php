@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin;
 
-use App\Core\Auth\Password;
 use App\Core\Db\Connection;
 use App\Core\Http\Controller;
 use App\Core\Http\Request;
@@ -14,7 +13,10 @@ use App\Core\Session\Session;
 use App\Core\Update\UpdateException;
 use App\Core\Update\UpdateManager;
 
-/** /admin/system-update — upload a release ZIP and update in place. Requires updates.manage + password. */
+/**
+ * /admin/system-update — upload a release ZIP and update in place. Requires updates.manage and a CSRF token; no
+ * password since 1.19.29. Every update and every code export is audited.
+ */
 final class SystemUpdateController extends Controller
 {
     public function show(Request $request, array $errors = [], int $status = 200, ?array $result = null): Response
@@ -33,11 +35,6 @@ final class SystemUpdateController extends Controller
     public function upload(Request $request): Response
     {
         $admin = $this->user($request);
-        $hash = (string) $this->c->get(Connection::class)->scalar('SELECT password_hash FROM users WHERE id = ?', [$admin['id']]);
-        if (!Password::verify((string) $request->input('password', ''), $hash)) {
-            $this->c->get(Audit::class)->log('system.update', $admin['id'], null, null, 'denied', $request, ['reason' => 'password']);
-            return $this->show($request, ['password' => 'رمز عبور درست نیست.'], 422);
-        }
         $file = $request->file('package');
         if ($file === null || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
             $msg = ($file['error'] ?? 0) === UPLOAD_ERR_INI_SIZE
@@ -80,7 +77,7 @@ final class SystemUpdateController extends Controller
 
     /**
      * Builds a ZIP of the current code, streams it, and deletes it from the host as soon as the transfer ends.
-     * No password (1.19.28): the route needs updates.manage and a CSRF token, and every download is audited.
+     * No password: the route needs updates.manage and a CSRF token, and every download is audited.
      */
     public function export(Request $request): Response
     {

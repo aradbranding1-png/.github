@@ -1143,8 +1143,8 @@ html:not([lang="fa"]) input[type=file] { max-width: 100%; min-width: 0; }
 .su-form { display: grid; gap: 12px; }
 .su-row { display: grid; gap: 10px; align-items: start; }
 @media (min-width: 900px) {
-  .su-row { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto; }
-  .su-export .su-row { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto; align-items: center; }
+  .su-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .su-export .su-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 }
 .su-row .field { gap: 4px; }
 .su-go { min-height: 52px; padding: 0 26px; }
@@ -1155,6 +1155,8 @@ html:not([lang="fa"]) input[type=file] { max-width: 100%; min-width: 0; }
 .su-drop-body { display: grid; min-width: 0; line-height: 1.5; }
 .su-drop-text { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .su-drop-hint { font-size: 12px; }
+.su-drop.is-over, .su-drop.is-ready { border-color: var(--gold); background: var(--gold-soft); }
+.su-drop.is-ready { border-style: solid; }
 .field.has-error .su-drop { border-color: var(--danger); }
 .su-field-pass .input { min-height: 52px; }
 .su-options { display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: center; padding: 10px 14px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); font-size: 14px; }
