@@ -3,9 +3,9 @@
  * - Page navigations: always network; an offline page only when the network is down.
  * - Nothing private is ever cached: no HTML, no API, no POST, no wallet/letters/admin data.
  */
-const VERSION = 'sadt-v6';
+const VERSION = 'sadt-v7';
 const OFFLINE = '/offline.html';
-const PRECACHE = [OFFLINE, '/icons/icon-192.png'];
+const PRECACHE = [OFFLINE, '/icons/icon-192.png', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(VERSION).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

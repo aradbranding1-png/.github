@@ -182,7 +182,7 @@
   var pick = document.querySelector('.theme-pick');
   var paint = function () {
     if (!pick) return;
-    var m = root.getAttribute('data-theme-mode') || 'system';
+    var m = root.getAttribute('data-theme-mode') || 'light';
     var sum = pick.querySelector('summary');
     sum.setAttribute('aria-label', T('حالت نمایش: :mode', { mode: labels[m] }));
     sum.setAttribute('title', T('حالت نمایش: :mode', { mode: labels[m] }));
@@ -198,7 +198,7 @@
         root.setAttribute('data-theme-mode', next);
         var sys = window.__sadtSystemTheme ? window.__sadtSystemTheme() : 'light';
         root.setAttribute('data-theme', next === 'system' ? sys : next);
-        try { if (next === 'system') localStorage.removeItem('sadt-theme-mode'); else localStorage.setItem('sadt-theme-mode', next); } catch (e) {}
+        try { localStorage.setItem('sadt-theme-mode', next); } catch (e) {}
         paint();
         pick.open = false;
       });

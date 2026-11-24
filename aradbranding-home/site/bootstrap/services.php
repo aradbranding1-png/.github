@@ -89,6 +89,8 @@ return static function (Container $c): void {
         $c->get(\App\Core\Queue\DatabaseQueue::class),
         $c->get(\App\Modules\Notifications\NotificationService::class)
     ));
+    $c->singleton(\App\Modules\Analytics\ActiveDays::class, static fn (Container $c) => new \App\Modules\Analytics\ActiveDays($c->get(Connection::class)));
+    $c->singleton(\App\Modules\Users\TradeTitles::class, static fn (Container $c) => new \App\Modules\Users\TradeTitles($c->get(Connection::class), $c->get(Cache::class)));
     $c->singleton(\App\Modules\Admin\MetricsService::class, static fn (Container $c) => new \App\Modules\Admin\MetricsService($c->get(Connection::class), $c->get(Cache::class)));
     $c->singleton(\App\Modules\Admin\ExportService::class, static fn (Container $c) => new \App\Modules\Admin\ExportService($c->get(Connection::class), $c->get(\App\Core\Queue\DatabaseQueue::class)));
     $c->singleton(\App\Modules\System\BackupService::class, static fn (Container $c) => new \App\Modules\System\BackupService($c->get(Connection::class)));

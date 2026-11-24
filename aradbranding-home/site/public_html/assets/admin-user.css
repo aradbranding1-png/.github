@@ -88,3 +88,30 @@
 
 @media (max-width: 860px) { .au-grid { grid-template-columns: 1fr; } .au-list-2 { grid-template-columns: 1fr; } .au-list-2 li:nth-child(2) { border-top: 1px solid var(--line); padding-top: 11px; } }
 @media (max-width: 520px) { .au-hero { padding: 16px; } .au-seg { grid-template-columns: repeat(2, 1fr); } .au-tabs label { flex: none; } }
+
+/* activity strip (1.19.21): one cell per day, last 30 days */
+.au-days { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; direction: ltr; margin-top: 4px; }
+.au-day { display: block; height: 22px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); }
+.au-day.is-on { background: var(--gold); border-color: var(--gold); }
+a.au-day.is-on:hover { filter: brightness(1.15); }
+.au-days-axis { display: flex; justify-content: space-between; direction: ltr; font-size: 11.5px; color: var(--muted); margin: 4px 0 14px; }
+.au-sub-title { font-size: 14px; font-weight: 700; margin: 6px 0 8px; }
+.au-h2-note { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+
+/* business pages: each row opens the public page in a new tab (1.19.21) */
+.au-page-link { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: inherit; text-decoration: none; border-radius: 10px; padding: 4px 6px; margin: -4px -6px; transition: background .15s; }
+a.au-page-link:hover { background: var(--surface-2); }
+a.au-page-link:hover .au-li-main b { color: var(--gold); }
+.au-page-link.is-off { cursor: default; }
+.au-ext { color: var(--muted); font-size: 13px; }
+
+/* official Arad Branding titles (1.19.21) */
+.au-titles { margin: 2px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.au-title-pill { padding: 2px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold); }
+.au-titles-card { border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.au-title-list { margin-bottom: 14px; }
+.au-title-remove summary { cursor: pointer; font-size: 12.5px; color: var(--danger); white-space: nowrap; }
+.au-title-remove form { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.au-title-form { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .au-title-form { grid-template-columns: minmax(160px, 1fr) minmax(260px, 2fr) minmax(180px, 1.4fr) minmax(140px, 1fr) auto; align-items: center; } }
+.au-hint-foot { margin: 12px 0 0; }

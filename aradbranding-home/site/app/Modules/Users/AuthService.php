@@ -264,6 +264,7 @@ final class AuthService
             [$rehash, $userId]
         );
         $this->log($userId, $email, $ip, $result);
+        (new \App\Modules\Analytics\ActiveDays($this->db))->touch($userId);
         return ['ok' => true, 'user_id' => $userId];
     }
 

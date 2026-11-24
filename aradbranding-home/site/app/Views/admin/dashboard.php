@@ -47,9 +47,9 @@ $growthBadge = static function (?int $g): string {
 $kpis = [
     ['label' => 'کاربران', 'value' => (int) $totals['users'], 'icon' => 'user', 'tone' => 'gold', 'spark' => $spark['new_users'], 'g' => $growth($spark['new_users']), 'href' => '/admin/users'],
     ['label' => 'صفحه منتشرشده', 'value' => (int) $totals['pages'], 'icon' => 'page', 'tone' => 'blue', 'spark' => $spark['new_pages'], 'g' => $growth($spark['new_pages']), 'href' => '/admin/content?tab=pages'],
-    ['label' => 'فعال امروز', 'value' => $t('dau'), 'icon' => 'spark', 'tone' => 'gold', 'spark' => $spark['dau'], 'g' => $growth($spark['dau'], true), 'href' => '/admin/reports?metric=dau'],
-    ['label' => 'فعال ۷ روز', 'value' => $t('wau'), 'icon' => 'route', 'tone' => 'blue', 'spark' => $spark['wau'], 'g' => $growth($spark['wau'], true), 'href' => '/admin/reports?metric=dau'],
-    ['label' => 'فعال ۳۰ روز', 'value' => $t('mau'), 'icon' => 'eye', 'tone' => 'gold', 'spark' => $spark['mau'], 'g' => $growth($spark['mau'], true), 'href' => '/admin/reports?metric=dau'],
+    ['label' => 'فعال امروز', 'value' => $t('dau'), 'icon' => 'spark', 'tone' => 'gold', 'spark' => $spark['dau'], 'g' => $growth($spark['dau'], true), 'href' => '/admin/reports/active'],
+    ['label' => 'فعال ۷ روز', 'value' => $t('wau'), 'icon' => 'route', 'tone' => 'blue', 'spark' => $spark['wau'], 'g' => $growth($spark['wau'], true), 'href' => '/admin/reports/active?range=7'],
+    ['label' => 'فعال ۳۰ روز', 'value' => $t('mau'), 'icon' => 'eye', 'tone' => 'gold', 'spark' => $spark['mau'], 'g' => $growth($spark['mau'], true), 'href' => '/admin/reports/active?range=30'],
     ['label' => 'کشورها', 'value' => (int) $totals['countries'], 'icon' => 'compass', 'tone' => 'blue', 'spark' => $spark['new_users'], 'g' => null, 'href' => '/admin/reports'],
     ['label' => 'ارتباط تجاری', 'value' => (int) $totals['connections'], 'icon' => 'chat', 'tone' => 'gold', 'spark' => $spark['connections'], 'g' => $growth($spark['connections']), 'href' => '/admin/reports?metric=connections'],
     ['label' => 'پیشنهاد فعال', 'value' => (int) $totals['proposals'], 'icon' => 'letter', 'tone' => 'blue', 'spark' => $spark['new_proposals'], 'g' => $growth($spark['new_proposals']), 'href' => '/admin/content'],

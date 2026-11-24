@@ -50,7 +50,7 @@ final class RolesController extends AdminController
             $grants[(int) $g['role_id']][] = (self::PERMISSION_LABELS[$g['code']] ?? $g['code']) . ' (' . (self::SCOPES[$g['scope']] ?? $g['scope']) . ')';
         }
         foreach ($roles as &$r) {
-            [$label, $about] = self::ROLE_INFO[$r['slug']] ?? [$r['name'], ''];
+            [$label, $about] = self::ROLE_INFO[$r['slug']] ?? \App\Modules\Users\TradeTitles::ROLE_INFO[$r['slug']] ?? [$r['name'], ''];
             $list = $grants[(int) $r['id']] ?? [];
             $tip = $label . ($about !== '' ? ' — ' . $about : '');
             if ($r['slug'] === 'super_admin') {

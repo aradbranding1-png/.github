@@ -23,6 +23,8 @@ final class UserAdminController extends AdminController
     public const STATUS = [1 => 'فعال', 2 => 'محدود', 3 => 'معلق', 4 => 'مسدود', 9 => 'حذف‌شده'];
     /** Timed suspension lengths (days); 0 = until lifted by hand. */
     public const SUSPEND_DAYS = [1, 3, 7, 30];
+    /** «فعالیت» filter of the users list: 1 = today (Tehran), N = last N days, -1 = inactive for 30+ days. */
+    public const ACTIVE = [1 => 'فعال امروز', 7 => 'فعال در ۷ روز اخیر', 30 => 'فعال در ۳۰ روز اخیر', -1 => 'غیرفعال بیش از ۳۰ روز'];
 
     public function index(Request $request): Response
     {
@@ -31,6 +33,10 @@ final class UserAdminController extends AdminController
         $status = (int) $request->query('status', '0');
         $country = (int) $request->query('country', '0');
         $before = (int) $request->query('before', '0');
+        $active = (int) $request->query('active', '0');
+        if (!isset(self::ACTIVE[$active])) {
+            $active = 0;
+        }
 
         $where = ['1 = 1'];
         $bind = [];
@@ -50,6 +56,14 @@ final class UserAdminController extends AdminController
         if (isset(self::STATUS[$status])) {
             $where[] = 'u.status = ?';
             $bind[] = $status;
+        }
+        if ($active === 1) {
+            $where[] = 'u.last_active_at >= ?';
+            $bind[] = \App\Modules\Analytics\ActiveDays::todayStartUtc();
+        } elseif ($active > 1) {
+            $where[] = 'u.last_active_at >= NOW(3) - INTERVAL ' . $active . ' DAY';
+        } elseif ($active === -1) {
+            $where[] = '(u.last_active_at IS NULL OR u.last_active_at < NOW(3) - INTERVAL 30 DAY)';
         }
         if ($country > 0) {
             $where[] = 'u.country_id = ?';
@@ -81,6 +95,7 @@ final class UserAdminController extends AdminController
             'q' => $q,
             'status' => $status,
             'country' => $country,
+            'active' => $active,
             'countries' => $this->c->get(ReferenceData::class)->countries(),
         ]);
     }
@@ -103,8 +118,33 @@ final class UserAdminController extends AdminController
             'countries' => $this->c->get(ReferenceData::class)->countries(),
             'logins' => $db->select('SELECT result, created_at FROM login_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', [$id]),
             'reportCount' => (int) $db->scalar('SELECT COUNT(*) FROM abuse_reports WHERE target_user_id = ?', [$id]),
+            'titles' => $this->c->get(\App\Modules\Users\TradeTitles::class)->forUser($id),
+            'activeDays' => $this->activeDays($id),
+            'events' => $db->select(
+                "SELECT e.event, e.created_at, e.data, s.first_name, s.last_name
+                   FROM activity_events e LEFT JOIN users s ON s.id = e.subject_user_id
+                  WHERE e.user_id = ? ORDER BY e.created_at DESC LIMIT 30",
+                [$id]
+            ),
             'errors' => $errors,
         ], 'layouts/app', $httpStatus);
+    }
+
+    /** Days (local 'Y-m-d' => [first, last] UTC times) this member was active in the last 30 days. @return array<string, array{0: string, 1: string}> */
+    private function activeDays(int $userId): array
+    {
+        try {
+            $out = [];
+            foreach ($this->c->get(Connection::class)->select(
+                'SELECT day, first_seen_at, last_seen_at FROM user_activity_days WHERE user_id = ? AND day >= ? ORDER BY day DESC',
+                [$userId, MetricsService::today(-29)]
+            ) as $r) {
+                $out[(string) $r['day']] = [(string) $r['first_seen_at'], (string) $r['last_seen_at']];
+            }
+            return $out;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     public function setStatus(Request $request): Response
@@ -209,8 +249,59 @@ final class UserAdminController extends AdminController
                 }
             }
         });
+        // Title roles and countries are managed by «عنوان‌های رسمی»; the form above rewrote them, so put them back.
+        $this->c->get(\App\Modules\Users\TradeTitles::class)->sync((int) $u['id']);
         $this->audit($request, 'roles.assign', (int) $u['id'], ['roles' => $ids, 'countries' => $countries]);
         return $this->redirect('/admin/users/' . $u['id'], 'نقش‌ها و حوزه دسترسی ذخیره شد.');
+    }
+
+    /** POST /admin/users/{id}/titles — give an official title for a country (and product). */
+    public function addTitle(Request $request): Response
+    {
+        $u = $this->target($request, 'users.view');
+        if (!$this->allows($request, 'roles.manage')) {
+            throw new HttpException(403);
+        }
+        if (!$this->reauth($request)) {
+            return $this->show($request, ['titles' => 'برای دادن عنوان، رمز عبور خود را وارد کنید.'], 422);
+        }
+        if (in_array((int) $u['status'], [3, 4, 9], true)) {
+            return $this->show($request, ['titles' => 'به حساب معلق یا مسدود نمی‌توان عنوان داد.'], 422);
+        }
+        $kind = (string) $request->input('title', '');
+        $country = (int) $request->input('country', 0);
+        $product = (string) $request->input('product', '');
+        $titles = $this->c->get(\App\Modules\Users\TradeTitles::class);
+        $error = $titles->grant((int) $u['id'], $kind, $country, $product, (int) $this->user($request)['id']);
+        if ($error !== null) {
+            return $this->show($request, ['titles' => $error], 422);
+        }
+        $this->audit($request, 'titles.grant', (int) $u['id'], ['title' => $kind, 'country' => $country, 'product' => $product]);
+        $text = '';
+        foreach ($titles->forUser((int) $u['id']) as $t) {
+            if ($t['kind'] === $kind && $t['country_id'] === $country) {
+                $text = $t['text'];
+            }
+        }
+        return $this->redirect('/admin/users/' . $u['id'], 'عنوان «' . $text . '» داده شد. دسترسی‌اش فقط به کشور همین عنوان است.');
+    }
+
+    /** POST /admin/users/{id}/titles/{title}/delete */
+    public function removeTitle(Request $request): Response
+    {
+        $u = $this->target($request, 'users.view');
+        if (!$this->allows($request, 'roles.manage')) {
+            throw new HttpException(403);
+        }
+        if (!$this->reauth($request)) {
+            return $this->show($request, ['titles' => 'برای گرفتن عنوان، رمز عبور خود را وارد کنید.'], 422);
+        }
+        $tid = (int) $request->param('title');
+        if (!$this->c->get(\App\Modules\Users\TradeTitles::class)->revoke((int) $u['id'], $tid)) {
+            throw new HttpException(404);
+        }
+        $this->audit($request, 'titles.revoke', (int) $u['id'], ['title_id' => $tid]);
+        return $this->redirect('/admin/users/' . $u['id'], 'عنوان گرفته شد.');
     }
 
     /** Super Admin only: act as the user (support). Banner + audit + time-boxed record. */

@@ -2,6 +2,7 @@
 /**
  * Simple server-rendered bar chart (inline SVG, no JS, CSP-safe). A 'Y-m-d' label is shown as a Persian date.
  * @var list<array{label: string, full?: string, value: int}> $series @var string $title @var bool|null $money
+ * @var (callable(array): ?string)|null $rowHref optional link for each table row (e.g. the members behind a DAU number)
  */
 $series = array_map(static function (array $p): array {
     if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $p['label'])) {
@@ -31,7 +32,8 @@ $fmt = static fn (int $v): string => !empty($money) ? toman($v) : fa_int($v);
       <div class="table-wrap chart-table"><table class="table">
         <thead><tr><th><?= e($table) ?></th><th><?= e($valueLabel ?? $title) ?></th></tr></thead>
         <tbody><?php foreach (array_reverse($series) as $p): ?>
-          <tr<?= (int) $p['value'] === 0 ? ' class="muted"' : '' ?>><td><?= e($p['full'] ?? $p['label']) ?></td><td><b><?= e($fmt((int) $p['value'])) ?></b></td></tr>
+          <?php $href = isset($rowHref) && is_callable($rowHref) ? $rowHref($p) : null; ?>
+          <tr<?= (int) $p['value'] === 0 ? ' class="muted"' : '' ?>><td><?php if ($href): ?><a href="<?= e($href) ?>"><?= e($p['full'] ?? $p['label']) ?></a><?php else: ?><?= e($p['full'] ?? $p['label']) ?><?php endif; ?></td><td><?php if ($href): ?><a href="<?= e($href) ?>"><b><?= e($fmt((int) $p['value'])) ?></b> <span class="muted">· ببینید چه کسانی ›</span></a><?php else: ?><b><?= e($fmt((int) $p['value'])) ?></b><?php endif; ?></td></tr>
         <?php endforeach; ?></tbody>
       </table></div>
     <?php endif; ?>

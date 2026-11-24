@@ -5,9 +5,11 @@
 <script src="<?= e(asset('theme.js')) ?>"></script>
 <link rel="stylesheet" href="<?= e(asset('app.css')) ?>">
 <script src="<?= e(asset('app.js')) ?>" defer></script>
-<link rel="manifest" href="/manifest.webmanifest?v=6">
-<link rel="icon" href="/favicon.ico?v=6" sizes="any">
-<link rel="icon" type="image/png" href="/favicon.png?v=6">
-<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=6">
+<link rel="manifest" href="/manifest.webmanifest?v=7">
+<link rel="icon" href="/favicon.ico?v=7" sizes="any">
+<link rel="icon" type="image/png" href="/favicon.png?v=7">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=7">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="<?= te('توسعه تجارت') ?>">
+<meta name="apple-mobile-web-app-title" content="<?= te('تجارت آراد برندینگ') ?>">
+<meta name="application-name" content="<?= te('تجارت آراد برندینگ') ?>">
+<meta name="mobile-web-app-capable" content="yes">

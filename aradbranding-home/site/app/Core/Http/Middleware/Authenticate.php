@@ -36,12 +36,17 @@ final class Authenticate implements Middleware
         }
         // At most one write per user per hour (DAU/WAU/MAU only need day precision). The WHERE clause
         // makes parallel requests at the hour boundary a no-op instead of N row writes.
-        if ($user['last_active_at'] === null || strtotime((string) $user['last_active_at'] . ' UTC') < time() - 3600) {
+        // The first request of a new (Tehran) day also writes, so user_activity_days lists every member
+        // who was active that day — not only those whose last write was more than an hour ago.
+        $dayStart = \App\Modules\Analytics\ActiveDays::todayStartUtc();
+        $last = $user['last_active_at'] === null ? null : (string) $user['last_active_at'];
+        if ($last === null || strtotime($last . ' UTC') < time() - 3600 || $last < $dayStart) {
             $this->c->get(\App\Core\Db\Connection::class)->exec(
                 'UPDATE users SET last_active_at = NOW(3)
-                  WHERE id = ? AND (last_active_at IS NULL OR last_active_at < NOW(3) - INTERVAL 1 HOUR)',
-                [$user['id']]
+                  WHERE id = ? AND (last_active_at IS NULL OR last_active_at < NOW(3) - INTERVAL 1 HOUR OR last_active_at < ?)',
+                [$user['id'], $dayStart]
             );
+            $this->c->get(\App\Modules\Analytics\ActiveDays::class)->touch((int) $user['id']);
         }
         $request->withAttribute('user_id', (int) $user['id']);
         $impersonator = \App\Core\Session\Session::get('_impersonator');

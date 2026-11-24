@@ -1,0 +1,32 @@
+/* /admin/reports/active — who was active and what they did (uses app.css tokens; both themes) */
+.aa-period { padding-block: 16px; }
+.aa-period .panel-head { margin-bottom: 10px; }
+.aa-period-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.aa-period-bar .seg-tabs { margin: 0; }
+.aa-day-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.aa-day-form .select { min-width: 230px; }
+
+.aa-kpis .stat { border: 1px solid var(--line); transition: border-color .15s; }
+.aa-kpis .stat.is-on { border-color: var(--gold); background: var(--gold-soft); }
+.aa-note { font-size: 13.5px; line-height: 1.9; }
+
+.aa-totals { display: flex; flex-wrap: wrap; gap: 8px; }
+.aa-total { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); font-size: 13.5px; color: var(--muted); }
+.aa-total b { color: var(--ink); font-size: 16px; font-weight: 800; }
+
+.aa-count { margin: 0 0 4px; font-size: 13px; }
+.aa-list-active { list-style: none; margin: 0; padding: 0; }
+.aa-row { border-top: 1px solid var(--line); }
+.aa-row:first-child { border-top: 0; }
+.aa-row .list-row { border-top: 0; flex-wrap: wrap; }
+.aa-row .title { font-weight: 700; text-decoration: none; color: var(--ink); }
+.aa-row a.title:hover { color: var(--gold); }
+.aa-row .chip { font-size: 11.5px; line-height: 20px; }
+.aa-acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 100%; }
+@media (max-width: 719px) { .aa-acts { justify-content: flex-start; width: 100%; } }
+
+.aa-tl { margin: -6px 0 12px; padding-inline-start: 58px; }
+.aa-tl summary { cursor: pointer; font-size: 13px; color: var(--gold); width: fit-content; }
+.aa-tl ol { margin: 8px 0 0; padding: 10px 14px; list-style: none; border-radius: 12px; background: var(--surface-2); display: grid; gap: 6px; font-size: 13.5px; }
+.aa-tl time { display: inline-block; min-width: 54px; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 719px) { .aa-tl { padding-inline-start: 0; } }

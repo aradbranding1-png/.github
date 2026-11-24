@@ -16,6 +16,36 @@ use App\Modules\Proposals\ProposalService;
 /** Moderation of business pages and proposals: hide, restore, reject (doc §54). */
 final class ContentAdminController extends AdminController
 {
+    /**
+     * Countries whose content this staff member may see with any of $perms: null = all countries.
+     * Team/department-scoped roles (e.g. «مدیر تجارت عراق») see only their assigned countries.
+     * @param list<string> $perms
+     * @return list<int>|null
+     */
+    private function contentCountries(Request $request, array $perms): ?array
+    {
+        $union = [];
+        foreach ($perms as $perm) {
+            if (!$this->allows($request, $perm)) {
+                continue;
+            }
+            $countries = $this->scopeCountries($request, $perm);
+            if ($countries === null) {
+                return null;
+            }
+            $union = array_merge($union, $countries);
+        }
+        return array_values(array_unique($union));
+    }
+
+    private static function countrySql(?array $countries, string $column): ?string
+    {
+        if ($countries === null) {
+            return null;
+        }
+        return $countries === [] ? '0 = 1' : $column . ' IN (' . implode(',', array_map('intval', $countries)) . ')';
+    }
+
     public function index(Request $request): Response
     {
         $tab = $request->query('tab') === 'pages' ? 'pages' : 'proposals';
@@ -29,6 +59,9 @@ final class ContentAdminController extends AdminController
             }
             $where = ['p.deleted_at IS NULL'];
             $bind = [];
+            if (($scope = self::countrySql($this->contentCountries($request, ['pages.view', 'pages.approve']), 'p.country_id')) !== null) {
+                $where[] = $scope;
+            }
             if (is_string($status) && ctype_digit($status)) {
                 $where[] = 'p.status = ?';
                 $bind[] = (int) $status;
@@ -49,6 +82,10 @@ final class ContentAdminController extends AdminController
             }
             $where = ['p.deleted_at IS NULL'];
             $bind = [];
+            $proposalScope = self::countrySql($this->contentCountries($request, ['proposals.view', 'proposals.moderate']), 'p.country_id');
+            if ($proposalScope !== null) {
+                $where[] = $proposalScope;
+            }
             if (is_string($status) && ctype_digit($status)) {
                 $where[] = 'p.status = ?';
                 $bind[] = (int) $status;
@@ -78,7 +115,7 @@ final class ContentAdminController extends AdminController
             'rows' => $rows,
             'next' => $next,
             'status' => is_string($status) ? $status : '',
-            'pendingCount' => $tab === 'proposals' ? (int) $db->scalar('SELECT COUNT(*) FROM proposals WHERE status = 1 AND deleted_at IS NULL') : 0,
+            'pendingCount' => $tab === 'proposals' ? (int) $db->scalar('SELECT COUNT(*) FROM proposals p WHERE p.status = 1 AND p.deleted_at IS NULL' . (($proposalScope ?? null) !== null ? ' AND ' . $proposalScope : '')) : 0,
         ]);
     }
 
@@ -88,8 +125,8 @@ final class ContentAdminController extends AdminController
             throw new HttpException(403);
         }
         $db = $this->c->get(Connection::class);
-        $p = $db->first('SELECT id, user_id, status FROM pages WHERE id = ? AND deleted_at IS NULL', [(int) $request->param('id')]);
-        if ($p === null) {
+        $p = $db->first('SELECT id, user_id, status, country_id FROM pages WHERE id = ? AND deleted_at IS NULL', [(int) $request->param('id')]);
+        if ($p === null || !$this->inScope($request, 'pages.approve', (int) $p['country_id'])) {
             throw new HttpException(404);
         }
         if ($request->input('action') === 'delete') {
@@ -117,8 +154,8 @@ final class ContentAdminController extends AdminController
             throw new HttpException(403);
         }
         $db = $this->c->get(Connection::class);
-        $p = $db->first('SELECT id, user_id, status FROM proposals WHERE id = ? AND deleted_at IS NULL', [(int) $request->param('id')]);
-        if ($p === null) {
+        $p = $db->first('SELECT id, user_id, status, country_id FROM proposals WHERE id = ? AND deleted_at IS NULL', [(int) $request->param('id')]);
+        if ($p === null || !$this->inScope($request, 'proposals.moderate', (int) $p['country_id'])) {
             throw new HttpException(404);
         }
         $to = match ($request->input('action')) {

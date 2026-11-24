@@ -129,6 +129,8 @@ final class PublicPageController extends Controller
                     is_array($row['content'][$list] ?? null) ? $row['content'][$list] : []
                 );
             }
+            // Official Arad Branding titles (1.19.21), in the page's language.
+            $row['titles'] = array_column($this->c->get(\App\Modules\Users\TradeTitles::class)->forUser((int) $row['user_id'], (string) $row['lang_code']), 'text');
             $row['verified'] = $row['business_verified_at'] !== null;
             unset($row['business_verified_at']);
             return $row;

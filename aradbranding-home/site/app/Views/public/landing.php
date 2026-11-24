@@ -106,7 +106,7 @@ $nameOf = static function (string $code) use ($markets, $countryNames): string {
 $schema = [
     '@context' => 'https://schema.org',
     '@graph' => [
-        ['@type' => 'Organization', 'name' => t('سامانه توسعه تجارت'), 'alternateName' => 'Arad Branding', 'url' => $baseUrl . '/', 'logo' => $baseUrl . '/icons/icon-512.png?v=6'],
+        ['@type' => 'Organization', 'name' => t('سامانه توسعه تجارت'), 'alternateName' => 'Arad Branding', 'url' => $baseUrl . '/', 'logo' => $baseUrl . '/icons/icon-512.png?v=7'],
         ['@type' => 'WebSite', 'name' => t('سامانه توسعه تجارت'), 'url' => $baseUrl . '/', 'inLanguage' => I18n::locale(),
             'potentialAction' => ['@type' => 'SearchAction', 'target' => $baseUrl . '/search?q={q}', 'query-input' => 'required name=q']],
     ],
@@ -134,7 +134,7 @@ $h = $home['hero'];
 <link rel="modulepreload" href="<?= e(asset('trade-globe.js')) ?>">
 <script src="<?= e(asset('trade-home.js')) ?>" defer></script>
 <script type="module" src="<?= e(asset('trade-globe.js')) ?>"></script>
-<title><?= te('سامانه توسعه تجارت · شبکه بین‌المللی تجار و فعالان اقتصادی') ?></title>
+<title><?= te('تجارت آراد برندینگ') ?></title>
 <meta name="description" content="<?= e($desc) ?>">
 <link rel="canonical" href="<?= e($homeUrl) ?>">
 <link rel="alternate" hreflang="fa" href="<?= e($baseUrl) ?>/">
@@ -147,7 +147,7 @@ $h = $home['hero'];
 <meta property="og:title" content="<?= te('سامانه توسعه تجارت · شبکه بین‌المللی تجار') ?>">
 <meta property="og:description" content="<?= e($desc) ?>">
 <meta property="og:url" content="<?= e($homeUrl) ?>">
-<meta property="og:image" content="<?= e($baseUrl) ?>/icons/icon-512.png?v=6">
+<meta property="og:image" content="<?= e($baseUrl) ?>/icons/icon-512.png?v=7">
 <meta property="og:locale" content="<?= e(I18n::isSource() ? 'fa_IR' : strtok(I18n::intl(), '@')) ?>">
 <meta name="twitter:card" content="summary">
 <script type="application/ld+json"><?= json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
@@ -159,9 +159,9 @@ $h = $home['hero'];
 
 <header class="th-head" data-th-head>
   <div class="th-head-in">
-    <a class="th-brand" href="/" aria-label="<?= te('سامانه توسعه تجارت · صفحه اصلی') ?>">
-      <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="48" height="48" decoding="async"></span>
-      <span class="th-brand-name"><?= te('سامانه توسعه تجارت') ?><small><?= te('Arad Branding · شبکه بین‌المللی تجار') ?></small></span>
+    <a class="th-brand" href="/" aria-label="<?= te('سامانه توسعه تجارت آراد برندینگ · صفحه اصلی') ?>">
+      <span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=7" alt="" width="48" height="48" decoding="async"></span>
+      <span class="th-brand-name"><?= te('سامانه توسعه تجارت آراد برندینگ') ?><small><?= te('شبکه بین‌المللی تجار') ?></small></span>
     </a>
     <nav class="th-nav" aria-label="<?= te('ناوبری اصلی') ?>">
       <?php foreach ($home['nav'] as $i => $n): if ($n['href'] === '') { continue; } $isHome = $n['href'] === '/'; ?>
@@ -425,7 +425,7 @@ $h = $home['hero'];
 
 <footer class="th-foot">
   <div class="th-foot-in">
-    <a class="th-brand" href="/"><span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=6" alt="" width="48" height="48" decoding="async"></span><span class="th-brand-name"><?= te('سامانه توسعه تجارت') ?><small>© <bdi>aradbranding.app</bdi></small></span></a>
+    <a class="th-brand" href="/"><span class="brand-mark th-mark has-logo"><img src="/assets/brand/logo-192.webp?v=7" alt="" width="48" height="48" decoding="async"></span><span class="th-brand-name"><?= te('سامانه توسعه تجارت آراد برندینگ') ?><small>© <bdi>aradbranding.app</bdi></small></span></a>
     <nav aria-label="<?= te('پیوندهای پایین صفحه') ?>"><a href="/register"><?= te('عضویت') ?></a><a href="/login"><?= te('ورود') ?></a><a href="/discover"><?= te('بازارهای هدف') ?></a><a href="/proposals"><?= te('فرصت‌ها') ?></a><?php if ($show['faq']): ?><a href="#faq"><?= te('پرسش‌ها') ?></a><?php endif; ?></nav>
   </div>
 </footer>

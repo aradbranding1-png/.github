@@ -90,8 +90,24 @@ final class MetricsService
         $m['stars_used'] = -($sumType(2) + $sumType(3)) - $sumType(4);
         $m['page_views'] = (int) ($sums[2]['page_view']['n'] ?? 0);
 
+        // Who was active is kept per day in user_activity_days (1.19.21), so DAU is now the number of
+        // rows listed on /admin/reports/active. Past days only ever go up: before 1.19.21 plain visits were
+        // not recorded per day, so a rebuilt day must not lower the number that was measured live.
+        $tracked = null;
+        try {
+            $tracked = (int) $this->db->scalar('SELECT COUNT(*) FROM user_activity_days WHERE day = ?', [$day]);
+        } catch (\Throwable) {
+            // migration not run yet
+        }
+        if ($tracked !== null && $day !== self::today()) {
+            $this->db->exec(
+                "INSERT INTO daily_metrics (day, metric, country_id, value, updated_at) VALUES (?, 'dau', 0, ?, NOW(3))
+                 ON DUPLICATE KEY UPDATE value = GREATEST(value, VALUES(value)), updated_at = NOW(3)",
+                [$day, $tracked]
+            );
+        }
         if ($day === self::today()) {
-            $m['dau'] = (int) $this->db->scalar('SELECT COUNT(*) FROM users WHERE last_active_at >= ?', [$from]);
+            $m['dau'] = max($tracked ?? 0, (int) $this->db->scalar('SELECT COUNT(*) FROM users WHERE last_active_at >= ?', [$from]));
             $m['wau'] = (int) $this->db->scalar('SELECT COUNT(*) FROM users WHERE last_active_at >= NOW(3) - INTERVAL 7 DAY');
             $m['mau'] = (int) $this->db->scalar('SELECT COUNT(*) FROM users WHERE last_active_at >= NOW(3) - INTERVAL 30 DAY');
         }
@@ -142,7 +158,7 @@ final class MetricsService
     /**
      * Series for charts in the Persian calendar: Tehran days, Saturday-to-Friday weeks, Persian months and years.
      * Every period is listed, with 0 where nothing happened, so the bars line up with the dates.
-     * @return list<array{label: string, full: string, value: int}> oldest first
+     * @return list<array{label: string, full: string, value: int, from: string, to: string}> oldest first ('from'/'to': local Y-m-d)
      */
     public function series(string $metric, string $period, int $points): array
     {
@@ -187,7 +203,7 @@ final class MetricsService
                 'yearly' => [fa_num((string) $jy), 'سال ' . fa_num((string) $jy)],
                 default => [Jalali::dayMonth($key), Jalali::full($key)],
             };
-            $out[] = ['label' => $label, 'full' => $full, 'value' => $b['value']];
+            $out[] = ['label' => $label, 'full' => $full, 'value' => $b['value'], 'from' => $b['from'], 'to' => $b['to']];
         }
         return $out;
     }

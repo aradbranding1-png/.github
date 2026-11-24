@@ -480,6 +480,12 @@ a.th-chip:hover { border-color: var(--th-line-gold); }
   .th-head-in { height: 60px; gap: 10px; padding: 0 10px; }
   .th-brand-name { font-size: 14px; }
   .th-brand-name small { display: none; }
+  html[lang="fa"] .th-brand { flex: 0 1 auto; min-width: 0; }
+  /* full name on one line: the size follows the screen width so it fits beside «ثبت‌نام» and the menu */
+  html[lang="fa"] .th-brand-name { font-size: clamp(11px, 3.1vw, 13.5px); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  html[lang="fa"] .th-head-in { gap: 8px; }
+  html[lang="fa"] .th-brand { gap: 8px; }
+  html[lang="fa"] .th-actions > .th-btn-gold { padding: 0 12px; }
   .th-mark { width: 36px; height: 36px; }
   .th-lang, .th-actions > .th-btn-ghost { display: none; }
   .th-actions > .th-btn-gold { min-height: 40px; padding: 0 14px; }

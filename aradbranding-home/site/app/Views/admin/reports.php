@@ -9,7 +9,13 @@ $periods = ['daily' => 'روزانه', 'weekly' => 'هفتگی', 'monthly' => '�
   <button class="btn btn-sm" type="submit">نمایش</button>
 </form>
 <section class="panel"><?= $this->partial('admin/_chart', ['series' => $series, 'title' => MetricsService::LABELS[$metric] . ' · ' . $periods[$period], 'money' => $metric === 'revenue_rial',
-  'table' => ['daily' => 'روز', 'weekly' => 'هفته', 'monthly' => 'ماه', 'yearly' => 'سال'][$period], 'valueLabel' => MetricsService::LABELS[$metric]]) ?>
+  'table' => ['daily' => 'روز', 'weekly' => 'هفته', 'monthly' => 'ماه', 'yearly' => 'سال'][$period], 'valueLabel' => MetricsService::LABELS[$metric],
+  'rowHref' => $metric === 'dau' && in_array($period, ['daily', 'weekly', 'monthly'], true)
+      ? static fn (array $p): ?string => isset($p['from']) && (int) $p['value'] > 0
+          ? '/admin/reports/active?' . http_build_query($p['from'] === $p['to'] ? ['day' => $p['from']] : ['from' => $p['from'], 'to' => $p['to']])
+          : null
+      : null]) ?>
+  <?php if ($metric === 'dau'): ?><p class="hint"><a href="/admin/reports/active"><b>فهرست کاربران فعال امروز و کارهایشان ›</b></a> روی هر روز در جدول بزنید تا ببینید چه کسانی فعال بودند و چه کردند. «کاربر فعال» یعنی هر عضوی که آن روز وارد سامانه شده یا صفحه‌ای را باز کرده است.</p><?php endif; ?>
   <p class="hint">روزها به وقت تهران شمرده می‌شوند (از ۰۰:۰۰ تا ۲۴:۰۰) و هفته‌ها از شنبه تا جمعه. آمار هر ساعت به‌روز می‌شود.</p></section>
 
 <section class="panel">

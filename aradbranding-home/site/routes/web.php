@@ -118,6 +118,7 @@ return static function (Router $r): void {
         // ---- Admin (each route checks its own permission; data scope is applied inside) ----
         $r->get('/admin', [\App\Modules\Admin\DashboardAdminController::class, 'dashboard']);
         $r->get('/admin/reports', [\App\Modules\Admin\DashboardAdminController::class, 'reports'], ['can:reports.view']);
+        $r->get('/admin/reports/active', [\App\Modules\Admin\ActiveUsersController::class, 'index'], ['can:reports.view']);
         $r->get('/admin/finance', [\App\Modules\Admin\DashboardAdminController::class, 'finance'], ['can:payments.view']);
         $r->post('/admin/finance/payments/{id:\d+}/delete', [\App\Modules\Admin\DashboardAdminController::class, 'deletePayment'], ['can:payments.delete']);
         $r->get('/admin/api', [\App\Modules\Admin\ApiAdminController::class, 'index'], ['can:settings.manage']);
@@ -136,6 +137,8 @@ return static function (Router $r): void {
         $r->post('/admin/users/{id:\d+}/verify', [\App\Modules\Admin\UserAdminController::class, 'verify'], ['can:users.edit']);
         $r->post('/admin/users/{id:\d+}/wallet', [\App\Modules\Admin\UserAdminController::class, 'wallet'], ['can:wallet.view']);
         $r->post('/admin/users/{id:\d+}/roles', [\App\Modules\Admin\UserAdminController::class, 'roles'], ['can:roles.manage']);
+        $r->post('/admin/users/{id:\d+}/titles', [\App\Modules\Admin\UserAdminController::class, 'addTitle'], ['can:roles.manage']);
+        $r->post('/admin/users/{id:\d+}/titles/{title:\d+}/delete', [\App\Modules\Admin\UserAdminController::class, 'removeTitle'], ['can:roles.manage']);
         $r->post('/admin/users/{id:\d+}/impersonate', [\App\Modules\Admin\UserAdminController::class, 'impersonate'], ['can:users.impersonate']);
         $r->post('/admin/impersonate/stop', [\App\Modules\Admin\UserAdminController::class, 'stopImpersonating']);
         $r->get('/admin/content', [\App\Modules\Admin\ContentAdminController::class, 'index']);
